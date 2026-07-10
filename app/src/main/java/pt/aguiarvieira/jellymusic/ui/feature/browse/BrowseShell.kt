@@ -1,6 +1,7 @@
 package pt.aguiarvieira.jellymusic.ui.feature.browse
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -37,6 +38,7 @@ import androidx.compose.material3.adaptive.navigationsuite.ExperimentalMaterial3
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -44,6 +46,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -72,6 +75,9 @@ fun BrowseShell(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var selectedTab by rememberSaveable { mutableStateOf(BrowseTab.ALBUMS) }
+    // Grid column count, adjustable by pinch (shared across tabs).
+    var columns by rememberSaveable { mutableIntStateOf(2) }
+    val onZoom: (Int) -> Unit = { delta -> columns = (columns + delta).coerceIn(1, 4) }
 
     NavigationSuiteScaffold(
         navigationSuiteItems = {
@@ -114,7 +120,7 @@ fun BrowseShell(
                         )
                         Box(modifier = Modifier.weight(1f)) {
                             ContentSection(state.albums, "No albums found") { albums ->
-                                Grid {
+                                Grid(columns = columns, onZoom = onZoom) {
                                     items(albums, key = { it.id }) { album ->
                                         AlbumCard(album, onClick = { onAlbumClick(album.id, album.name) })
                                     }
@@ -124,7 +130,7 @@ fun BrowseShell(
                     }
 
                     BrowseTab.ARTISTS -> ContentSection(state.artists, "No artists found") { artists ->
-                        Grid {
+                        Grid(columns = columns, onZoom = onZoom) {
                             items(artists, key = { it.id }) { artist ->
                                 ArtistCard(artist, onClick = { onArtistClick(artist.id, artist.name) })
                             }
@@ -132,7 +138,7 @@ fun BrowseShell(
                     }
 
                     BrowseTab.PLAYLISTS -> ContentSection(state.playlists, "No playlists found") { playlists ->
-                        Grid {
+                        Grid(columns = columns, onZoom = onZoom) {
                             items(playlists, key = { it.id }) { playlist ->
                                 PlaylistCard(playlist, onClick = { onPlaylistClick(playlist.id, playlist.name) })
                             }
@@ -239,16 +245,45 @@ private fun LibrarySelector(
     }
 }
 
+/**
+ * Fixed-column grid whose column count is pinch-adjustable. Pinching out (fingers apart) drops a
+ * column for bigger items; pinching in adds one. [onZoom] receives the step (-1 / +1) and the caller
+ * clamps to 1..4.
+ */
 @Composable
-private fun Grid(content: androidx.compose.foundation.lazy.grid.LazyGridScope.() -> Unit) {
+private fun Grid(
+    columns: Int,
+    onZoom: (Int) -> Unit,
+    content: androidx.compose.foundation.lazy.grid.LazyGridScope.() -> Unit,
+) {
     LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = 150.dp),
+        columns = GridCells.Fixed(columns),
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 8.dp),
+            .padding(horizontal = 8.dp)
+            .pointerInput(Unit) {
+                var cumulative = 1f
+                detectTransformGestures { _, _, zoom, _ ->
+                    cumulative *= zoom
+                    when {
+                        cumulative > PINCH_STEP -> {
+                            onZoom(-1)
+                            cumulative = 1f
+                        }
+
+                        cumulative < 1f / PINCH_STEP -> {
+                            onZoom(+1)
+                            cumulative = 1f
+                        }
+                    }
+                }
+            },
         content = content,
     )
 }
+
+/** Cumulative zoom factor within one pinch that triggers a one-column step. */
+private const val PINCH_STEP = 1.3f
 
 @Composable
 private fun <T> ContentSection(

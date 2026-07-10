@@ -11,11 +11,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
+import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -25,34 +27,35 @@ import pt.aguiarvieira.jellymusic.domain.model.Playlist
 
 @Composable
 fun AlbumCard(album: Album, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier
-            .clickable(onClick = onClick)
-            .padding(6.dp),
+    Card(
+        onClick = onClick,
+        modifier = modifier.padding(6.dp),
     ) {
+        // Card clips content to its shape, so the square artwork picks up the card's rounded top.
         ArtworkImage(
             url = album.artworkUrl,
             contentDescription = album.name,
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f),
-            shape = MaterialTheme.shapes.large,
+            shape = RectangleShape,
         )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = album.name,
-            style = MaterialTheme.typography.titleSmall,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        album.artist?.let {
+        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
             Text(
-                text = it,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                text = album.name,
+                style = MaterialTheme.typography.titleSmall,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+            album.artist?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
 }
@@ -87,10 +90,9 @@ fun ArtistCard(artist: Artist, onClick: () -> Unit, modifier: Modifier = Modifie
 
 @Composable
 fun PlaylistCard(playlist: Playlist, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier
-            .clickable(onClick = onClick)
-            .padding(6.dp),
+    Card(
+        onClick = onClick,
+        modifier = modifier.padding(6.dp),
     ) {
         ArtworkImage(
             url = playlist.artworkUrl,
@@ -98,22 +100,23 @@ fun PlaylistCard(playlist: Playlist, onClick: () -> Unit, modifier: Modifier = M
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f),
-            shape = MaterialTheme.shapes.large,
+            shape = RectangleShape,
             fallbackIcon = Icons.AutoMirrored.Filled.QueueMusic,
         )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = playlist.name,
-            style = MaterialTheme.typography.titleSmall,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        playlist.trackCount?.let {
+        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
             Text(
-                text = "$it tracks",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                text = playlist.name,
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
+            playlist.trackCount?.let {
+                Text(
+                    text = "$it tracks",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }
