@@ -109,8 +109,9 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.security.crypto)
 
-    // Jellyfin SDK
+    // Jellyfin SDK (+ slf4j-api that its kotlin-logging backend requires at runtime)
     implementation(libs.jellyfin.core)
+    implementation(libs.slf4j.api)
 
     // Coil
     implementation(libs.coil.compose)

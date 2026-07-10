@@ -80,6 +80,9 @@ androidx-security-crypto = { group = "androidx.security", name = "security-crypt
 
 # Jellyfin SDK
 jellyfin-core = { group = "org.jellyfin.sdk", name = "jellyfin-core", version.ref = "jellyfin" }
+# The SDK logs via kotlin-logging-jvm, whose SLF4J backend needs slf4j-api on the classpath
+# (not bundled transitively) — without it every SDK call throws NoClassDefFoundError.
+slf4j-api = { group = "org.slf4j", name = "slf4j-api", version = "2.0.18" }
 
 # Coil
 coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref = "coil" }
