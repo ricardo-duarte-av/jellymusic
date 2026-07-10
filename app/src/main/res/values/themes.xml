@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Base app theme. Compose owns the real theming (MaterialExpressiveTheme);
+         this is only for the launch/window chrome. Edge-to-edge is enabled in code. -->
+    <style name="Theme.JellyMusic" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowBackground">?android:attr/colorBackground</item>
+    </style>
+</resources>

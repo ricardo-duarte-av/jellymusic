@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Remote/public Jellyfin servers must use HTTPS (the secure default below enforces that).
+
+  Self-hosted servers on the local network are very often reachable only over plain HTTP, and
+  Android's network-security-config cannot express private-IP ranges (no CIDR matching), so there is
+  no way to scope cleartext to "LAN only". For a self-hosted media client we therefore permit
+  cleartext generally; TLS is still used whenever the entered server URL is https. Reaching a local
+  address additionally requires the ACCESS_LOCAL_NETWORK runtime permission (Android 17+), which the
+  app requests only when the user browses/connects locally.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>
