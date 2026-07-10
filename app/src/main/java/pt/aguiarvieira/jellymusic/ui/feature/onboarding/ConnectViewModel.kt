@@ -2,6 +2,7 @@ package pt.aguiarvieira.jellymusic.ui.feature.onboarding
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import pt.aguiarvieira.jellymusic.core.util.Logx
 import pt.aguiarvieira.jellymusic.domain.model.Server
 import pt.aguiarvieira.jellymusic.domain.repository.AuthRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -50,13 +51,16 @@ class ConnectViewModel @Inject constructor(
 
     private fun connect(input: String) {
         if (input.isBlank() || _state.value.connecting) return
+        Logx.d(TAG, "ViewModel.connect(\"$input\")")
         viewModelScope.launch {
             _state.update { it.copy(connecting = true, error = null) }
             authRepository.connect(input)
                 .onSuccess { server ->
+                    Logx.d(TAG, "ViewModel.connect success: ${server.name}")
                     _state.update { it.copy(connecting = false, connectedServer = server) }
                 }
                 .onFailure { e ->
+                    Logx.w(TAG, "ViewModel.connect failure", e)
                     _state.update {
                         it.copy(connecting = false, error = e.message ?: "Could not connect")
                     }
@@ -76,5 +80,9 @@ class ConnectViewModel @Inject constructor(
 
     fun clearError() {
         _state.update { it.copy(error = null) }
+    }
+
+    private companion object {
+        const val TAG = "JellyMusicAuth"
     }
 }

@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -57,12 +58,7 @@ fun ConnectServerScreen(
         }
     }
 
-    LaunchedEffect(state.error) {
-        state.error?.let {
-            snackbarHostState.showSnackbar(it)
-            viewModel.clearError()
-        }
-    }
+    // Error is also shown as a persistent card below; the error clears when the user edits the field.
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -118,6 +114,22 @@ fun ConnectServerScreen(
                     )
                 } else {
                     Text("Connect")
+                }
+            }
+
+            state.error?.let { message ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                    ),
+                ) {
+                    Text(
+                        text = message,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(16.dp),
+                    )
                 }
             }
 

@@ -1,5 +1,6 @@
 package pt.aguiarvieira.jellymusic.data.auth
 
+import pt.aguiarvieira.jellymusic.core.util.Logx
 import pt.aguiarvieira.jellymusic.data.jellyfin.JellyfinClientProvider
 import pt.aguiarvieira.jellymusic.domain.model.QuickConnectSession
 import pt.aguiarvieira.jellymusic.domain.model.Server
@@ -41,7 +42,13 @@ class AuthRepositoryImpl @Inject constructor(
 
     override suspend fun connect(input: String): Result<Server> = withContext(Dispatchers.IO) {
         val candidates = runCatching { clientProvider.discovery.getAddressCandidates(input) }
-            .getOrDefault(listOf(input))
+            .getOrElse {
+                Logx.w(TAG, "getAddressCandidates failed for \"$input\"", it)
+                listOf(input)
+            }
+        Logx.d(TAG, "connect(\"$input\") candidates=$candidates")
+
+        var lastError: Throwable? = null
         for (candidate in candidates) {
             val result = runCatching {
                 val api = clientProvider.unauthenticatedApi(candidate)
@@ -52,9 +59,17 @@ class AuthRepositoryImpl @Inject constructor(
                     address = candidate,
                 )
             }
+            result
+                .onSuccess { Logx.d(TAG, "connect ok via $candidate -> ${it.name}") }
+                .onFailure {
+                    lastError = it
+                    Logx.w(TAG, "connect attempt failed for $candidate: ${it.message}", it)
+                }
             if (result.isSuccess) return@withContext result
         }
-        Result.failure(IllegalStateException("No Jellyfin server found at \"$input\""))
+        // Surface the real reason (SSL / DNS / engine / timeout) instead of a generic message.
+        val reason = lastError?.let { "${it::class.simpleName}: ${it.message}" } ?: "unknown error"
+        Result.failure(IllegalStateException("Couldn't reach a Jellyfin server at \"$input\" ($reason)"))
     }
 
     override suspend fun loginWithPassword(
@@ -120,5 +135,9 @@ class AuthRepositoryImpl @Inject constructor(
             userName = user.name ?: "",
             accessToken = accessToken ?: error("Authentication returned no access token"),
         )
+    }
+
+    private companion object {
+        const val TAG = "JellyMusicAuth"
     }
 }
