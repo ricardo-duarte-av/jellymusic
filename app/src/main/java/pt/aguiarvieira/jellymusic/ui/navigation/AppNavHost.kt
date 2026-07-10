@@ -9,7 +9,6 @@ import pt.aguiarvieira.jellymusic.ui.feature.browse.BrowseShell
 import pt.aguiarvieira.jellymusic.ui.feature.detail.AlbumDetailScreen
 import pt.aguiarvieira.jellymusic.ui.feature.detail.ArtistDetailScreen
 import pt.aguiarvieira.jellymusic.ui.feature.detail.PlaylistDetailScreen
-import pt.aguiarvieira.jellymusic.ui.feature.library.LibraryPickerScreen
 import pt.aguiarvieira.jellymusic.ui.feature.onboarding.ConnectServerScreen
 import pt.aguiarvieira.jellymusic.ui.feature.onboarding.LoginScreen
 import pt.aguiarvieira.jellymusic.ui.feature.player.FullPlayerScreen
@@ -40,18 +39,10 @@ fun AppNavHost(
         composable<Routes.Login> {
             LoginScreen(
                 onAuthenticated = {
-                    navController.navigate(Routes.LibraryPicker) {
-                        popUpTo(Routes.ConnectServer) { inclusive = true }
-                    }
-                },
-            )
-        }
-
-        composable<Routes.LibraryPicker> {
-            LibraryPickerScreen(
-                onLibrarySelected = {
+                    // Straight to browse; default to All music. Library is switchable via the
+                    // dropdown in the top bar.
                     navController.navigate(Routes.Home) {
-                        popUpTo(Routes.LibraryPicker) { inclusive = true }
+                        popUpTo(Routes.ConnectServer) { inclusive = true }
                     }
                 },
             )

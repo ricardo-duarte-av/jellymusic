@@ -15,9 +15,6 @@ object Routes {
         val serverAddress: String,
     )
 
-    @Serializable
-    object LibraryPicker
-
     /** The browse shell (Albums / Artists / Playlists) — the app's main surface. */
     @Serializable
     object Home
