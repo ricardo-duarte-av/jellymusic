@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import org.jellyfin.sdk.api.operations.QuickConnectApi
 import org.jellyfin.sdk.api.operations.SystemApi
 import org.jellyfin.sdk.api.operations.UserApi
@@ -51,13 +52,17 @@ class AuthRepositoryImpl @Inject constructor(
         var lastError: Throwable? = null
         for (candidate in candidates) {
             val result = runCatching {
-                val api = clientProvider.unauthenticatedApi(candidate)
-                val info = SystemApi(api).getPublicSystemInfo().content
-                Server(
-                    id = info.id,
-                    name = info.serverName ?: candidate,
-                    address = candidate,
-                )
+                // Bound each attempt so an unreachable/stalled host fails fast and visibly
+                // instead of leaving the UI spinning forever.
+                withTimeout(CONNECT_TIMEOUT_MS) {
+                    val api = clientProvider.unauthenticatedApi(candidate)
+                    val info = SystemApi(api).getPublicSystemInfo().content
+                    Server(
+                        id = info.id,
+                        name = info.serverName ?: candidate,
+                        address = candidate,
+                    )
+                }
             }
             result
                 .onSuccess { Logx.d(TAG, "connect ok via $candidate -> ${it.name}") }
@@ -139,5 +144,6 @@ class AuthRepositoryImpl @Inject constructor(
 
     private companion object {
         const val TAG = "JellyMusicAuth"
+        const val CONNECT_TIMEOUT_MS = 15_000L
     }
 }
