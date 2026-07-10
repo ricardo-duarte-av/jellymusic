@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.Wifi
@@ -35,6 +36,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -88,6 +91,14 @@ fun ConnectServerScreen(
                 label = { Text("Server address") },
                 placeholder = { Text("https://jellyfin.example.com") },
                 singleLine = true,
+                // "Dumb" input: no autocorrect / auto-capitalization so e.g. "https://" is left
+                // exactly as typed (autocorrect would mangle it to "Https://").
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Uri,
+                    autoCorrectEnabled = false,
+                    capitalization = KeyboardCapitalization.None,
+                    imeAction = ImeAction.Go,
+                ),
                 modifier = Modifier.fillMaxWidth(),
             )
 

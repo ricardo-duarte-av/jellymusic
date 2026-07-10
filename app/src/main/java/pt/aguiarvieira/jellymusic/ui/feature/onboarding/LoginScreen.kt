@@ -31,8 +31,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
@@ -90,6 +92,11 @@ fun LoginScreen(
                     onValueChange = viewModel::onUsernameChange,
                     label = { Text("Username") },
                     singleLine = true,
+                    // Usernames are case-sensitive; don't autocorrect or auto-capitalize.
+                    keyboardOptions = KeyboardOptions(
+                        autoCorrectEnabled = false,
+                        capitalization = KeyboardCapitalization.None,
+                    ),
                     modifier = Modifier.fillMaxWidth(),
                 )
                 OutlinedTextField(
