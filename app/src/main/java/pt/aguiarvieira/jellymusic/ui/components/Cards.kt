@@ -10,7 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.QueueMusic
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -99,7 +99,7 @@ fun PlaylistCard(playlist: Playlist, onClick: () -> Unit, modifier: Modifier = M
                 .fillMaxWidth()
                 .aspectRatio(1f),
             shape = MaterialTheme.shapes.large,
-            fallbackIcon = Icons.Filled.QueueMusic,
+            fallbackIcon = Icons.AutoMirrored.Filled.QueueMusic,
         )
         Spacer(Modifier.height(8.dp))
         Text(

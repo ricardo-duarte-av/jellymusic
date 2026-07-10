@@ -28,9 +28,10 @@ class AuthRepositoryImpl @Inject constructor(
 
     override val session: StateFlow<UserSession?> = clientProvider.session
 
-    override suspend fun restoreSession(): Unit = withContext(Dispatchers.IO) {
-        credentialStore.load()?.let { clientProvider.activateSession(it) }
-        Unit
+    override suspend fun restoreSession() {
+        withContext(Dispatchers.IO) {
+            credentialStore.load()?.let { clientProvider.activateSession(it) }
+        }
     }
 
     override suspend fun discoverServers(): List<Server> = withContext(Dispatchers.IO) {
@@ -96,10 +97,7 @@ class AuthRepositoryImpl @Inject constructor(
             runCatching {
                 val api = clientProvider.unauthenticatedApi(server.address)
                 val state = QuickConnectApi(api).initiateQuickConnect().content
-                QuickConnectSession(
-                    code = state.code ?: error("Server returned no Quick Connect code"),
-                    secret = state.secret ?: error("Server returned no Quick Connect secret"),
-                )
+                QuickConnectSession(code = state.code, secret = state.secret)
             }
         }
 

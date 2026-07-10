@@ -12,7 +12,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LibraryMusic
-import androidx.compose.material.icons.filled.QueueMusic
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -25,7 +25,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import pt.aguiarvieira.jellymusic.domain.model.MusicLibrary
 
@@ -74,7 +74,7 @@ fun LibraryPickerScreen(
                             leadingContent = {
                                 Icon(
                                     imageVector = if (library.id == MusicLibrary.ALL_ID) {
-                                        Icons.Filled.QueueMusic
+                                        Icons.AutoMirrored.Filled.QueueMusic
                                     } else {
                                         Icons.Filled.LibraryMusic
                                     },

@@ -14,6 +14,10 @@ import javax.inject.Singleton
  * [EncryptedSharedPreferences] so it survives process death without exposing the token in plain
  * text.
  */
+// androidx.security.crypto (EncryptedSharedPreferences/MasterKey) is deprecated by AndroidX with
+// no drop-in replacement yet; it remains the standard for encrypted key/value storage. Revisit if
+// Jetpack ships a successor.
+@Suppress("DEPRECATION")
 @Singleton
 class CredentialStore @Inject constructor(
     @ApplicationContext context: Context,
