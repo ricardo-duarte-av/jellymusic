@@ -31,16 +31,18 @@ fun AlbumCard(album: Album, onClick: () -> Unit, modifier: Modifier = Modifier) 
         onClick = onClick,
         modifier = modifier.padding(6.dp),
     ) {
-        // Card clips content to its shape, so the square artwork picks up the card's rounded top.
-        ArtworkImage(
-            url = album.artworkUrl,
-            contentDescription = album.name,
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(1f),
-            shape = RectangleShape,
-        )
-        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+        // Artwork lives in its own inner frame (card) inset from the outer card's edges.
+        Card(modifier = Modifier.padding(8.dp)) {
+            ArtworkImage(
+                url = album.artworkUrl,
+                contentDescription = album.name,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f),
+                shape = RectangleShape,
+            )
+        }
+        Column(modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 10.dp)) {
             Text(
                 text = album.name,
                 style = MaterialTheme.typography.titleSmall,
@@ -94,16 +96,18 @@ fun PlaylistCard(playlist: Playlist, onClick: () -> Unit, modifier: Modifier = M
         onClick = onClick,
         modifier = modifier.padding(6.dp),
     ) {
-        ArtworkImage(
-            url = playlist.artworkUrl,
-            contentDescription = playlist.name,
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(1f),
-            shape = RectangleShape,
-            fallbackIcon = Icons.AutoMirrored.Filled.QueueMusic,
-        )
-        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+        Card(modifier = Modifier.padding(8.dp)) {
+            ArtworkImage(
+                url = playlist.artworkUrl,
+                contentDescription = playlist.name,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f),
+                shape = RectangleShape,
+                fallbackIcon = Icons.AutoMirrored.Filled.QueueMusic,
+            )
+        }
+        Column(modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 10.dp)) {
             Text(
                 text = playlist.name,
                 style = MaterialTheme.typography.titleSmall,

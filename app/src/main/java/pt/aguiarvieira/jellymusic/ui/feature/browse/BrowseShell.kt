@@ -1,17 +1,14 @@
 package pt.aguiarvieira.jellymusic.ui.feature.browse
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -32,7 +29,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.adaptive.navigationsuite.ExperimentalMaterial3AdaptiveNavigationSuiteApi
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
@@ -46,6 +42,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -107,24 +104,25 @@ fun BrowseShell(
                         )
                     }
                 },
-            )
-
-            Box(modifier = Modifier.weight(1f)) {
-                when (selectedTab) {
-                    BrowseTab.ALBUMS -> Column(modifier = Modifier.fillMaxSize()) {
-                        AlbumSortBar(
+                actions = {
+                    // Sort controls live on the top-bar row, alongside the library dropdown.
+                    if (selectedTab == BrowseTab.ALBUMS) {
+                        AlbumSortActions(
                             sort = state.albumSort,
                             descending = state.albumSortDescending,
                             onSortSelected = viewModel::setAlbumSort,
                             onToggleOrder = viewModel::toggleAlbumSortOrder,
                         )
-                        Box(modifier = Modifier.weight(1f)) {
-                            ContentSection(state.albums, "No albums found") { albums ->
-                                Grid(columns = columns, onZoom = onZoom) {
-                                    items(albums, key = { it.id }) { album ->
-                                        AlbumCard(album, onClick = { onAlbumClick(album.id, album.name) })
-                                    }
-                                }
+                    }
+                },
+            )
+
+            Box(modifier = Modifier.weight(1f)) {
+                when (selectedTab) {
+                    BrowseTab.ALBUMS -> ContentSection(state.albums, "No albums found") { albums ->
+                        Grid(columns = columns, onZoom = onZoom) {
+                            items(albums, key = { it.id }) { album ->
+                                AlbumCard(album, onClick = { onAlbumClick(album.id, album.name) })
                             }
                         }
                     }
@@ -152,50 +150,41 @@ fun BrowseShell(
     }
 }
 
-/** Sort field dropdown + ascending/descending toggle, shown above the album grid. */
+/** Compact sort field dropdown + order toggle for the top-app-bar actions (Albums tab). */
 @Composable
-private fun AlbumSortBar(
+private fun AlbumSortActions(
     sort: AlbumSort,
     descending: Boolean,
     onSortSelected: (AlbumSort) -> Unit,
     onToggleOrder: () -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(modifier = Modifier.weight(1f)) {
-            TextButton(onClick = { expanded = true }) {
-                Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text(sort.label)
-            }
-            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                AlbumSort.entries.forEach { option ->
-                    DropdownMenuItem(
-                        text = { Text(option.label) },
-                        onClick = {
-                            onSortSelected(option)
-                            expanded = false
-                        },
-                        trailingIcon = if (option == sort) {
-                            { Icon(Icons.Filled.Check, contentDescription = null) }
-                        } else {
-                            null
-                        },
-                    )
-                }
+    Box {
+        IconButton(onClick = { expanded = true }) {
+            Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = "Sort by (${sort.label})")
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            AlbumSort.entries.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(option.label) },
+                    onClick = {
+                        onSortSelected(option)
+                        expanded = false
+                    },
+                    trailingIcon = if (option == sort) {
+                        { Icon(Icons.Filled.Check, contentDescription = null) }
+                    } else {
+                        null
+                    },
+                )
             }
         }
-        IconButton(onClick = onToggleOrder) {
-            Icon(
-                imageVector = if (descending) Icons.Filled.VerticalAlignTop else Icons.Filled.VerticalAlignBottom,
-                contentDescription = if (descending) "Descending" else "Ascending",
-            )
-        }
+    }
+    IconButton(onClick = onToggleOrder) {
+        Icon(
+            imageVector = if (descending) Icons.Filled.VerticalAlignTop else Icons.Filled.VerticalAlignBottom,
+            contentDescription = if (descending) "Sort descending" else "Sort ascending",
+        )
     }
 }
 
@@ -256,30 +245,46 @@ private fun Grid(
     onZoom: (Int) -> Unit,
     content: androidx.compose.foundation.lazy.grid.LazyGridScope.() -> Unit,
 ) {
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(columns),
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 8.dp)
+            // Intercept two-finger pinches on the Initial pass and consume them, so the grid's own
+            // vertical scroll (which fought the earlier detectTransformGestures) doesn't win.
             .pointerInput(Unit) {
-                var cumulative = 1f
-                detectTransformGestures { _, _, zoom, _ ->
-                    cumulative *= zoom
-                    when {
-                        cumulative > PINCH_STEP -> {
-                            onZoom(-1)
-                            cumulative = 1f
-                        }
+                awaitPointerEventScope {
+                    var cumulative = 1f
+                    while (true) {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        if (event.changes.count { it.pressed } >= 2) {
+                            val zoom = event.calculateZoom()
+                            if (zoom != 1f) {
+                                cumulative *= zoom
+                                when {
+                                    cumulative > PINCH_STEP -> {
+                                        onZoom(-1)
+                                        cumulative = 1f
+                                    }
 
-                        cumulative < 1f / PINCH_STEP -> {
-                            onZoom(+1)
-                            cumulative = 1f
+                                    cumulative < 1f / PINCH_STEP -> {
+                                        onZoom(+1)
+                                        cumulative = 1f
+                                    }
+                                }
+                                event.changes.forEach { it.consume() }
+                            }
                         }
                     }
                 }
             },
-        content = content,
-    )
+    ) {
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(columns),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 8.dp),
+            content = content,
+        )
+    }
 }
 
 /** Cumulative zoom factor within one pinch that triggers a one-column step. */
