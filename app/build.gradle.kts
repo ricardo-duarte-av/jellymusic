@@ -23,6 +23,20 @@ android {
         vectorDrawables { useSupportLibrary = true }
     }
 
+    // Release signing driven by CI env vars. When KEYSTORE_FILE is unset (local dev, PRs
+    // without secrets) the release build is produced unsigned instead of failing.
+    val keystoreFile = System.getenv("KEYSTORE_FILE")
+    signingConfigs {
+        if (!keystoreFile.isNullOrBlank()) {
+            create("release") {
+                storeFile = file(keystoreFile)
+                storePassword = System.getenv("KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("KEY_ALIAS")
+                keyPassword = System.getenv("KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -31,6 +45,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            if (!keystoreFile.isNullOrBlank()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
         debug {
             applicationIdSuffix = ".debug"
