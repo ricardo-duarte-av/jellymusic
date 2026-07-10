@@ -4,26 +4,34 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.automirrored.filled.QueueMusic
+import androidx.compose.material.icons.filled.VerticalAlignBottom
+import androidx.compose.material.icons.filled.VerticalAlignTop
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.adaptive.navigationsuite.ExperimentalMaterial3AdaptiveNavigationSuiteApi
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
@@ -39,6 +47,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import pt.aguiarvieira.jellymusic.domain.model.AlbumSort
 import pt.aguiarvieira.jellymusic.domain.model.MusicLibrary
 import pt.aguiarvieira.jellymusic.ui.common.ContentState
 import pt.aguiarvieira.jellymusic.ui.components.AlbumCard
@@ -96,10 +105,20 @@ fun BrowseShell(
 
             Box(modifier = Modifier.weight(1f)) {
                 when (selectedTab) {
-                    BrowseTab.ALBUMS -> ContentSection(state.albums, "No albums found") { albums ->
-                        Grid {
-                            items(albums, key = { it.id }) { album ->
-                                AlbumCard(album, onClick = { onAlbumClick(album.id, album.name) })
+                    BrowseTab.ALBUMS -> Column(modifier = Modifier.fillMaxSize()) {
+                        AlbumSortBar(
+                            sort = state.albumSort,
+                            descending = state.albumSortDescending,
+                            onSortSelected = viewModel::setAlbumSort,
+                            onToggleOrder = viewModel::toggleAlbumSortOrder,
+                        )
+                        Box(modifier = Modifier.weight(1f)) {
+                            ContentSection(state.albums, "No albums found") { albums ->
+                                Grid {
+                                    items(albums, key = { it.id }) { album ->
+                                        AlbumCard(album, onClick = { onAlbumClick(album.id, album.name) })
+                                    }
+                                }
                             }
                         }
                     }
@@ -123,6 +142,53 @@ fun BrowseShell(
             }
 
             MiniPlayer(onExpand = onExpandPlayer)
+        }
+    }
+}
+
+/** Sort field dropdown + ascending/descending toggle, shown above the album grid. */
+@Composable
+private fun AlbumSortBar(
+    sort: AlbumSort,
+    descending: Boolean,
+    onSortSelected: (AlbumSort) -> Unit,
+    onToggleOrder: () -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(modifier = Modifier.weight(1f)) {
+            TextButton(onClick = { expanded = true }) {
+                Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text(sort.label)
+            }
+            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                AlbumSort.entries.forEach { option ->
+                    DropdownMenuItem(
+                        text = { Text(option.label) },
+                        onClick = {
+                            onSortSelected(option)
+                            expanded = false
+                        },
+                        trailingIcon = if (option == sort) {
+                            { Icon(Icons.Filled.Check, contentDescription = null) }
+                        } else {
+                            null
+                        },
+                    )
+                }
+            }
+        }
+        IconButton(onClick = onToggleOrder) {
+            Icon(
+                imageVector = if (descending) Icons.Filled.VerticalAlignTop else Icons.Filled.VerticalAlignBottom,
+                contentDescription = if (descending) "Descending" else "Ascending",
+            )
         }
     }
 }

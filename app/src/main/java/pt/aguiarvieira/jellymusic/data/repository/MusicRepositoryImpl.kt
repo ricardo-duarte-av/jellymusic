@@ -3,6 +3,7 @@ package pt.aguiarvieira.jellymusic.data.repository
 import pt.aguiarvieira.jellymusic.data.jellyfin.JellyfinClientProvider
 import pt.aguiarvieira.jellymusic.data.jellyfin.StreamUrlBuilder
 import pt.aguiarvieira.jellymusic.domain.model.Album
+import pt.aguiarvieira.jellymusic.domain.model.AlbumSort
 import pt.aguiarvieira.jellymusic.domain.model.Artist
 import pt.aguiarvieira.jellymusic.domain.model.MusicLibrary
 import pt.aguiarvieira.jellymusic.domain.model.Playlist
@@ -33,16 +34,32 @@ class MusicRepositoryImpl @Inject constructor(
     private val urlBuilder: StreamUrlBuilder,
 ) : MusicRepository {
 
-    override suspend fun getAlbums(libraryId: String?): Result<List<Album>> = query { api ->
+    override suspend fun getAlbums(
+        libraryId: String?,
+        sort: AlbumSort,
+        descending: Boolean,
+    ): Result<List<Album>> = query { api ->
         ItemsApi(api).getItems(
             GetItemsRequest(
                 parentId = libraryId.toParentUuid(),
                 includeItemTypes = listOf(BaseItemKind.MUSIC_ALBUM),
                 recursive = true,
-                sortBy = listOf(ItemSortBy.SORT_NAME),
-                sortOrder = listOf(SortOrder.ASCENDING),
+                sortBy = listOf(sort.toItemSortBy()),
+                sortOrder = listOf(if (descending) SortOrder.DESCENDING else SortOrder.ASCENDING),
             ),
         ).content.items.map { it.toAlbum() }
+    }
+
+    private fun AlbumSort.toItemSortBy(): ItemSortBy = when (this) {
+        AlbumSort.ALBUM_ARTIST -> ItemSortBy.ALBUM_ARTIST
+        AlbumSort.ID -> ItemSortBy.DEFAULT
+        AlbumSort.COMMUNITY_RATING -> ItemSortBy.COMMUNITY_RATING
+        AlbumSort.CRITIC_RATING -> ItemSortBy.CRITIC_RATING
+        AlbumSort.NAME -> ItemSortBy.SORT_NAME
+        AlbumSort.PLAY_COUNT -> ItemSortBy.PLAY_COUNT
+        AlbumSort.RANDOM -> ItemSortBy.RANDOM
+        AlbumSort.DATE_ADDED -> ItemSortBy.DATE_CREATED
+        AlbumSort.DATE_RELEASED -> ItemSortBy.PREMIERE_DATE
     }
 
     override suspend fun getArtists(libraryId: String?): Result<List<Artist>> = query { api ->

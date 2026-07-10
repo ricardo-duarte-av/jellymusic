@@ -1,6 +1,7 @@
 package pt.aguiarvieira.jellymusic.domain.repository
 
 import pt.aguiarvieira.jellymusic.domain.model.Album
+import pt.aguiarvieira.jellymusic.domain.model.AlbumSort
 import pt.aguiarvieira.jellymusic.domain.model.Artist
 import pt.aguiarvieira.jellymusic.domain.model.Playlist
 import pt.aguiarvieira.jellymusic.domain.model.Track
@@ -10,7 +11,11 @@ import pt.aguiarvieira.jellymusic.domain.model.Track
  * "search across every music library".
  */
 interface MusicRepository {
-    suspend fun getAlbums(libraryId: String?): Result<List<Album>>
+    suspend fun getAlbums(
+        libraryId: String?,
+        sort: AlbumSort = AlbumSort.DEFAULT,
+        descending: Boolean = false,
+    ): Result<List<Album>>
     suspend fun getArtists(libraryId: String?): Result<List<Artist>>
     suspend fun getPlaylists(libraryId: String?): Result<List<Playlist>>
 

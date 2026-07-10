@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import pt.aguiarvieira.jellymusic.data.settings.SettingsStore
 import pt.aguiarvieira.jellymusic.domain.model.Album
+import pt.aguiarvieira.jellymusic.domain.model.AlbumSort
 import pt.aguiarvieira.jellymusic.domain.model.Artist
 import pt.aguiarvieira.jellymusic.domain.model.MusicLibrary
 import pt.aguiarvieira.jellymusic.domain.model.Playlist
@@ -22,6 +23,8 @@ import javax.inject.Inject
 data class BrowseUiState(
     val selectedLibrary: MusicLibrary = MusicLibrary.all(),
     val libraries: List<MusicLibrary> = listOf(MusicLibrary.all()),
+    val albumSort: AlbumSort = AlbumSort.DEFAULT,
+    val albumSortDescending: Boolean = false,
     val albums: ContentState<List<Album>> = ContentState.Loading,
     val artists: ContentState<List<Artist>> = ContentState.Loading,
     val playlists: ContentState<List<Playlist>> = ContentState.Loading,
@@ -41,7 +44,13 @@ class BrowseViewModel @Inject constructor(
         viewModelScope.launch {
             // Default to "All music" unless the user has previously picked a library.
             val selected = settingsStore.selectedLibrary.first() ?: MusicLibrary.all()
-            _state.update { it.copy(selectedLibrary = selected) }
+            _state.update {
+                it.copy(
+                    selectedLibrary = selected,
+                    albumSort = settingsStore.albumSort.first(),
+                    albumSortDescending = settingsStore.albumSortDescending.first(),
+                )
+            }
             loadLibraries()
             loadContent(selected.id)
         }
@@ -64,22 +73,46 @@ class BrowseViewModel @Inject constructor(
         }
     }
 
+    fun setAlbumSort(sort: AlbumSort) {
+        if (sort == _state.value.albumSort) return
+        viewModelScope.launch {
+            settingsStore.setAlbumSort(sort)
+            _state.update { it.copy(albumSort = sort) }
+            loadAlbums()
+        }
+    }
+
+    fun toggleAlbumSortOrder() {
+        val descending = !_state.value.albumSortDescending
+        viewModelScope.launch {
+            settingsStore.setAlbumSortDescending(descending)
+            _state.update { it.copy(albumSortDescending = descending) }
+            loadAlbums()
+        }
+    }
+
     private fun loadContent(libraryId: String) {
-        _state.update {
-            it.copy(
-                albums = ContentState.Loading,
-                artists = ContentState.Loading,
-                playlists = ContentState.Loading,
-            )
-        }
+        loadAlbums()
         viewModelScope.launch {
-            _state.update { it.copy(albums = musicRepository.getAlbums(libraryId).toContentState()) }
-        }
-        viewModelScope.launch {
+            _state.update { it.copy(artists = ContentState.Loading) }
             _state.update { it.copy(artists = musicRepository.getArtists(libraryId).toContentState()) }
         }
         viewModelScope.launch {
+            _state.update { it.copy(playlists = ContentState.Loading) }
             _state.update { it.copy(playlists = musicRepository.getPlaylists(libraryId).toContentState()) }
+        }
+    }
+
+    private fun loadAlbums() {
+        val current = _state.value
+        val libraryId = current.selectedLibrary.id
+        val sort = current.albumSort
+        val descending = current.albumSortDescending
+        _state.update { it.copy(albums = ContentState.Loading) }
+        viewModelScope.launch {
+            _state.update {
+                it.copy(albums = musicRepository.getAlbums(libraryId, sort, descending).toContentState())
+            }
         }
     }
 }

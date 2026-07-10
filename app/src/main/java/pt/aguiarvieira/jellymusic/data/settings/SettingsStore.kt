@@ -1,9 +1,11 @@
 package pt.aguiarvieira.jellymusic.data.settings
 
 import android.content.Context
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import pt.aguiarvieira.jellymusic.domain.model.AlbumSort
 import pt.aguiarvieira.jellymusic.domain.model.AudioQuality
 import pt.aguiarvieira.jellymusic.domain.model.MusicLibrary
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -35,6 +37,15 @@ class SettingsStore @Inject constructor(
         prefs[KEY_DOWNLOAD_QUALITY].toAudioQuality(AudioQuality.HIGH)
     }
 
+    val albumSort: Flow<AlbumSort> = context.dataStore.data.map { prefs ->
+        prefs[KEY_ALBUM_SORT]?.let { runCatching { AlbumSort.valueOf(it) }.getOrNull() }
+            ?: AlbumSort.DEFAULT
+    }
+
+    val albumSortDescending: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_ALBUM_SORT_DESC] ?: false
+    }
+
     suspend fun setSelectedLibrary(library: MusicLibrary) {
         context.dataStore.edit { prefs ->
             prefs[KEY_LIBRARY_ID] = library.id
@@ -50,6 +61,14 @@ class SettingsStore @Inject constructor(
         context.dataStore.edit { it[KEY_DOWNLOAD_QUALITY] = quality.name }
     }
 
+    suspend fun setAlbumSort(sort: AlbumSort) {
+        context.dataStore.edit { it[KEY_ALBUM_SORT] = sort.name }
+    }
+
+    suspend fun setAlbumSortDescending(descending: Boolean) {
+        context.dataStore.edit { it[KEY_ALBUM_SORT_DESC] = descending }
+    }
+
     private fun String?.toAudioQuality(default: AudioQuality): AudioQuality =
         this?.let { runCatching { AudioQuality.valueOf(it) }.getOrNull() } ?: default
 
@@ -58,5 +77,7 @@ class SettingsStore @Inject constructor(
         val KEY_LIBRARY_NAME = stringPreferencesKey("selected_library_name")
         val KEY_STREAMING_QUALITY = stringPreferencesKey("streaming_quality")
         val KEY_DOWNLOAD_QUALITY = stringPreferencesKey("download_quality")
+        val KEY_ALBUM_SORT = stringPreferencesKey("album_sort")
+        val KEY_ALBUM_SORT_DESC = booleanPreferencesKey("album_sort_descending")
     }
 }
