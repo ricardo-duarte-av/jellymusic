@@ -39,6 +39,11 @@ build/
 # Keep the Gradle wrapper jar despite the *.jar rule above
 !gradle/wrapper/gradle-wrapper.jar
 
+# Signing material — never commit keystores or credentials
+/signing/
+*.jks
+*.keystore
+
 # virtual machine crash logs
 hs_err_pid*
 replay_pid*
