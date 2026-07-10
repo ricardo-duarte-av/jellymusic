@@ -58,12 +58,12 @@ class StreamUrlBuilder @Inject constructor(
         protocol: MediaStreamProtocol,
         transcodingContainer: String,
     ): String? {
+        val session = clientProvider.session.value ?: return null
         val api = clientProvider.api ?: return null
-        val userId = clientProvider.session.value?.userId?.toUuid() ?: return null
-        return UniversalAudioApi(api).getUniversalAudioStreamUrl(
+        val url = UniversalAudioApi(api).getUniversalAudioStreamUrl(
             itemId = itemId.toUuid(),
             container = supportedContainers,
-            userId = userId,
+            userId = session.userId.toUuid(),
             deviceId = api.deviceInfo.id,
             maxStreamingBitrate = quality.maxBitrate,
             transcodingContainer = if (quality.isTranscoded) transcodingContainer else null,
@@ -71,7 +71,17 @@ class StreamUrlBuilder @Inject constructor(
             audioCodec = if (quality.isTranscoded) "opus" else null,
             enableRedirection = true,
         )
+        // Audio streaming is authenticated; ExoPlayer fetches the URL directly with no auth header,
+        // so make sure the access token rides along as a query param (append only if absent).
+        return url.withApiKey(session.accessToken)
     }
+
+    private fun String.withApiKey(token: String): String =
+        if (contains("ApiKey=") || contains("api_key=")) {
+            this
+        } else {
+            this + (if (contains("?")) "&" else "?") + "ApiKey=" + token
+        }
 
     private fun String.toUuid(): UUID = UUID.fromString(this)
 }
