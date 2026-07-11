@@ -51,6 +51,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
@@ -126,7 +127,12 @@ fun AlbumDetailScreen(
         },
         bottomBar = { MiniPlayer(onExpand = onExpandPlayer) },
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.surface)
+                .padding(padding),
+        ) {
             when (val state = tracksState) {
                 ContentState.Loading -> Centered { CircularProgressIndicator() }
                 is ContentState.Error -> Centered {
@@ -263,20 +269,20 @@ private fun DiscCard(
     onRequestDownload: (Track) -> Unit,
     onRemoveTrack: (String) -> Unit,
 ) {
-    // Subtly tinted container so the disc group reads as distinct from both the neutral background
-    // and the neutral track cards, which sit raised on top of it.
+    // Neutral tonal ladder: surface (page) < surfaceContainerLow (disc) < surfaceContainerHigh
+    // (track). The disc reads as a distinct surface beneath its raised track cards.
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 8.dp, vertical = 6.dp),
         shape = RoundedCornerShape(8.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         Text(
             text = "Disc ${section.disc}",
             style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.onSecondaryContainer,
+            color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 2.dp),
         )
         section.tracks.forEachIndexed { i, track ->
@@ -286,6 +292,7 @@ private fun DiscCard(
                 downloadStatus = trackStatuses[track.id],
                 onDownload = { onRequestDownload(track) },
                 onRemoveLocal = { onRemoveTrack(track.id) },
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             )
         }
         Spacer(Modifier.height(4.dp))
@@ -358,6 +365,7 @@ private fun TrackCard(
     downloadStatus: TrackDownloadStatus? = null,
     onDownload: (() -> Unit)? = null,
     onRemoveLocal: (() -> Unit)? = null,
+    containerColor: Color = MaterialTheme.colorScheme.surfaceContainer,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     val hasMenu = onDownload != null || onRemoveLocal != null
@@ -373,6 +381,7 @@ private fun TrackCard(
                     onLongClick = if (hasMenu) ({ menuOpen = true }) else null,
                 ),
             shape = RoundedCornerShape(8.dp),
+            colors = CardDefaults.cardColors(containerColor = containerColor),
         ) {
             Column {
                 Row(
