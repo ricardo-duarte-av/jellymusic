@@ -1,20 +1,31 @@
 package pt.aguiarvieira.jellymusic.ui.feature.detail
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -23,9 +34,19 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -38,6 +59,10 @@ import pt.aguiarvieira.jellymusic.ui.components.TrackRow
 import pt.aguiarvieira.jellymusic.ui.feature.player.MiniPlayer
 import pt.aguiarvieira.jellymusic.ui.feature.player.PlaybackViewModel
 
+private val MAX_ART_HEIGHT = 340.dp
+private const val MIN_ART_FRACTION = 0.25f
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AlbumDetailScreen(
     onBack: () -> Unit,
@@ -45,14 +70,223 @@ fun AlbumDetailScreen(
     viewModel: AlbumDetailViewModel = hiltViewModel(),
     playbackViewModel: PlaybackViewModel = hiltViewModel(),
 ) {
-    val tracks by viewModel.tracks.collectAsStateWithLifecycle()
-    TrackListDetail(
-        title = viewModel.title,
-        tracksState = tracks,
-        onBack = onBack,
-        onExpandPlayer = onExpandPlayer,
-        onPlay = playbackViewModel::play,
-    )
+    val tracksState by viewModel.tracks.collectAsStateWithLifecycle()
+    Scaffold(
+        // (1) No album name in the header — keeps space for future actions.
+        topBar = {
+            TopAppBar(
+                title = {},
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+            )
+        },
+        bottomBar = { MiniPlayer(onExpand = onExpandPlayer) },
+    ) { padding ->
+        Box(Modifier.fillMaxSize().padding(padding)) {
+            when (val state = tracksState) {
+                ContentState.Loading -> Centered { CircularProgressIndicator() }
+                is ContentState.Error -> Centered {
+                    Text(state.message, color = MaterialTheme.colorScheme.error)
+                }
+
+                is ContentState.Data -> AlbumTrackList(
+                    title = viewModel.title,
+                    tracks = state.value,
+                    onPlay = playbackViewModel::play,
+                )
+            }
+        }
+    }
+}
+
+/** Album track list with a collapsing hero image (shrinks to 25% on scroll, then scrolls away). */
+@Composable
+private fun AlbumTrackList(
+    title: String,
+    tracks: List<Track>,
+    onPlay: (List<Track>, Int) -> Unit,
+) {
+    val density = LocalDensity.current
+    val maxArtPx = with(density) { MAX_ART_HEIGHT.toPx() }
+    val minArtPx = maxArtPx * MIN_ART_FRACTION
+    var artHeightPx by remember { mutableFloatStateOf(maxArtPx) }
+
+    // (4) Scroll shrinks the art (consuming the scroll) until it hits the min; only then does the
+    // list scroll and carry the shrunk art off the top.
+    val collapseConnection = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                val delta = available.y
+                if (delta < 0f) {
+                    val newHeight = (artHeightPx + delta).coerceIn(minArtPx, maxArtPx)
+                    val consumed = newHeight - artHeightPx
+                    artHeightPx = newHeight
+                    return Offset(0f, consumed)
+                }
+                return Offset.Zero
+            }
+
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource,
+            ): Offset {
+                val delta = available.y
+                if (delta > 0f) {
+                    val newHeight = (artHeightPx + delta).coerceIn(minArtPx, maxArtPx)
+                    val used = newHeight - artHeightPx
+                    artHeightPx = newHeight
+                    return Offset(0f, used)
+                }
+                return Offset.Zero
+            }
+        }
+    }
+
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .nestedScroll(collapseConnection),
+    ) {
+        item(key = "art") {
+            ArtworkImage(
+                url = tracks.firstOrNull()?.artworkUrl,
+                contentDescription = title,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(with(density) { artHeightPx.toDp() }),
+                shape = RectangleShape,
+            )
+        }
+        item(key = "header") {
+            AlbumHeader(
+                title = title,
+                artist = tracks.firstOrNull()?.artist,
+                trackCount = tracks.size,
+                onPlay = { onPlay(tracks, 0) },
+                onShuffle = { onPlay(tracks.shuffled(), 0) },
+            )
+        }
+        itemsIndexed(tracks, key = { _, t -> t.id }) { index, track ->
+            TrackCard(track = track, onClick = { onPlay(tracks, index) })
+        }
+    }
+}
+
+@Composable
+private fun AlbumHeader(
+    title: String,
+    artist: String?,
+    trackCount: Int,
+    onPlay: () -> Unit,
+    onShuffle: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.headlineSmallEmphasized,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        // (2) Album artist — smaller than the title, larger than track rows.
+        if (!artist.isNullOrEmpty()) {
+            Text(
+                text = artist,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+        Spacer(Modifier.height(16.dp))
+        // (5) Play (enqueue + play) and Shuffle (enqueue shuffled + play).
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Button(onClick = onPlay) {
+                Icon(Icons.Filled.PlayArrow, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Play")
+            }
+            FilledTonalButton(onClick = onShuffle) {
+                Icon(Icons.Filled.Shuffle, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Shuffle")
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = "$trackCount tracks",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** (3) Each track in an M3 filled card with a small (non-pill) corner radius. */
+@Composable
+private fun TrackCard(track: Track, onClick: () -> Unit) {
+    Card(
+        onClick = onClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+        shape = RoundedCornerShape(8.dp),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(modifier = Modifier.width(28.dp), contentAlignment = Alignment.Center) {
+                Text(
+                    text = track.trackNumber?.toString() ?: "•",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = track.name,
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                track.artist?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            track.durationMs?.let { ms ->
+                Text(
+                    text = formatDuration(ms),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+private fun formatDuration(ms: Long): String {
+    val totalSeconds = ms / 1000
+    return "%d:%02d".format(totalSeconds / 60, totalSeconds % 60)
 }
 
 @Composable
