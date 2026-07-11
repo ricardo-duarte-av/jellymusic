@@ -12,6 +12,7 @@ import pt.aguiarvieira.jellymusic.domain.model.Track
 import pt.aguiarvieira.jellymusic.domain.model.TrackAudioInfo
 import pt.aguiarvieira.jellymusic.data.db.JellyMusicDatabase
 import pt.aguiarvieira.jellymusic.data.db.toAlbum
+import pt.aguiarvieira.jellymusic.data.db.toDomainTrack
 import pt.aguiarvieira.jellymusic.domain.repository.MusicRepository
 import androidx.paging.ExperimentalPagingApi
 import androidx.paging.Pager
@@ -135,15 +136,21 @@ class MusicRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun getAlbumTracks(albumId: String): Result<List<Track>> = query { api ->
-        ItemsApi(api).getItems(
-            GetItemsRequest(
-                parentId = UUID.fromString(albumId),
-                includeItemTypes = listOf(BaseItemKind.AUDIO),
-            ),
-        ).content.items
-            .map { it.toTrack(urlBuilder) }
-            .sortedWith(compareBy({ it.trackNumber ?: Int.MAX_VALUE }, { it.name }))
+    override suspend fun getAlbumTracks(albumId: String): Result<List<Track>> {
+        val remote = query { api ->
+            ItemsApi(api).getItems(
+                GetItemsRequest(
+                    parentId = UUID.fromString(albumId),
+                    includeItemTypes = listOf(BaseItemKind.AUDIO),
+                ),
+            ).content.items
+                .map { it.toTrack(urlBuilder) }
+                .sortedWith(compareBy({ it.trackNumber ?: Int.MAX_VALUE }, { it.name }))
+        }
+        remote.getOrNull()?.takeIf { it.isNotEmpty() }?.let { return remote }
+        // Offline (or server returned nothing): fall back to this album's downloaded tracks.
+        val local = database.downloadDao().completedTracksForAlbum(albumId).map { it.toDomainTrack() }
+        return if (local.isNotEmpty()) Result.success(local) else remote
     }
 
     override suspend fun getArtistAlbums(artistId: String): Result<List<Album>> = query { api ->

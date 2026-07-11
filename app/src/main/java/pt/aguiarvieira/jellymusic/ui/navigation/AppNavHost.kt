@@ -118,7 +118,11 @@ fun AppNavHost(
         }
 
         composable<Routes.Downloads> {
-            DownloadsScreen(onBack = { navController.popBackStack() })
+            DownloadsScreen(
+                onBack = { navController.popBackStack() },
+                onAlbumClick = { id, name -> navController.navigate(Routes.AlbumDetail(id, name)) },
+                onExpandPlayer = { navController.navigate(Routes.Player) },
+            )
         }
     }
 }

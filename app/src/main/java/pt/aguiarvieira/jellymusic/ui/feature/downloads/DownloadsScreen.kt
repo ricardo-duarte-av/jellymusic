@@ -1,5 +1,6 @@
 package pt.aguiarvieira.jellymusic.ui.feature.downloads
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
@@ -33,16 +35,22 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import pt.aguiarvieira.jellymusic.data.db.AlbumDownloadEntity
 import pt.aguiarvieira.jellymusic.data.db.TrackDownloadEntity
+import pt.aguiarvieira.jellymusic.data.db.toDomainTrack
 import pt.aguiarvieira.jellymusic.domain.model.AlbumDownloadStatus
 import pt.aguiarvieira.jellymusic.domain.model.DownloadState
 import pt.aguiarvieira.jellymusic.domain.model.TrackDownloadStatus
 import pt.aguiarvieira.jellymusic.ui.components.ArtworkImage
+import pt.aguiarvieira.jellymusic.ui.feature.player.MiniPlayer
+import pt.aguiarvieira.jellymusic.ui.feature.player.PlaybackViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DownloadsScreen(
     onBack: () -> Unit,
+    onAlbumClick: (String, String) -> Unit,
+    onExpandPlayer: () -> Unit,
     viewModel: DownloadsViewModel = hiltViewModel(),
+    playbackViewModel: PlaybackViewModel = hiltViewModel(),
 ) {
     val albums by viewModel.downloadedAlbums.collectAsStateWithLifecycle()
     val tracks by viewModel.downloadedTracks.collectAsStateWithLifecycle()
@@ -53,6 +61,10 @@ fun DownloadsScreen(
     // Tracks downloaded on their own (not part of a downloaded album).
     val individualTracks = remember(tracks, albumIds) {
         tracks.filter { it.albumId == null || it.albumId !in albumIds }
+    }
+    // Domain tracks for the standalone list, so tapping one plays it in context.
+    val individualDomainTracks = remember(individualTracks) {
+        individualTracks.map { it.toDomainTrack() }
     }
     val albumSizes = remember(tracks) {
         tracks.groupBy { it.albumId }.mapValues { (_, v) -> v.sumOf { it.downloadedBytes } }
@@ -75,6 +87,7 @@ fun DownloadsScreen(
                 },
             )
         },
+        bottomBar = { MiniPlayer(onExpand = onExpandPlayer) },
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             if (albums.isEmpty() && individualTracks.isEmpty()) {
@@ -99,6 +112,7 @@ fun DownloadsScreen(
                                 album = album,
                                 status = albumStatuses[album.albumId],
                                 sizeBytes = albumSizes[album.albumId] ?: 0L,
+                                onClick = { onAlbumClick(album.albumId, album.name) },
                                 onRemove = { viewModel.removeAlbum(album.albumId) },
                             )
                         }
@@ -106,10 +120,11 @@ fun DownloadsScreen(
 
                     if (individualTracks.isNotEmpty()) {
                         item { SectionHeader("Tracks") }
-                        items(individualTracks, key = { it.trackId }) { track ->
+                        itemsIndexed(individualTracks, key = { _, t -> t.trackId }) { index, track ->
                             TrackDownloadRow(
                                 track = track,
                                 status = trackStatuses[track.trackId],
+                                onClick = { playbackViewModel.play(individualDomainTracks, index) },
                                 onRemove = { viewModel.removeTrack(track.trackId) },
                             )
                         }
@@ -137,9 +152,10 @@ private fun AlbumDownloadRow(
     album: AlbumDownloadEntity,
     status: AlbumDownloadStatus?,
     sizeBytes: Long,
+    onClick: () -> Unit,
     onRemove: () -> Unit,
 ) {
-    Column {
+    Column(modifier = Modifier.clickable(onClick = onClick)) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -176,9 +192,10 @@ private fun AlbumDownloadRow(
 private fun TrackDownloadRow(
     track: TrackDownloadEntity,
     status: TrackDownloadStatus?,
+    onClick: () -> Unit,
     onRemove: () -> Unit,
 ) {
-    Column {
+    Column(modifier = Modifier.clickable(onClick = onClick)) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,

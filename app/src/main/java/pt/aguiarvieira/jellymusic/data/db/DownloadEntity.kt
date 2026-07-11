@@ -2,6 +2,7 @@ package pt.aguiarvieira.jellymusic.data.db
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import pt.aguiarvieira.jellymusic.domain.model.Track
 
 /**
  * One track's offline copy. Rows exist only for tracks the user asked to download; enough metadata
@@ -41,4 +42,16 @@ data class AlbumDownloadEntity(
     val totalTracks: Int,
     val transcoded: Boolean,
     val requestedAt: Long,
+)
+
+/** Reconstructs a domain [Track] from a stored download, for offline browsing/playback. */
+fun TrackDownloadEntity.toDomainTrack(): Track = Track(
+    id = trackId,
+    name = title,
+    artist = artist,
+    album = album,
+    albumId = albumId,
+    trackNumber = trackNumber,
+    durationMs = durationMs,
+    artworkUrl = artworkUrl,
 )
