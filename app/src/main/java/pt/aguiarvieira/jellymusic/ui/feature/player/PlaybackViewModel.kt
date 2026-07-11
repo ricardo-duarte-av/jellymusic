@@ -34,14 +34,20 @@ class PlaybackViewModel @Inject constructor(
      */
     val qualityLabel: StateFlow<String?> =
         connection.state
-            .map { it.trackId to it.appliedStreamSettings }
+            .map { Triple(it.trackId, it.appliedStreamSettings, it.isLocal) }
             .distinctUntilChanged()
-            .mapLatest { (trackId, settings) ->
+            .mapLatest { (trackId, settings, isLocal) ->
                 if (trackId == null) {
                     null
                 } else {
-                    val info = musicRepository.getTrackAudioInfo(trackId).getOrNull()
-                    buildQualityLabel(info, settings)
+                    // A downloaded transcoded file already IS the transcoded format, so the server's
+                    // original details are irrelevant; skip the (possibly offline) fetch.
+                    val info = if (isLocal && settings.transcode) {
+                        null
+                    } else {
+                        musicRepository.getTrackAudioInfo(trackId).getOrNull()
+                    }
+                    buildQualityLabel(info, settings, isLocal)
                 }
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
@@ -54,12 +60,16 @@ class PlaybackViewModel @Inject constructor(
     fun toggleShuffle() = connection.toggleShuffle()
     fun cycleRepeat() = connection.cycleRepeat()
 
-    private fun buildQualityLabel(info: TrackAudioInfo?, settings: StreamSettings): String? {
+    private fun buildQualityLabel(info: TrackAudioInfo?, settings: StreamSettings, isLocal: Boolean): String? {
         val original = formatOriginal(info)
         val transcoded = "${settings.codec.label} ${settings.maxBitrateKbps} kbps"
         return when {
+            // Downloaded transcoded file: you're hearing the transcoded format itself.
+            settings.transcode && isLocal -> transcoded
+            // Streaming with transcode: original file, transcoded on the fly.
             settings.transcode && original != null -> "$original  →  $transcoded"
             settings.transcode -> "→  $transcoded"
+            // Original (streamed or downloaded original).
             else -> original
         }
     }

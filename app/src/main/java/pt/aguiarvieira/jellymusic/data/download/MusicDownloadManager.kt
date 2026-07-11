@@ -43,20 +43,18 @@ class MusicDownloadManager @Inject constructor(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val processorMutex = Mutex()
 
-    /** trackId → absolute file path of a completed download, kept in memory for fast playback lookup. */
+    /** trackId → completed download row, kept in memory for fast playback resolution. */
     @Volatile
-    private var completedPaths: Map<String, String> = emptyMap()
+    private var completedRows: Map<String, TrackDownloadEntity> = emptyMap()
 
     private val downloadsDir: File
         get() = File(context.filesDir, "downloads").apply { mkdirs() }
 
     init {
-        // Keep the local-file map current for playback resolution.
+        // Keep the completed-download map current for playback resolution.
         scope.launch {
             dao.observeCompletedTracks().collect { rows ->
-                completedPaths = rows
-                    .mapNotNull { row -> row.filePath?.let { row.trackId to it } }
-                    .toMap()
+                completedRows = rows.filter { it.filePath != null }.associateBy { it.trackId }
             }
         }
         // Resume any downloads left pending by a previous session.
@@ -65,8 +63,22 @@ class MusicDownloadManager @Inject constructor(
 
     /** Absolute `file://` URI for a completed, still-present download, else null. */
     fun localFileUri(trackId: String): String? {
-        val path = completedPaths[trackId] ?: return null
+        val path = completedRows[trackId]?.filePath ?: return null
         return if (File(path).exists()) "file://$path" else null
+    }
+
+    /** The actual format of a completed local download (for reporting what's being played), else null. */
+    fun localFormat(trackId: String): StreamSettings? {
+        val row = completedRows[trackId] ?: return null
+        return if (row.transcoded) {
+            StreamSettings(
+                transcode = true,
+                codec = row.codec?.let { runCatching { AudioCodec.valueOf(it) }.getOrNull() } ?: AudioCodec.OPUS,
+                maxBitrateKbps = row.bitrateKbps ?: 320,
+            )
+        } else {
+            StreamSettings(transcode = false)
+        }
     }
 
     // --- Enqueue ---

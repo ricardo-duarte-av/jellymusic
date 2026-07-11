@@ -73,12 +73,20 @@ class DownloadsViewModel @Inject constructor(
     fun removeAlbum(albumId: String) = downloadManager.removeAlbum(albumId)
 
     private fun TrackDownloadEntity.toStatus(): TrackDownloadStatus {
-        val progress = when {
-            state == DownloadState.COMPLETED.name -> 1f
-            totalBytes > 0 -> (downloadedBytes.toFloat() / totalBytes).coerceIn(0f, 1f)
-            else -> -1f // indeterminate
-        }
         val downloadState = runCatching { DownloadState.valueOf(state) }.getOrDefault(DownloadState.FAILED)
+        // The transcoding endpoint sends no Content-Length, so estimate the size from the target
+        // bitrate × duration to still show a determinate bar.
+        val denom = when {
+            totalBytes > 0 -> totalBytes
+            transcoded && bitrateKbps != null && durationMs != null && durationMs > 0 ->
+                bitrateKbps.toLong() * 1000L / 8L * (durationMs / 1000L)
+            else -> 0L
+        }
+        val progress = when {
+            downloadState == DownloadState.COMPLETED -> 1f
+            downloadedBytes > 0 && denom > 0 -> (downloadedBytes.toFloat() / denom).coerceIn(0f, 0.99f)
+            else -> -1f // queued or unknown size → indeterminate
+        }
         return TrackDownloadStatus(downloadState, progress)
     }
 }

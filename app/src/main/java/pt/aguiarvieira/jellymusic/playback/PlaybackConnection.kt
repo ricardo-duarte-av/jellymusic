@@ -40,6 +40,8 @@ data class PlaybackUiState(
     val repeatMode: RepeatMode = RepeatMode.OFF,
     /** The settings the current track was actually enqueued with (fixed for its lifetime). */
     val appliedStreamSettings: StreamSettings = StreamSettings(),
+    /** True when the current track plays from a local downloaded file rather than streaming. */
+    val isLocal: Boolean = false,
 )
 
 /**
@@ -118,11 +120,14 @@ class PlaybackConnection @Inject constructor(
         val rebuilt = ((current + 1) until count).map { index ->
             val item = c.getMediaItemAt(index)
             val trackId = item.mediaId.removePrefix("track/")
+            val localUri = downloadManager.localFileUri(trackId)
+            val isLocal = localUri != null
+            val playbackSettings = if (isLocal) downloadManager.localFormat(trackId) ?: streamSettings else streamSettings
             val metadata = item.mediaMetadata.buildUpon()
-                .setExtras(StreamSettingsExtras.toBundle(streamSettings))
+                .setExtras(StreamSettingsExtras.toBundle(playbackSettings, isLocal))
                 .build()
             item.buildUpon()
-                .setUri(downloadManager.localFileUri(trackId) ?: urlBuilder.audioStreamUrl(trackId, streamSettings))
+                .setUri(localUri ?: urlBuilder.audioStreamUrl(trackId, streamSettings))
                 .setMediaMetadata(metadata)
                 .build()
         }
@@ -179,7 +184,8 @@ class PlaybackConnection @Inject constructor(
                 Player.REPEAT_MODE_ALL -> RepeatMode.ALL
                 else -> RepeatMode.OFF
             },
-            appliedStreamSettings = StreamSettingsExtras.fromBundle(c.currentMediaItem?.mediaMetadata?.extras),
+            appliedStreamSettings = StreamSettingsExtras.settingsFrom(c.currentMediaItem?.mediaMetadata?.extras),
+            isLocal = StreamSettingsExtras.isLocal(c.currentMediaItem?.mediaMetadata?.extras),
         )
     }
 }

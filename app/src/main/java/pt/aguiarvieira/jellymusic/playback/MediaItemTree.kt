@@ -72,6 +72,11 @@ class MediaItemTree @Inject constructor(
 
     /** Public so the in-app player ([PlaybackConnection]) builds identical playable items. */
     fun trackMediaItem(track: Track, settings: StreamSettings): MediaItem {
+        // Prefer a completed offline copy; fall back to streaming. When local, the item's real format
+        // is the download's format, not the current streaming settings.
+        val localUri = downloadManager.localFileUri(track.id)
+        val isLocal = localUri != null
+        val playbackSettings = if (isLocal) downloadManager.localFormat(track.id) ?: settings else settings
         val metadata = MediaMetadata.Builder()
             .setTitle(track.name)
             .setArtist(track.artist)
@@ -80,14 +85,13 @@ class MediaItemTree @Inject constructor(
             .setIsBrowsable(false)
             .setIsPlayable(true)
             .setMediaType(MediaMetadata.MEDIA_TYPE_MUSIC)
-            // Record the settings this item was built with so the UI can report the track's actual
-            // stream method (which is fixed for its lifetime) rather than the live settings.
-            .setExtras(StreamSettingsExtras.toBundle(settings))
+            // Record what's actually playing (format + local/stream) so the UI can report it; this is
+            // fixed for the item's lifetime rather than tracking the live settings.
+            .setExtras(StreamSettingsExtras.toBundle(playbackSettings, isLocal))
             .build()
         return MediaItem.Builder()
             .setMediaId(TRACK_PREFIX + track.id)
-            // Prefer a completed offline copy; fall back to streaming.
-            .setUri(downloadManager.localFileUri(track.id) ?: urlBuilder.audioStreamUrl(track.id, settings))
+            .setUri(localUri ?: urlBuilder.audioStreamUrl(track.id, settings))
             .setMediaMetadata(metadata)
             .build()
     }
