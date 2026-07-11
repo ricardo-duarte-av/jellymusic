@@ -44,6 +44,7 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -159,6 +160,8 @@ private fun AlbumTrackList(
                     .fillMaxWidth()
                     .height(with(density) { artHeightPx.toDp() }),
                 shape = RectangleShape,
+                // Scale the whole cover to fit so it shrinks with the frame instead of clipping.
+                contentScale = ContentScale.Fit,
             )
         }
         item(key = "header") {

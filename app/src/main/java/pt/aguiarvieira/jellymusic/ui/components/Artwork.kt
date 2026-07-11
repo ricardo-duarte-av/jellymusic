@@ -26,6 +26,9 @@ fun ArtworkImage(
     modifier: Modifier = Modifier,
     shape: Shape = MaterialTheme.shapes.medium,
     fallbackIcon: ImageVector = Icons.Filled.MusicNote,
+    // Crop fills the frame (good for square grid cards); Fit scales the whole image to fit (used by
+    // the collapsing album hero, so it shrinks rather than clips).
+    contentScale: ContentScale = ContentScale.Crop,
 ) {
     Box(
         modifier = modifier
@@ -38,7 +41,7 @@ fun ArtworkImage(
                 model = url,
                 contentDescription = contentDescription,
                 modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
+                contentScale = contentScale,
             )
         } else {
             Icon(
