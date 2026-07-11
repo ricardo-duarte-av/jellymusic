@@ -2,10 +2,15 @@ package pt.aguiarvieira.jellymusic.ui.feature.browse
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.paging.PagingData
+import androidx.paging.cachedIn
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import pt.aguiarvieira.jellymusic.data.settings.SettingsStore
@@ -25,11 +30,17 @@ data class BrowseUiState(
     val libraries: List<MusicLibrary> = listOf(MusicLibrary.all()),
     val albumSort: AlbumSort = AlbumSort.DEFAULT,
     val albumSortDescending: Boolean = false,
-    val albums: ContentState<List<Album>> = ContentState.Loading,
     val artists: ContentState<List<Artist>> = ContentState.Loading,
     val playlists: ContentState<List<Playlist>> = ContentState.Loading,
 )
 
+private data class AlbumQuery(
+    val libraryId: String,
+    val sort: AlbumSort,
+    val descending: Boolean,
+)
+
+@OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class BrowseViewModel @Inject constructor(
     private val musicRepository: MusicRepository,
@@ -40,20 +51,26 @@ class BrowseViewModel @Inject constructor(
     private val _state = MutableStateFlow(BrowseUiState())
     val state = _state.asStateFlow()
 
+    private val albumQuery = MutableStateFlow(
+        AlbumQuery(MusicLibrary.ALL_ID, AlbumSort.DEFAULT, false),
+    )
+
+    /** Paged albums for the current library + sort; the grid collects this. */
+    val albumsPaging: Flow<PagingData<Album>> = albumQuery
+        .flatMapLatest { q -> musicRepository.albumsPager(q.libraryId, q.sort, q.descending) }
+        .cachedIn(viewModelScope)
+
     init {
         viewModelScope.launch {
             // Default to "All music" unless the user has previously picked a library.
             val selected = settingsStore.selectedLibrary.first() ?: MusicLibrary.all()
+            val sort = settingsStore.albumSort.first()
+            val descending = settingsStore.albumSortDescending.first()
             _state.update {
-                it.copy(
-                    selectedLibrary = selected,
-                    albumSort = settingsStore.albumSort.first(),
-                    albumSortDescending = settingsStore.albumSortDescending.first(),
-                )
+                it.copy(selectedLibrary = selected, albumSort = sort, albumSortDescending = descending)
             }
+            albumQuery.value = AlbumQuery(selected.id, sort, descending)
             loadLibraries()
-            // Only the default (Albums) tab loads eagerly; Artists/Playlists load on first view.
-            loadAlbums()
         }
     }
 
@@ -69,7 +86,6 @@ class BrowseViewModel @Inject constructor(
         if (library.id == _state.value.selectedLibrary.id) return
         viewModelScope.launch {
             settingsStore.setSelectedLibrary(library)
-            // Albums reload immediately; the other tabs reset and reload lazily when next viewed.
             _state.update {
                 it.copy(
                     selectedLibrary = library,
@@ -77,7 +93,7 @@ class BrowseViewModel @Inject constructor(
                     playlists = ContentState.Loading,
                 )
             }
-            loadAlbums()
+            albumQuery.update { it.copy(libraryId = library.id) }
         }
     }
 
@@ -86,7 +102,7 @@ class BrowseViewModel @Inject constructor(
         viewModelScope.launch {
             settingsStore.setAlbumSort(sort)
             _state.update { it.copy(albumSort = sort) }
-            loadAlbums()
+            albumQuery.update { it.copy(sort = sort) }
         }
     }
 
@@ -95,7 +111,7 @@ class BrowseViewModel @Inject constructor(
         viewModelScope.launch {
             settingsStore.setAlbumSortDescending(descending)
             _state.update { it.copy(albumSortDescending = descending) }
-            loadAlbums()
+            albumQuery.update { it.copy(descending = descending) }
         }
     }
 
@@ -114,20 +130,6 @@ class BrowseViewModel @Inject constructor(
         viewModelScope.launch {
             _state.update {
                 it.copy(playlists = musicRepository.getPlaylists(_state.value.selectedLibrary.id).toContentState())
-            }
-        }
-    }
-
-    private fun loadAlbums() {
-        val current = _state.value
-        _state.update { it.copy(albums = ContentState.Loading) }
-        viewModelScope.launch {
-            _state.update {
-                it.copy(
-                    albums = musicRepository
-                        .getAlbums(current.selectedLibrary.id, current.albumSort, current.albumSortDescending)
-                        .toContentState(),
-                )
             }
         }
     }

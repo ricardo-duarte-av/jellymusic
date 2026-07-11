@@ -1,5 +1,7 @@
 package pt.aguiarvieira.jellymusic.domain.repository
 
+import androidx.paging.PagingData
+import kotlinx.coroutines.flow.Flow
 import pt.aguiarvieira.jellymusic.domain.model.Album
 import pt.aguiarvieira.jellymusic.domain.model.AlbumSort
 import pt.aguiarvieira.jellymusic.domain.model.Artist
@@ -16,6 +18,13 @@ interface MusicRepository {
         sort: AlbumSort = AlbumSort.DEFAULT,
         descending: Boolean = false,
     ): Result<List<Album>>
+
+    /** Paged album stream (first page renders fast); reflects [libraryId]/[sort]/[descending]. */
+    fun albumsPager(
+        libraryId: String?,
+        sort: AlbumSort,
+        descending: Boolean,
+    ): Flow<PagingData<Album>>
     suspend fun getArtists(libraryId: String?): Result<List<Artist>>
     suspend fun getPlaylists(libraryId: String?): Result<List<Playlist>>
 

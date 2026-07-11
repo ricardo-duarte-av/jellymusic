@@ -10,6 +10,7 @@ coreKtx = "1.19.0"
 activityCompose = "1.13.0"
 lifecycle = "2.11.0"
 navigationCompose = "2.10.0-alpha06"
+paging = "3.5.0"
 
 # --- Compose (bleeding edge for M3 Expressive eye candy) ---
 composeBom = "2026.06.01"
@@ -56,6 +57,10 @@ androidx-material3-adaptive-navigation-suite = { group = "androidx.compose.mater
 
 # Navigation
 androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigationCompose" }
+
+# Paging
+androidx-paging-runtime = { group = "androidx.paging", name = "paging-runtime", version.ref = "paging" }
+androidx-paging-compose = { group = "androidx.paging", name = "paging-compose", version.ref = "paging" }
 
 # Hilt
 hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }

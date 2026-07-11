@@ -9,13 +9,16 @@ import pt.aguiarvieira.jellymusic.domain.model.MusicLibrary
 import pt.aguiarvieira.jellymusic.domain.model.Playlist
 import pt.aguiarvieira.jellymusic.domain.model.Track
 import pt.aguiarvieira.jellymusic.domain.repository.MusicRepository
+import androidx.paging.Pager
+import androidx.paging.PagingConfig
+import androidx.paging.PagingData
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.operations.ArtistsApi
 import org.jellyfin.sdk.api.operations.ItemsApi
 import org.jellyfin.sdk.api.operations.PlaylistsApi
-import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.BaseItemKind
 import org.jellyfin.sdk.model.api.ImageType
 import org.jellyfin.sdk.model.api.ItemSortBy
@@ -27,7 +30,7 @@ import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
-private const val TICKS_PER_MS = 10_000L
+private const val ALBUM_PAGE_SIZE = 100
 
 @Singleton
 class MusicRepositoryImpl @Inject constructor(
@@ -52,20 +55,23 @@ class MusicRepositoryImpl @Inject constructor(
                 imageTypeLimit = 1,
                 enableImageTypes = listOf(ImageType.PRIMARY),
             ),
-        ).content.items.map { it.toAlbum() }
+        ).content.items.map { it.toAlbum(urlBuilder) }
     }
 
-    private fun AlbumSort.toItemSortBy(): ItemSortBy = when (this) {
-        AlbumSort.ALBUM_ARTIST -> ItemSortBy.ALBUM_ARTIST
-        AlbumSort.ID -> ItemSortBy.DEFAULT
-        AlbumSort.COMMUNITY_RATING -> ItemSortBy.COMMUNITY_RATING
-        AlbumSort.CRITIC_RATING -> ItemSortBy.CRITIC_RATING
-        AlbumSort.NAME -> ItemSortBy.SORT_NAME
-        AlbumSort.PLAY_COUNT -> ItemSortBy.PLAY_COUNT
-        AlbumSort.RANDOM -> ItemSortBy.RANDOM
-        AlbumSort.DATE_ADDED -> ItemSortBy.DATE_CREATED
-        AlbumSort.DATE_RELEASED -> ItemSortBy.PREMIERE_DATE
-    }
+    override fun albumsPager(
+        libraryId: String?,
+        sort: AlbumSort,
+        descending: Boolean,
+    ): Flow<PagingData<Album>> = Pager(
+        config = PagingConfig(
+            pageSize = ALBUM_PAGE_SIZE,
+            initialLoadSize = ALBUM_PAGE_SIZE,
+            enablePlaceholders = false,
+        ),
+        pagingSourceFactory = {
+            AlbumPagingSource(clientProvider, urlBuilder, libraryId, sort, descending)
+        },
+    ).flow
 
     override suspend fun getArtists(libraryId: String?): Result<List<Artist>> = query { api ->
         ArtistsApi(api).getAlbumArtists(
@@ -77,7 +83,7 @@ class MusicRepositoryImpl @Inject constructor(
                 imageTypeLimit = 1,
                 enableImageTypes = listOf(ImageType.PRIMARY),
             ),
-        ).content.items.map { it.toArtist() }
+        ).content.items.map { it.toArtist(urlBuilder) }
     }
 
     override suspend fun getPlaylists(libraryId: String?): Result<List<Playlist>> = query { api ->
@@ -92,7 +98,7 @@ class MusicRepositoryImpl @Inject constructor(
                 imageTypeLimit = 1,
                 enableImageTypes = listOf(ImageType.PRIMARY),
             ),
-        ).content.items.map { it.toPlaylist() }
+        ).content.items.map { it.toPlaylist(urlBuilder) }
     }
 
     override suspend fun getAlbumTracks(albumId: String): Result<List<Track>> = query { api ->
@@ -102,7 +108,7 @@ class MusicRepositoryImpl @Inject constructor(
                 includeItemTypes = listOf(BaseItemKind.AUDIO),
             ),
         ).content.items
-            .map { it.toTrack() }
+            .map { it.toTrack(urlBuilder) }
             .sortedWith(compareBy({ it.trackNumber ?: Int.MAX_VALUE }, { it.name }))
     }
 
@@ -115,13 +121,13 @@ class MusicRepositoryImpl @Inject constructor(
                 sortBy = listOf(ItemSortBy.PRODUCTION_YEAR, ItemSortBy.SORT_NAME),
                 sortOrder = listOf(SortOrder.DESCENDING),
             ),
-        ).content.items.map { it.toAlbum() }
+        ).content.items.map { it.toAlbum(urlBuilder) }
     }
 
     override suspend fun getPlaylistTracks(playlistId: String): Result<List<Track>> = query { api ->
         PlaylistsApi(api).getPlaylistItems(
             GetPlaylistItemsRequest(playlistId = UUID.fromString(playlistId)),
-        ).content.items.map { it.toTrack() }
+        ).content.items.map { it.toTrack(urlBuilder) }
     }
 
     private suspend fun <T> query(block: suspend (ApiClient) -> T): Result<T> =
@@ -133,36 +139,4 @@ class MusicRepositoryImpl @Inject constructor(
 
     private fun String?.toParentUuid(): UUID? =
         if (this == null || this == MusicLibrary.ALL_ID) null else UUID.fromString(this)
-
-    private fun BaseItemDto.toAlbum() = Album(
-        id = id.toString(),
-        name = name.orEmpty(),
-        artist = albumArtist ?: artists?.firstOrNull(),
-        year = productionYear,
-        artworkUrl = urlBuilder.imageUrl(id.toString()),
-    )
-
-    private fun BaseItemDto.toArtist() = Artist(
-        id = id.toString(),
-        name = name.orEmpty(),
-        artworkUrl = urlBuilder.imageUrl(id.toString()),
-    )
-
-    private fun BaseItemDto.toPlaylist() = Playlist(
-        id = id.toString(),
-        name = name.orEmpty(),
-        trackCount = childCount,
-        artworkUrl = urlBuilder.imageUrl(id.toString()),
-    )
-
-    private fun BaseItemDto.toTrack() = Track(
-        id = id.toString(),
-        name = name.orEmpty(),
-        artist = artists?.firstOrNull() ?: albumArtist,
-        album = album,
-        albumId = albumId?.toString(),
-        trackNumber = indexNumber,
-        durationMs = runTimeTicks?.let { it / TICKS_PER_MS },
-        artworkUrl = urlBuilder.imageUrl(albumId?.toString() ?: id.toString()),
-    )
 }

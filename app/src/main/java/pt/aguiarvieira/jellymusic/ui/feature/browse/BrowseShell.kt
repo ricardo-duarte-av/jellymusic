@@ -7,10 +7,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
@@ -50,6 +52,12 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.paging.LoadState
+import androidx.paging.compose.LazyPagingItems
+import androidx.paging.compose.collectAsLazyPagingItems
+import androidx.paging.compose.itemContentType
+import androidx.paging.compose.itemKey
+import pt.aguiarvieira.jellymusic.domain.model.Album
 import pt.aguiarvieira.jellymusic.domain.model.AlbumSort
 import pt.aguiarvieira.jellymusic.domain.model.MusicLibrary
 import pt.aguiarvieira.jellymusic.ui.common.ContentState
@@ -75,6 +83,7 @@ fun BrowseShell(
     viewModel: BrowseViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val albumItems = viewModel.albumsPaging.collectAsLazyPagingItems()
     var selectedTab by rememberSaveable { mutableStateOf(BrowseTab.ALBUMS) }
     // Grid column count, adjustable by pinch (shared across tabs).
     var columns by rememberSaveable { mutableIntStateOf(2) }
@@ -141,13 +150,12 @@ fun BrowseShell(
 
             Box(modifier = Modifier.weight(1f)) {
                 when (selectedTab) {
-                    BrowseTab.ALBUMS -> ContentSection(state.albums, "No albums found") { albums ->
-                        Grid(columns = columns, onZoom = onZoom) {
-                            items(albums, key = { it.id }) { album ->
-                                AlbumCard(album, onClick = { onAlbumClick(album.id, album.name) })
-                            }
-                        }
-                    }
+                    BrowseTab.ALBUMS -> AlbumsPagingContent(
+                        albums = albumItems,
+                        columns = columns,
+                        onZoom = onZoom,
+                        onAlbumClick = onAlbumClick,
+                    )
 
                     BrowseTab.ARTISTS -> ContentSection(state.artists, "No artists found") { artists ->
                         Grid(columns = columns, onZoom = onZoom) {
@@ -261,6 +269,54 @@ private fun LibrarySelector(
                         null
                     },
                 )
+            }
+        }
+    }
+}
+
+/** Paged album grid with load-state handling (initial spinner, error, empty, append footer). */
+@Composable
+private fun AlbumsPagingContent(
+    albums: LazyPagingItems<Album>,
+    columns: Int,
+    onZoom: (Int) -> Unit,
+    onAlbumClick: (String, String) -> Unit,
+) {
+    val refresh = albums.loadState.refresh
+    when {
+        refresh is LoadState.Loading -> Centered { CircularProgressIndicator() }
+        refresh is LoadState.Error -> Centered {
+            Text(
+                text = refresh.error.message ?: "Couldn't load albums",
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+
+        albums.itemCount == 0 -> Centered {
+            Text("No albums found", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+
+        else -> Grid(columns = columns, onZoom = onZoom) {
+            items(
+                count = albums.itemCount,
+                key = albums.itemKey { it.id },
+                contentType = albums.itemContentType { "album" },
+            ) { index ->
+                albums[index]?.let { album ->
+                    AlbumCard(album, onClick = { onAlbumClick(album.id, album.name) })
+                }
+            }
+            if (albums.loadState.append is LoadState.Loading) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                }
             }
         }
     }
