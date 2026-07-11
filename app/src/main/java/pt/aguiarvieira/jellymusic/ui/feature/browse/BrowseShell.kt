@@ -34,6 +34,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.adaptive.navigationsuite.ExperimentalMaterial3AdaptiveNavigationSuiteApi
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.runtime.Composable
@@ -274,7 +275,8 @@ private fun LibrarySelector(
     }
 }
 
-/** Paged album grid with load-state handling (initial spinner, error, empty, append footer). */
+/** Paged album grid with pull-to-refresh and load-state handling. */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AlbumsPagingContent(
     albums: LazyPagingItems<Album>,
@@ -284,6 +286,38 @@ private fun AlbumsPagingContent(
 ) {
     val refresh = albums.loadState.refresh
     when {
+        // Have cached/loaded data: always show the grid (a background refresh shows as the pull
+        // indicator rather than replacing the grid with a spinner).
+        albums.itemCount > 0 -> PullToRefreshBox(
+            isRefreshing = refresh is LoadState.Loading,
+            onRefresh = { albums.refresh() },
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            Grid(columns = columns, onZoom = onZoom) {
+                items(
+                    count = albums.itemCount,
+                    key = albums.itemKey { it.id },
+                    contentType = albums.itemContentType { "album" },
+                ) { index ->
+                    albums[index]?.let { album ->
+                        AlbumCard(album, onClick = { onAlbumClick(album.id, album.name) })
+                    }
+                }
+                if (albums.loadState.append is LoadState.Loading) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            CircularProgressIndicator()
+                        }
+                    }
+                }
+            }
+        }
+
         refresh is LoadState.Loading -> Centered { CircularProgressIndicator() }
         refresh is LoadState.Error -> Centered {
             Text(
@@ -292,32 +326,8 @@ private fun AlbumsPagingContent(
             )
         }
 
-        albums.itemCount == 0 -> Centered {
+        else -> Centered {
             Text("No albums found", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-
-        else -> Grid(columns = columns, onZoom = onZoom) {
-            items(
-                count = albums.itemCount,
-                key = albums.itemKey { it.id },
-                contentType = albums.itemContentType { "album" },
-            ) { index ->
-                albums[index]?.let { album ->
-                    AlbumCard(album, onClick = { onAlbumClick(album.id, album.name) })
-                }
-            }
-            if (albums.loadState.append is LoadState.Loading) {
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        CircularProgressIndicator()
-                    }
-                }
-            }
         }
     }
 }
