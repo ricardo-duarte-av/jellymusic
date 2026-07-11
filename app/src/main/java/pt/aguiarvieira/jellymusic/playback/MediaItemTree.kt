@@ -78,6 +78,9 @@ class MediaItemTree @Inject constructor(
             .setIsBrowsable(false)
             .setIsPlayable(true)
             .setMediaType(MediaMetadata.MEDIA_TYPE_MUSIC)
+            // Record the settings this item was built with so the UI can report the track's actual
+            // stream method (which is fixed for its lifetime) rather than the live settings.
+            .setExtras(StreamSettingsExtras.toBundle(settings))
             .build()
         return MediaItem.Builder()
             .setMediaId(TRACK_PREFIX + track.id)

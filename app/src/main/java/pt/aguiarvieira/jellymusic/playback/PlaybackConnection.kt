@@ -37,6 +37,8 @@ data class PlaybackUiState(
     val durationMs: Long = 0L,
     val shuffleEnabled: Boolean = false,
     val repeatMode: RepeatMode = RepeatMode.OFF,
+    /** The settings the current track was actually enqueued with (fixed for its lifetime). */
+    val appliedStreamSettings: StreamSettings = StreamSettings(),
 )
 
 /**
@@ -114,8 +116,12 @@ class PlaybackConnection @Inject constructor(
         val rebuilt = ((current + 1) until count).map { index ->
             val item = c.getMediaItemAt(index)
             val trackId = item.mediaId.removePrefix("track/")
+            val metadata = item.mediaMetadata.buildUpon()
+                .setExtras(StreamSettingsExtras.toBundle(streamSettings))
+                .build()
             item.buildUpon()
                 .setUri(urlBuilder.audioStreamUrl(trackId, streamSettings))
+                .setMediaMetadata(metadata)
                 .build()
         }
         c.replaceMediaItems(current + 1, count, rebuilt)
@@ -171,6 +177,7 @@ class PlaybackConnection @Inject constructor(
                 Player.REPEAT_MODE_ALL -> RepeatMode.ALL
                 else -> RepeatMode.OFF
             },
+            appliedStreamSettings = StreamSettingsExtras.fromBundle(c.currentMediaItem?.mediaMetadata?.extras),
         )
     }
 }

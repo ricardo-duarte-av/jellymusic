@@ -6,12 +6,10 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
-import pt.aguiarvieira.jellymusic.data.settings.SettingsStore
 import pt.aguiarvieira.jellymusic.domain.model.StreamSettings
 import pt.aguiarvieira.jellymusic.domain.model.Track
 import pt.aguiarvieira.jellymusic.domain.model.TrackAudioInfo
@@ -24,28 +22,29 @@ import javax.inject.Inject
 class PlaybackViewModel @Inject constructor(
     private val connection: PlaybackConnection,
     private val musicRepository: MusicRepository,
-    settingsStore: SettingsStore,
 ) : ViewModel() {
 
     val state = connection.state
 
     /**
      * Human-readable quality of the current track: the original file's codec/rate/depth/bitrate, or
-     * "original → transcoded" when streaming transcode is on.
+     * "original → transcoded" when it is being transcoded. Keyed off the settings the track was
+     * *actually* enqueued with (from playback state), not the live settings — flipping transcode in
+     * Settings only affects the next track, so the label must not change for the current one.
      */
-    val qualityLabel: StateFlow<String?> = combine(
-        connection.state.map { it.trackId }.distinctUntilChanged(),
-        settingsStore.streamSettings,
-    ) { trackId, settings -> trackId to settings }
-        .mapLatest { (trackId, settings) ->
-            if (trackId == null) {
-                null
-            } else {
-                val info = musicRepository.getTrackAudioInfo(trackId).getOrNull()
-                buildQualityLabel(info, settings)
+    val qualityLabel: StateFlow<String?> =
+        connection.state
+            .map { it.trackId to it.appliedStreamSettings }
+            .distinctUntilChanged()
+            .mapLatest { (trackId, settings) ->
+                if (trackId == null) {
+                    null
+                } else {
+                    val info = musicRepository.getTrackAudioInfo(trackId).getOrNull()
+                    buildQualityLabel(info, settings)
+                }
             }
-        }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     fun play(tracks: List<Track>, startIndex: Int) = connection.playTracks(tracks, startIndex)
     fun togglePlayPause() = connection.togglePlayPause()

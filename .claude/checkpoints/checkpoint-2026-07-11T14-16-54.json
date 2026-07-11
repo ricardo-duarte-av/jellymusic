@@ -1,0 +1,71 @@
+{
+  "timestamp": "2026-07-11T14:16:54.497Z",
+  "projectRoot": "/home/daedric/jellymusic",
+  "instincts": {
+    "instincts": [
+      {
+        "id": "coroutine-structured",
+        "type": "pattern",
+        "description": "Structured concurrency with viewModelScope",
+        "context": "coroutines-patterns",
+        "confidence": 1,
+        "createdAt": "2026-07-10T21:01:04.424Z",
+        "lastUsed": "2026-07-11T14:10:05.817Z",
+        "usageCount": 34
+      },
+      {
+        "id": "sealed-interface-state",
+        "type": "pattern",
+        "description": "Sealed interface for UI state",
+        "context": "mvi-architecture",
+        "confidence": 0.9999999999999999,
+        "createdAt": "2026-07-10T21:01:04.429Z",
+        "lastUsed": "2026-07-11T14:10:05.814Z",
+        "usageCount": 7
+      },
+      {
+        "id": "compose-state-hoisting",
+        "type": "pattern",
+        "description": "State hoisting with collectAsStateWithLifecycle",
+        "context": "jetpack-compose",
+        "confidence": 1,
+        "createdAt": "2026-07-10T21:01:04.430Z",
+        "lastUsed": "2026-07-11T14:10:05.816Z",
+        "usageCount": 93
+      },
+      {
+        "id": "compose-lazy-key",
+        "type": "pattern",
+        "description": "LazyColumn/LazyRow with stable keys",
+        "context": "jetpack-compose",
+        "confidence": 1,
+        "createdAt": "2026-07-10T21:01:04.430Z",
+        "lastUsed": "2026-07-11T14:10:05.815Z",
+        "usageCount": 43
+      }
+    ],
+    "version": "1.0",
+    "lastUpdated": "2026-07-11T14:10:05.817Z"
+  },
+  "gitBranch": "main",
+  "lastFiles": [
+    "app/src/main/java/pt/aguiarvieira/jellymusic/data/jellyfin/StreamUrlBuilder.kt",
+    "app/src/main/java/pt/aguiarvieira/jellymusic/data/repository/MusicRepositoryImpl.kt",
+    "app/src/main/java/pt/aguiarvieira/jellymusic/data/settings/SettingsStore.kt",
+    "app/src/main/java/pt/aguiarvieira/jellymusic/domain/model/StreamModels.kt",
+    "app/src/main/java/pt/aguiarvieira/jellymusic/domain/repository/MusicRepository.kt",
+    "app/src/main/java/pt/aguiarvieira/jellymusic/playback/MediaItemTree.kt",
+    "app/src/main/java/pt/aguiarvieira/jellymusic/playback/PlaybackConnection.kt",
+    "app/src/main/java/pt/aguiarvieira/jellymusic/ui/feature/detail/DetailScreens.kt",
+    "app/src/main/java/pt/aguiarvieira/jellymusic/ui/feature/player/FullPlayerScreen.kt",
+    "app/src/main/java/pt/aguiarvieira/jellymusic/ui/feature/player/PlaybackViewModel.kt",
+    "app/src/main/java/pt/aguiarvieira/jellymusic/ui/feature/settings/SettingsScreen.kt",
+    "app/src/main/java/pt/aguiarvieira/jellymusic/ui/feature/settings/SettingsViewModel.kt",
+    "app/src/main/java/pt/aguiarvieira/jellymusic/ui/navigation/AppNavHost.kt",
+    "app/src/main/java/pt/aguiarvieira/jellymusic/ui/navigation/Routes.kt",
+    "screenshots/jellymusic1.jpg",
+    "screenshots/jellymusic2.jpg",
+    "screenshots/jellymusic3.jpg",
+    "screenshots/readme.md"
+  ]
+}
