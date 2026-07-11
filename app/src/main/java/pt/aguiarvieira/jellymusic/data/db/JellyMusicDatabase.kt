@@ -5,7 +5,7 @@ import androidx.room.RoomDatabase
 
 @Database(
     entities = [CachedAlbumEntity::class, TrackDownloadEntity::class, AlbumDownloadEntity::class],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class JellyMusicDatabase : RoomDatabase() {

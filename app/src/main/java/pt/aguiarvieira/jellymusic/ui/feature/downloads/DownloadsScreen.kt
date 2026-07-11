@@ -161,7 +161,7 @@ private fun AlbumDownloadRow(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             ArtworkImage(
-                url = album.artworkUrl,
+                url = album.artworkPath?.let { "file://$it" } ?: album.artworkUrl,
                 contentDescription = album.name,
                 modifier = Modifier.size(48.dp),
             )

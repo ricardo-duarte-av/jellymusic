@@ -25,11 +25,19 @@ object DatabaseModule {
         }
     }
 
+    // v4 adds cached-artwork paths to both download tables.
+    private val MIGRATION_3_4 = object : Migration(3, 4) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE track_downloads ADD COLUMN artworkPath TEXT")
+            db.execSQL("ALTER TABLE album_downloads ADD COLUMN artworkPath TEXT")
+        }
+    }
+
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): JellyMusicDatabase =
         Room.databaseBuilder(context, JellyMusicDatabase::class.java, "jellymusic.db")
-            .addMigrations(MIGRATION_2_3)
+            .addMigrations(MIGRATION_2_3, MIGRATION_3_4)
             .fallbackToDestructiveMigration(dropAllTables = true)
             .build()
 

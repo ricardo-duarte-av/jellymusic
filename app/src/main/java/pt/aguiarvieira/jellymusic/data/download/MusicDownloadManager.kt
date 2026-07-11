@@ -39,6 +39,7 @@ class MusicDownloadManager @Inject constructor(
     private val urlBuilder: StreamUrlBuilder,
     private val musicRepository: MusicRepository,
     private val settingsStore: SettingsStore,
+    private val artworkCache: ArtworkCache,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val processorMutex = Mutex()
@@ -100,6 +101,7 @@ class MusicDownloadManager @Inject constructor(
                     name = albumName,
                     artist = albumArtist,
                     artworkUrl = artworkUrl,
+                    artworkPath = artworkCache.cache(albumId, artworkUrl),
                     totalTracks = tracks.size,
                     transcoded = transcode,
                     requestedAt = System.currentTimeMillis(),
@@ -125,6 +127,7 @@ class MusicDownloadManager @Inject constructor(
             // Delete every track file we hold for this album, then drop the rows.
             dao.completedTracks().filter { it.albumId == albumId }.forEach { deleteFilesFor(it.trackId) }
             dao.deleteTracksForAlbum(albumId)
+            artworkCache.delete(albumId)
         }
     }
 
@@ -147,6 +150,8 @@ class MusicDownloadManager @Inject constructor(
                 trackNumber = track.trackNumber,
                 durationMs = track.durationMs,
                 artworkUrl = track.artworkUrl,
+                // Cache the cover (keyed by album so an album's tracks share one file).
+                artworkPath = artworkCache.cache(albumId ?: track.id, track.artworkUrl),
                 transcoded = transcode,
                 codec = if (transcode) settings.codec.name else null,
                 bitrateKbps = if (transcode) settings.maxBitrateKbps else null,

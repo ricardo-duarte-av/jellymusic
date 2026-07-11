@@ -19,6 +19,8 @@ data class TrackDownloadEntity(
     val trackNumber: Int?,
     val durationMs: Long?,
     val artworkUrl: String?,
+    /** Absolute path to the cached cover on disk, once fetched (for offline display). */
+    val artworkPath: String? = null,
     /** Download-time transcode choice (independent of the streaming setting). */
     val transcoded: Boolean,
     val codec: String?,        // AudioCodec.name when transcoded
@@ -40,6 +42,8 @@ data class AlbumDownloadEntity(
     val name: String,
     val artist: String?,
     val artworkUrl: String?,
+    /** Absolute path to the cached cover on disk, once fetched (for offline display). */
+    val artworkPath: String? = null,
     val totalTracks: Int,
     val transcoded: Boolean,
     val requestedAt: Long,
@@ -55,5 +59,6 @@ fun TrackDownloadEntity.toDomainTrack(): Track = Track(
     discNumber = discNumber,
     trackNumber = trackNumber,
     durationMs = durationMs,
-    artworkUrl = artworkUrl,
+    // Prefer the cached local cover so downloaded tracks show art offline.
+    artworkUrl = artworkPath?.let { "file://$it" } ?: artworkUrl,
 )
