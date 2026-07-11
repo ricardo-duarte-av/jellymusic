@@ -18,4 +18,6 @@ class PlaybackViewModel @Inject constructor(
     fun next() = connection.next()
     fun previous() = connection.previous()
     fun seekTo(positionMs: Long) = connection.seekTo(positionMs)
+    fun toggleShuffle() = connection.toggleShuffle()
+    fun cycleRepeat() = connection.cycleRepeat()
 }

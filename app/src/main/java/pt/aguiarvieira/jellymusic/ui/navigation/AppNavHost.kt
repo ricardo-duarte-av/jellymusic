@@ -1,5 +1,7 @@
 package pt.aguiarvieira.jellymusic.ui.navigation
 
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -81,7 +83,11 @@ fun AppNavHost(
             )
         }
 
-        composable<Routes.Player> {
+        composable<Routes.Player>(
+            // Rise up when opened from the mini player; collapse straight down on close.
+            enterTransition = { slideInVertically(initialOffsetY = { it }) },
+            popExitTransition = { slideOutVertically(targetOffsetY = { it }) },
+        ) {
             FullPlayerScreen(onCollapse = { navController.popBackStack() })
         }
     }

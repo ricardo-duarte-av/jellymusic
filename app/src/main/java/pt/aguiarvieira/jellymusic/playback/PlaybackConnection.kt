@@ -23,6 +23,8 @@ import pt.aguiarvieira.jellymusic.domain.model.Track
 import javax.inject.Inject
 import javax.inject.Singleton
 
+enum class RepeatMode { OFF, ALL, ONE }
+
 data class PlaybackUiState(
     val hasMedia: Boolean = false,
     val isPlaying: Boolean = false,
@@ -31,6 +33,8 @@ data class PlaybackUiState(
     val artworkUri: String? = null,
     val positionMs: Long = 0L,
     val durationMs: Long = 0L,
+    val shuffleEnabled: Boolean = false,
+    val repeatMode: RepeatMode = RepeatMode.OFF,
 )
 
 /**
@@ -106,6 +110,21 @@ class PlaybackConnection @Inject constructor(
         controller?.seekTo(positionMs)
     }
 
+    fun toggleShuffle() {
+        val c = controller ?: return
+        c.shuffleModeEnabled = !c.shuffleModeEnabled
+    }
+
+    /** Cycles repeat: off → all → one → off. */
+    fun cycleRepeat() {
+        val c = controller ?: return
+        c.repeatMode = when (c.repeatMode) {
+            Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+            Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+            else -> Player.REPEAT_MODE_OFF
+        }
+    }
+
     private fun updateState() {
         val c = controller ?: return
         val metadata = c.mediaMetadata
@@ -117,6 +136,12 @@ class PlaybackConnection @Inject constructor(
             artworkUri = metadata.artworkUri?.toString(),
             positionMs = c.currentPosition.coerceAtLeast(0L),
             durationMs = c.duration.coerceAtLeast(0L),
+            shuffleEnabled = c.shuffleModeEnabled,
+            repeatMode = when (c.repeatMode) {
+                Player.REPEAT_MODE_ONE -> RepeatMode.ONE
+                Player.REPEAT_MODE_ALL -> RepeatMode.ALL
+                else -> RepeatMode.OFF
+            },
         )
     }
 }

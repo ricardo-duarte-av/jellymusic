@@ -19,6 +19,18 @@ class AppViewModel @Inject constructor(
     private val _startState = MutableStateFlow<StartState>(StartState.Loading)
     val startState: StateFlow<StartState> = _startState.asStateFlow()
 
+    /** Set when the app is launched from the media notification; consumed after navigating. */
+    private val _openPlayer = MutableStateFlow(false)
+    val openPlayer: StateFlow<Boolean> = _openPlayer.asStateFlow()
+
+    fun requestOpenPlayer() {
+        _openPlayer.value = true
+    }
+
+    fun consumeOpenPlayer() {
+        _openPlayer.value = false
+    }
+
     init {
         viewModelScope.launch {
             authRepository.restoreSession()

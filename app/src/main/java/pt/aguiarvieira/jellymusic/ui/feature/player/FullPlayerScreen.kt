@@ -14,6 +14,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.RepeatOne
+import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -37,6 +40,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import pt.aguiarvieira.jellymusic.playback.RepeatMode
 import pt.aguiarvieira.jellymusic.ui.components.ArtworkImage
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -130,9 +134,22 @@ fun FullPlayerScreen(
             Spacer(Modifier.height(24.dp))
 
             Row(
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
             ) {
+                // Shuffle toggle — tinted when enabled.
+                IconButton(onClick = viewModel::toggleShuffle, modifier = Modifier.size(48.dp)) {
+                    Icon(
+                        imageVector = Icons.Filled.Shuffle,
+                        contentDescription = if (state.shuffleEnabled) "Shuffle on" else "Shuffle off",
+                        tint = if (state.shuffleEnabled) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    )
+                }
                 IconButton(onClick = viewModel::previous, modifier = Modifier.size(56.dp)) {
                     Icon(
                         Icons.Filled.SkipPrevious,
@@ -140,11 +157,11 @@ fun FullPlayerScreen(
                         modifier = Modifier.size(40.dp),
                     )
                 }
-                FilledIconButton(onClick = viewModel::togglePlayPause, modifier = Modifier.size(80.dp)) {
+                FilledIconButton(onClick = viewModel::togglePlayPause, modifier = Modifier.size(72.dp)) {
                     Icon(
                         imageVector = if (state.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
                         contentDescription = if (state.isPlaying) "Pause" else "Play",
-                        modifier = Modifier.size(44.dp),
+                        modifier = Modifier.size(40.dp),
                     )
                 }
                 IconButton(onClick = viewModel::next, modifier = Modifier.size(56.dp)) {
@@ -152,6 +169,22 @@ fun FullPlayerScreen(
                         Icons.Filled.SkipNext,
                         contentDescription = "Next",
                         modifier = Modifier.size(40.dp),
+                    )
+                }
+                // Repeat toggle — off / all / one, tinted when active.
+                IconButton(onClick = viewModel::cycleRepeat, modifier = Modifier.size(48.dp)) {
+                    Icon(
+                        imageVector = if (state.repeatMode == RepeatMode.ONE) {
+                            Icons.Filled.RepeatOne
+                        } else {
+                            Icons.Filled.Repeat
+                        },
+                        contentDescription = "Repeat ${state.repeatMode.name.lowercase()}",
+                        tint = if (state.repeatMode == RepeatMode.OFF) {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        } else {
+                            MaterialTheme.colorScheme.primary
+                        },
                     )
                 }
             }

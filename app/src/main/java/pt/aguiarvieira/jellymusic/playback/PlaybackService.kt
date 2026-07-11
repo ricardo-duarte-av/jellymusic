@@ -1,5 +1,7 @@
 package pt.aguiarvieira.jellymusic.playback
 
+import android.app.PendingIntent
+import android.content.Intent
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -19,6 +21,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.guava.future
+import pt.aguiarvieira.jellymusic.MainActivity
 import javax.inject.Inject
 
 /**
@@ -50,7 +53,23 @@ class PlaybackService : MediaLibraryService() {
             .setHandleAudioBecomingNoisy(true)
             .build()
 
-        mediaSession = MediaLibrarySession.Builder(this, player, LibraryCallback()).build()
+        mediaSession = MediaLibrarySession.Builder(this, player, LibraryCallback())
+            .setSessionActivity(openPlayerPendingIntent())
+            .build()
+    }
+
+    /** Tapping the media notification opens the app on the full-screen player. */
+    private fun openPlayerPendingIntent(): PendingIntent {
+        val intent = Intent(this, MainActivity::class.java).apply {
+            putExtra(MainActivity.EXTRA_OPEN_PLAYER, true)
+            addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        }
+        return PendingIntent.getActivity(
+            this,
+            0,
+            intent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession =
