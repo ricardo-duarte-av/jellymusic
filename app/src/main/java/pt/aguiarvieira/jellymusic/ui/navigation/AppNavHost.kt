@@ -54,6 +54,8 @@ fun AppNavHost(
                 onArtistClick = { id, name -> navController.navigate(Routes.ArtistDetail(id, name)) },
                 onPlaylistClick = { id, name -> navController.navigate(Routes.PlaylistDetail(id, name)) },
                 onExpandPlayer = { navController.navigate(Routes.Player) },
+                // Settings screen is future work; the gear is wired but inert for now.
+                onOpenSettings = { },
             )
         }
 

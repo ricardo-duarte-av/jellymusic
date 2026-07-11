@@ -2,6 +2,7 @@ package pt.aguiarvieira.jellymusic.ui.feature.browse
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,6 +20,7 @@ import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VerticalAlignBottom
 import androidx.compose.material.icons.filled.VerticalAlignTop
 import androidx.compose.material3.CircularProgressIndicator
@@ -33,6 +35,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.adaptive.navigationsuite.ExperimentalMaterial3AdaptiveNavigationSuiteApi
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -68,6 +71,7 @@ fun BrowseShell(
     onArtistClick: (String, String) -> Unit,
     onPlaylistClick: (String, String) -> Unit,
     onExpandPlayer: () -> Unit,
+    onOpenSettings: () -> Unit,
     viewModel: BrowseViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -75,6 +79,16 @@ fun BrowseShell(
     // Grid column count, adjustable by pinch (shared across tabs).
     var columns by rememberSaveable { mutableIntStateOf(2) }
     val onZoom: (Int) -> Unit = { delta -> columns = (columns + delta).coerceIn(1, 4) }
+
+    // Lazily load Artists/Playlists the first time their tab is shown (Albums loads eagerly).
+    // Re-keyed on the library so a library switch reloads the currently-visible tab.
+    LaunchedEffect(selectedTab, state.selectedLibrary.id) {
+        when (selectedTab) {
+            BrowseTab.ARTISTS -> viewModel.ensureArtists()
+            BrowseTab.PLAYLISTS -> viewModel.ensurePlaylists()
+            BrowseTab.ALBUMS -> Unit
+        }
+    }
 
     NavigationSuiteScaffold(
         navigationSuiteItems = {
@@ -97,22 +111,30 @@ fun BrowseShell(
                             text = selectedTab.label,
                             style = MaterialTheme.typography.titleLargeEmphasized,
                         )
-                        LibrarySelector(
-                            selected = state.selectedLibrary,
-                            libraries = state.libraries,
-                            onSelect = viewModel::selectLibrary,
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            LibrarySelector(
+                                selected = state.selectedLibrary,
+                                libraries = state.libraries,
+                                onSelect = viewModel::selectLibrary,
+                            )
+                            // Sort/order sit right next to the library dropdown (Albums tab only).
+                            if (selectedTab == BrowseTab.ALBUMS) {
+                                AlbumSortControls(
+                                    sort = state.albumSort,
+                                    descending = state.albumSortDescending,
+                                    onSortSelected = viewModel::setAlbumSort,
+                                    onToggleOrder = viewModel::toggleAlbumSortOrder,
+                                )
+                            }
+                        }
                     }
                 },
                 actions = {
-                    // Sort controls live on the top-bar row, alongside the library dropdown.
-                    if (selectedTab == BrowseTab.ALBUMS) {
-                        AlbumSortActions(
-                            sort = state.albumSort,
-                            descending = state.albumSortDescending,
-                            onSortSelected = viewModel::setAlbumSort,
-                            onToggleOrder = viewModel::toggleAlbumSortOrder,
-                        )
+                    IconButton(onClick = onOpenSettings) {
+                        Icon(Icons.Filled.Settings, contentDescription = "Settings")
                     }
                 },
             )
@@ -150,19 +172,26 @@ fun BrowseShell(
     }
 }
 
-/** Compact sort field dropdown + order toggle for the top-app-bar actions (Albums tab). */
+/** Compact sort field + order controls, sized to sit inline next to the library dropdown. */
 @Composable
-private fun AlbumSortActions(
+private fun AlbumSortControls(
     sort: AlbumSort,
     descending: Boolean,
     onSortSelected: (AlbumSort) -> Unit,
     onToggleOrder: () -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
+    val tint = MaterialTheme.colorScheme.onSurfaceVariant
     Box {
-        IconButton(onClick = { expanded = true }) {
-            Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = "Sort by (${sort.label})")
-        }
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.Sort,
+            contentDescription = "Sort by ${sort.label}",
+            tint = tint,
+            modifier = Modifier
+                .clickable { expanded = true }
+                .padding(4.dp)
+                .size(24.dp),
+        )
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             AlbumSort.entries.forEach { option ->
                 DropdownMenuItem(
@@ -180,12 +209,15 @@ private fun AlbumSortActions(
             }
         }
     }
-    IconButton(onClick = onToggleOrder) {
-        Icon(
-            imageVector = if (descending) Icons.Filled.VerticalAlignTop else Icons.Filled.VerticalAlignBottom,
-            contentDescription = if (descending) "Sort descending" else "Sort ascending",
-        )
-    }
+    Icon(
+        imageVector = if (descending) Icons.Filled.VerticalAlignTop else Icons.Filled.VerticalAlignBottom,
+        contentDescription = if (descending) "Sort descending" else "Sort ascending",
+        tint = tint,
+        modifier = Modifier
+            .clickable { onToggleOrder() }
+            .padding(4.dp)
+            .size(24.dp),
+    )
 }
 
 /** The library name in the top bar, tappable to switch between "All music" and a single library. */

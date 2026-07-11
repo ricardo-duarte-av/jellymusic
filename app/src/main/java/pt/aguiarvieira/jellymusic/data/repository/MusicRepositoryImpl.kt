@@ -17,6 +17,7 @@ import org.jellyfin.sdk.api.operations.ItemsApi
 import org.jellyfin.sdk.api.operations.PlaylistsApi
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.BaseItemKind
+import org.jellyfin.sdk.model.api.ImageType
 import org.jellyfin.sdk.model.api.ItemSortBy
 import org.jellyfin.sdk.model.api.SortOrder
 import org.jellyfin.sdk.model.api.request.GetAlbumArtistsRequest
@@ -46,6 +47,10 @@ class MusicRepositoryImpl @Inject constructor(
                 recursive = true,
                 sortBy = listOf(sort.toItemSortBy()),
                 sortOrder = listOf(if (descending) SortOrder.DESCENDING else SortOrder.ASCENDING),
+                // Trim the payload to what the grid shows (drops user-data + extra image tags).
+                enableUserData = false,
+                imageTypeLimit = 1,
+                enableImageTypes = listOf(ImageType.PRIMARY),
             ),
         ).content.items.map { it.toAlbum() }
     }
@@ -68,6 +73,9 @@ class MusicRepositoryImpl @Inject constructor(
                 parentId = libraryId.toParentUuid(),
                 sortBy = listOf(ItemSortBy.SORT_NAME),
                 sortOrder = listOf(SortOrder.ASCENDING),
+                enableUserData = false,
+                imageTypeLimit = 1,
+                enableImageTypes = listOf(ImageType.PRIMARY),
             ),
         ).content.items.map { it.toArtist() }
     }
@@ -80,6 +88,9 @@ class MusicRepositoryImpl @Inject constructor(
                 recursive = true,
                 sortBy = listOf(ItemSortBy.SORT_NAME),
                 sortOrder = listOf(SortOrder.ASCENDING),
+                enableUserData = false,
+                imageTypeLimit = 1,
+                enableImageTypes = listOf(ImageType.PRIMARY),
             ),
         ).content.items.map { it.toPlaylist() }
     }

@@ -52,7 +52,8 @@ class BrowseViewModel @Inject constructor(
                 )
             }
             loadLibraries()
-            loadContent(selected.id)
+            // Only the default (Albums) tab loads eagerly; Artists/Playlists load on first view.
+            loadAlbums()
         }
     }
 
@@ -68,8 +69,15 @@ class BrowseViewModel @Inject constructor(
         if (library.id == _state.value.selectedLibrary.id) return
         viewModelScope.launch {
             settingsStore.setSelectedLibrary(library)
-            _state.update { it.copy(selectedLibrary = library) }
-            loadContent(library.id)
+            // Albums reload immediately; the other tabs reset and reload lazily when next viewed.
+            _state.update {
+                it.copy(
+                    selectedLibrary = library,
+                    artists = ContentState.Loading,
+                    playlists = ContentState.Loading,
+                )
+            }
+            loadAlbums()
         }
     }
 
@@ -91,27 +99,35 @@ class BrowseViewModel @Inject constructor(
         }
     }
 
-    private fun loadContent(libraryId: String) {
-        loadAlbums()
+    /** Loads Artists only if not already loaded (called when the Artists tab is viewed). */
+    fun ensureArtists() {
+        if (_state.value.artists !is ContentState.Loading) return
+        val libraryId = _state.value.selectedLibrary.id
         viewModelScope.launch {
-            _state.update { it.copy(artists = ContentState.Loading) }
             _state.update { it.copy(artists = musicRepository.getArtists(libraryId).toContentState()) }
         }
+    }
+
+    /** Loads Playlists only if not already loaded (called when the Playlists tab is viewed). */
+    fun ensurePlaylists() {
+        if (_state.value.playlists !is ContentState.Loading) return
         viewModelScope.launch {
-            _state.update { it.copy(playlists = ContentState.Loading) }
-            _state.update { it.copy(playlists = musicRepository.getPlaylists(libraryId).toContentState()) }
+            _state.update {
+                it.copy(playlists = musicRepository.getPlaylists(_state.value.selectedLibrary.id).toContentState())
+            }
         }
     }
 
     private fun loadAlbums() {
         val current = _state.value
-        val libraryId = current.selectedLibrary.id
-        val sort = current.albumSort
-        val descending = current.albumSortDescending
         _state.update { it.copy(albums = ContentState.Loading) }
         viewModelScope.launch {
             _state.update {
-                it.copy(albums = musicRepository.getAlbums(libraryId, sort, descending).toContentState())
+                it.copy(
+                    albums = musicRepository
+                        .getAlbums(current.selectedLibrary.id, current.albumSort, current.albumSortDescending)
+                        .toContentState(),
+                )
             }
         }
     }
