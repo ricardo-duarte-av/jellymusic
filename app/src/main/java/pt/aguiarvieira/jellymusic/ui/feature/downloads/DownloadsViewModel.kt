@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import pt.aguiarvieira.jellymusic.core.network.NetworkMonitor
+import pt.aguiarvieira.jellymusic.data.db.AlbumDownloadEntity
 import pt.aguiarvieira.jellymusic.data.db.DownloadDao
 import pt.aguiarvieira.jellymusic.data.db.TrackDownloadEntity
 import pt.aguiarvieira.jellymusic.data.download.MusicDownloadManager
@@ -50,6 +51,13 @@ class DownloadsViewModel @Inject constructor(
                 )
             }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    /** Downloaded/queued albums and tracks, for the Downloads manager screen. */
+    val downloadedAlbums: StateFlow<List<AlbumDownloadEntity>> =
+        dao.observeAlbums().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val downloadedTracks: StateFlow<List<TrackDownloadEntity>> =
+        dao.observeTracks().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** Default transcode choice for the download dialog, mirroring the current streaming setting. */
     val transcodeDefault: StateFlow<Boolean> =

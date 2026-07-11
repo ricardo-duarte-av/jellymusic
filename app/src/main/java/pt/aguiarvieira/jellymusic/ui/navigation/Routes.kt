@@ -34,4 +34,8 @@ object Routes {
 
     @Serializable
     object Settings
+
+    /** Offline downloads manager. */
+    @Serializable
+    object Downloads
 }
