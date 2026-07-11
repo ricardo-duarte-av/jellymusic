@@ -1,5 +1,6 @@
 package pt.aguiarvieira.jellymusic.ui.feature.detail
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -164,7 +165,8 @@ private fun AlbumTrackList(
                 contentScale = ContentScale.Fit,
             )
         }
-        item(key = "header") {
+        // Pins to the top once the art has scrolled away; the track list scrolls beneath it.
+        stickyHeader(key = "header") {
             AlbumHeader(
                 title = title,
                 artist = tracks.firstOrNull()?.artist,
@@ -190,6 +192,7 @@ private fun AlbumHeader(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surface)
             .padding(horizontal = 24.dp, vertical = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
