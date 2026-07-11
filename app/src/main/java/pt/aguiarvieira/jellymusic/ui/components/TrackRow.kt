@@ -4,6 +4,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
@@ -26,6 +27,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import pt.aguiarvieira.jellymusic.domain.model.Track
 import pt.aguiarvieira.jellymusic.domain.model.TrackDownloadStatus
+import pt.aguiarvieira.jellymusic.ui.feature.downloads.TrackDownloadBar
 import pt.aguiarvieira.jellymusic.ui.feature.downloads.TrackDownloadIndicator
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -44,6 +46,7 @@ fun TrackRow(
     val canRemove = downloadStatus?.isComplete == true || downloadStatus?.isActive == true
 
     Box {
+      Column {
         ListItem(
             modifier = modifier.combinedClickable(
                 onClick = onClick,
@@ -81,6 +84,11 @@ fun TrackRow(
                 }
             },
         )
+        TrackDownloadBar(
+            status = downloadStatus,
+            modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 6.dp),
+        )
+      }
 
         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
             onDownload?.let { download ->

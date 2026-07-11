@@ -38,6 +38,7 @@ import pt.aguiarvieira.jellymusic.domain.model.AlbumDownloadStatus
 import pt.aguiarvieira.jellymusic.domain.model.Artist
 import pt.aguiarvieira.jellymusic.domain.model.Playlist
 import pt.aguiarvieira.jellymusic.ui.feature.downloads.AlbumArtDownloadBadge
+import pt.aguiarvieira.jellymusic.ui.feature.downloads.AlbumDownloadBar
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -96,6 +97,11 @@ fun AlbumCard(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
+                // Album-wide download progress while queued/downloading.
+                AlbumDownloadBar(
+                    status = downloadStatus,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
             }
         }
 

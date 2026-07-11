@@ -3,6 +3,7 @@ package pt.aguiarvieira.jellymusic.ui.feature.downloads
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -12,8 +13,8 @@ import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -28,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import pt.aguiarvieira.jellymusic.domain.model.AlbumDownloadStatus
+import pt.aguiarvieira.jellymusic.domain.model.DownloadState
 import pt.aguiarvieira.jellymusic.domain.model.Track
 import pt.aguiarvieira.jellymusic.domain.model.TrackDownloadStatus
 
@@ -112,12 +114,12 @@ private fun targetLabel(target: DownloadTarget): String = when (target) {
 }
 
 /**
- * Overlay badge for album artwork: a save icon once the whole album is downloaded, or a determinate
- * ring while it's downloading. Place inside a Box and pass an aligned [modifier].
+ * Overlay badge for album artwork: a save icon once the whole album is downloaded. In-progress
+ * albums show a [AlbumDownloadBar] on the card instead. Place inside a Box with an aligned [modifier].
  */
 @Composable
 fun AlbumArtDownloadBadge(status: AlbumDownloadStatus?, modifier: Modifier = Modifier) {
-    if (status == null || (!status.isComplete && !status.inProgress)) return
+    if (status?.isComplete != true) return
     Surface(
         modifier = modifier.padding(6.dp).size(26.dp),
         shape = CircleShape,
@@ -127,25 +129,29 @@ fun AlbumArtDownloadBadge(status: AlbumDownloadStatus?, modifier: Modifier = Mod
             modifier = Modifier.padding(4.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            if (status.isComplete) {
-                Icon(
-                    Icons.Filled.Save,
-                    contentDescription = "Downloaded",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(18.dp),
-                )
-            } else {
-                CircularProgressIndicator(
-                    progress = { status.progress },
-                    modifier = Modifier.size(18.dp),
-                    strokeWidth = 2.dp,
-                )
-            }
+            Icon(
+                Icons.Filled.Save,
+                contentDescription = "Downloaded",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp),
+            )
         }
     }
 }
 
-/** Compact per-track state: save icon when downloaded, ring while active, error mark on failure. */
+/** Thin album-wide progress bar shown while the album is downloading/queued; hidden otherwise. */
+@Composable
+fun AlbumDownloadBar(status: AlbumDownloadStatus?, modifier: Modifier = Modifier) {
+    if (status == null || status.isComplete || !status.inProgress) return
+    // Determinate once at least one track is done; indeterminate while everything is still queued.
+    if (status.completed > 0) {
+        LinearProgressIndicator(progress = { status.progress }, modifier = modifier.fillMaxWidth())
+    } else {
+        LinearProgressIndicator(modifier = modifier.fillMaxWidth())
+    }
+}
+
+/** Compact per-track state marker: save icon when downloaded, error mark on failure. */
 @Composable
 fun TrackDownloadIndicator(status: TrackDownloadStatus?, modifier: Modifier = Modifier) {
     when {
@@ -157,21 +163,24 @@ fun TrackDownloadIndicator(status: TrackDownloadStatus?, modifier: Modifier = Mo
             modifier = modifier.size(18.dp),
         )
 
-        status.isActive -> if (status.isIndeterminate) {
-            CircularProgressIndicator(modifier = modifier.size(18.dp), strokeWidth = 2.dp)
-        } else {
-            CircularProgressIndicator(
-                progress = { status.progress },
-                modifier = modifier.size(18.dp),
-                strokeWidth = 2.dp,
-            )
-        }
-
-        else -> Icon(
+        status.state == DownloadState.FAILED -> Icon(
             Icons.Filled.ErrorOutline,
             contentDescription = "Download failed",
             tint = MaterialTheme.colorScheme.error,
             modifier = modifier.size(18.dp),
         )
+
+        else -> Unit // active state is shown by TrackDownloadBar
+    }
+}
+
+/** Thin per-track progress bar shown while the track is downloading/queued; hidden otherwise. */
+@Composable
+fun TrackDownloadBar(status: TrackDownloadStatus?, modifier: Modifier = Modifier) {
+    if (status == null || !status.isActive) return
+    if (status.isIndeterminate) {
+        LinearProgressIndicator(modifier = modifier.fillMaxWidth())
+    } else {
+        LinearProgressIndicator(progress = { status.progress }, modifier = modifier.fillMaxWidth())
     }
 }

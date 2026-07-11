@@ -70,6 +70,7 @@ import pt.aguiarvieira.jellymusic.ui.components.TrackRow
 import pt.aguiarvieira.jellymusic.ui.feature.downloads.DownloadDialogs
 import pt.aguiarvieira.jellymusic.ui.feature.downloads.DownloadTarget
 import pt.aguiarvieira.jellymusic.ui.feature.downloads.DownloadsViewModel
+import pt.aguiarvieira.jellymusic.ui.feature.downloads.TrackDownloadBar
 import pt.aguiarvieira.jellymusic.ui.feature.downloads.TrackDownloadIndicator
 import pt.aguiarvieira.jellymusic.ui.feature.player.MiniPlayer
 import pt.aguiarvieira.jellymusic.ui.feature.player.PlaybackViewModel
@@ -311,48 +312,54 @@ private fun TrackCard(
                 ),
             shape = RoundedCornerShape(8.dp),
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(modifier = Modifier.width(28.dp), contentAlignment = Alignment.Center) {
-                    Text(
-                        text = track.trackNumber?.toString() ?: "•",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Spacer(Modifier.width(8.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = track.name,
-                        style = MaterialTheme.typography.titleSmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    track.artist?.let {
+            Column {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(modifier = Modifier.width(28.dp), contentAlignment = Alignment.Center) {
                         Text(
-                            text = it,
-                            style = MaterialTheme.typography.bodySmall,
+                            text = track.trackNumber?.toString() ?: "•",
+                            style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = track.name,
+                            style = MaterialTheme.typography.titleSmall,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
+                        track.artist?.let {
+                            Text(
+                                text = it,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                    // Download state sits above the duration.
+                    Column(horizontalAlignment = Alignment.End) {
+                        TrackDownloadIndicator(downloadStatus)
+                        track.durationMs?.let { ms ->
+                            Text(
+                                text = formatDuration(ms),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                 }
-                // Download state sits above the duration.
-                Column(horizontalAlignment = Alignment.End) {
-                    TrackDownloadIndicator(downloadStatus)
-                    track.durationMs?.let { ms ->
-                        Text(
-                            text = formatDuration(ms),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
+                TrackDownloadBar(
+                    status = downloadStatus,
+                    modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 8.dp),
+                )
             }
         }
 
