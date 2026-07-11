@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -27,6 +28,7 @@ import pt.aguiarvieira.jellymusic.ui.app.StartState
 import pt.aguiarvieira.jellymusic.ui.navigation.AppNavHost
 import pt.aguiarvieira.jellymusic.ui.navigation.Routes
 import pt.aguiarvieira.jellymusic.ui.theme.JellyMusicTheme
+import pt.aguiarvieira.jellymusic.ui.theme.LocalDynamicColorEnabled
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -47,16 +49,19 @@ class MainActivity : ComponentActivity() {
                 } else {
                     val navController = rememberNavController()
                     val openPlayer by appViewModel.openPlayer.collectAsStateWithLifecycle()
+                    val dynamicTheme by appViewModel.dynamicAlbumTheme.collectAsStateWithLifecycle()
                     LaunchedEffect(openPlayer, startState) {
                         if (openPlayer && startState == StartState.Home) {
                             navController.navigate(Routes.Player)
                             appViewModel.consumeOpenPlayer()
                         }
                     }
-                    AppNavHost(
-                        startAtHome = startState == StartState.Home,
-                        navController = navController,
-                    )
+                    CompositionLocalProvider(LocalDynamicColorEnabled provides dynamicTheme) {
+                        AppNavHost(
+                            startAtHome = startState == StartState.Home,
+                            navController = navController,
+                        )
+                    }
                 }
             }
         }

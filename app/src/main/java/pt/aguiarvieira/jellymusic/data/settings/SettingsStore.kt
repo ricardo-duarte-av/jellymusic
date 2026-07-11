@@ -45,6 +45,11 @@ class SettingsStore @Inject constructor(
         prefs[KEY_DOWNLOAD_QUALITY].toAudioQuality(AudioQuality.HIGH)
     }
 
+    /** Whether the album/player surfaces retint to the album art. Defaults on. */
+    val dynamicAlbumTheme: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_DYNAMIC_ALBUM_THEME] ?: true
+    }
+
     val albumSort: Flow<AlbumSort> = context.dataStore.data.map { prefs ->
         prefs[KEY_ALBUM_SORT]?.let { runCatching { AlbumSort.valueOf(it) }.getOrNull() }
             ?: AlbumSort.DEFAULT
@@ -77,6 +82,10 @@ class SettingsStore @Inject constructor(
         context.dataStore.edit { it[KEY_DOWNLOAD_QUALITY] = quality.name }
     }
 
+    suspend fun setDynamicAlbumTheme(enabled: Boolean) {
+        context.dataStore.edit { it[KEY_DYNAMIC_ALBUM_THEME] = enabled }
+    }
+
     suspend fun setAlbumSort(sort: AlbumSort) {
         context.dataStore.edit { it[KEY_ALBUM_SORT] = sort.name }
     }
@@ -95,6 +104,7 @@ class SettingsStore @Inject constructor(
         val KEY_STREAM_CODEC = stringPreferencesKey("stream_codec")
         val KEY_STREAM_BITRATE = intPreferencesKey("stream_bitrate_kbps")
         val KEY_DOWNLOAD_QUALITY = stringPreferencesKey("download_quality")
+        val KEY_DYNAMIC_ALBUM_THEME = booleanPreferencesKey("dynamic_album_theme")
         val KEY_ALBUM_SORT = stringPreferencesKey("album_sort")
         val KEY_ALBUM_SORT_DESC = booleanPreferencesKey("album_sort_descending")
     }

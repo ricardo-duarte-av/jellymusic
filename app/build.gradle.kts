@@ -140,6 +140,10 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
 
+    // Per-album dynamic theming
+    implementation(libs.material.kolor)
+    implementation(libs.androidx.palette)
+
     // Coroutines / serialization
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.coroutines.guava)

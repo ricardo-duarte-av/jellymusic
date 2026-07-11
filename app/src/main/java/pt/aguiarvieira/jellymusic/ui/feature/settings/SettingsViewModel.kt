@@ -19,6 +19,13 @@ class SettingsViewModel @Inject constructor(
     val streamSettings = settingsStore.streamSettings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), StreamSettings())
 
+    val dynamicAlbumTheme = settingsStore.dynamicAlbumTheme
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+
+    fun setDynamicAlbumTheme(enabled: Boolean) {
+        viewModelScope.launch { settingsStore.setDynamicAlbumTheme(enabled) }
+    }
+
     fun setTranscode(enabled: Boolean) {
         viewModelScope.launch { settingsStore.setStreamTranscode(enabled) }
     }

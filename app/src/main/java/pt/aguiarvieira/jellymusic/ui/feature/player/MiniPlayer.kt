@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import pt.aguiarvieira.jellymusic.ui.components.ArtworkImage
+import pt.aguiarvieira.jellymusic.ui.theme.AlbumTheme
 
 /** Persistent mini player docked above the navigation bar. Hidden when nothing is loaded. */
 @Composable
@@ -35,11 +36,13 @@ fun MiniPlayer(
     val state by viewModel.state.collectAsStateWithLifecycle()
     if (!state.hasMedia) return
 
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        tonalElevation = 3.dp,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-    ) {
+    // Retint to the now-playing album's cover.
+    AlbumTheme(artworkUrl = state.artworkUri) {
+        Surface(
+            modifier = modifier.fillMaxWidth(),
+            tonalElevation = 3.dp,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        ) {
         Column {
             Row(
                 modifier = Modifier
@@ -91,6 +94,7 @@ fun MiniPlayer(
                 progress = { progress },
                 modifier = Modifier.fillMaxWidth(),
             )
+        }
         }
     }
 }

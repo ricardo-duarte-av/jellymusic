@@ -77,6 +77,7 @@ import pt.aguiarvieira.jellymusic.ui.feature.downloads.TrackDownloadBar
 import pt.aguiarvieira.jellymusic.ui.feature.downloads.TrackDownloadIndicator
 import pt.aguiarvieira.jellymusic.ui.feature.player.MiniPlayer
 import pt.aguiarvieira.jellymusic.ui.feature.player.PlaybackViewModel
+import pt.aguiarvieira.jellymusic.ui.theme.AlbumTheme
 
 private val MAX_ART_HEIGHT = 340.dp
 private const val MIN_ART_FRACTION = 0.25f
@@ -108,6 +109,10 @@ fun AlbumDetailScreen(
         },
         onDismiss = { pendingDownload = null },
     )
+
+    // Retint the album screen to its cover once tracks (and their artwork) have loaded.
+    val albumArt = (tracksState as? ContentState.Data)?.value?.firstOrNull()?.artworkUrl
+    AlbumTheme(artworkUrl = albumArt) {
     Scaffold(
         // (1) No album name in the header — keeps space for the Settings action.
         topBar = {
@@ -149,6 +154,7 @@ fun AlbumDetailScreen(
                 )
             }
         }
+    }
     }
 }
 

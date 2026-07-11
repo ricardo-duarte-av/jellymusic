@@ -46,6 +46,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import pt.aguiarvieira.jellymusic.playback.RepeatMode
 import pt.aguiarvieira.jellymusic.ui.components.ArtworkImage
+import pt.aguiarvieira.jellymusic.ui.theme.AlbumTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -60,6 +61,7 @@ fun FullPlayerScreen(
     // Local scrubbing state so the thumb follows the finger, committed on release.
     var scrubFraction by remember { mutableStateOf<Float?>(null) }
 
+    AlbumTheme(artworkUrl = state.artworkUri) {
     Scaffold(
         topBar = {
             TopAppBar(
@@ -233,6 +235,7 @@ fun FullPlayerScreen(
                 }
             }
         }
+    }
     }
 }
 

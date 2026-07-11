@@ -43,6 +43,7 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val settings by viewModel.streamSettings.collectAsStateWithLifecycle()
+    val dynamicTheme by viewModel.dynamicAlbumTheme.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {
@@ -64,6 +65,28 @@ fun SettingsScreen(
                 .padding(horizontal = 20.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            Text(
+                text = "Appearance",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Color from album art", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        text = "Tint the album and player screens using the cover.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(checked = dynamicTheme, onCheckedChange = viewModel::setDynamicAlbumTheme)
+            }
+
+            HorizontalDivider()
+
             Text(
                 text = "Streaming",
                 style = MaterialTheme.typography.titleMedium,
