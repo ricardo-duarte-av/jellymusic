@@ -15,6 +15,7 @@ import pt.aguiarvieira.jellymusic.ui.feature.downloads.DownloadsScreen
 import pt.aguiarvieira.jellymusic.ui.feature.onboarding.ConnectServerScreen
 import pt.aguiarvieira.jellymusic.ui.feature.onboarding.LoginScreen
 import pt.aguiarvieira.jellymusic.ui.feature.player.FullPlayerScreen
+import pt.aguiarvieira.jellymusic.ui.feature.search.SearchScreen
 import pt.aguiarvieira.jellymusic.ui.feature.settings.SettingsScreen
 
 @Composable
@@ -59,6 +60,17 @@ fun AppNavHost(
                 onPlaylistClick = { id, name -> navController.navigate(Routes.PlaylistDetail(id, name)) },
                 onExpandPlayer = { navController.navigate(Routes.Player) },
                 onOpenSettings = { navController.navigate(Routes.Settings) },
+                onOpenSearch = { navController.navigate(Routes.Search) },
+            )
+        }
+
+        composable<Routes.Search> {
+            SearchScreen(
+                onBack = { navController.popBackStack() },
+                onAlbumClick = { id, name -> navController.navigate(Routes.AlbumDetail(id, name)) },
+                onArtistClick = { id, name -> navController.navigate(Routes.ArtistDetail(id, name)) },
+                onPlaylistClick = { id, name -> navController.navigate(Routes.PlaylistDetail(id, name)) },
+                onExpandPlayer = { navController.navigate(Routes.Player) },
             )
         }
 

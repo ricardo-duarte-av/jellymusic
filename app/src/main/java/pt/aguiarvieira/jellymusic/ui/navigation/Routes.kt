@@ -32,6 +32,10 @@ object Routes {
     @Serializable
     object Player
 
+    /** Search across songs / albums / artists / playlists. */
+    @Serializable
+    object Search
+
     @Serializable
     object Settings
 

@@ -7,6 +7,7 @@ import pt.aguiarvieira.jellymusic.domain.model.AlbumSort
 import pt.aguiarvieira.jellymusic.domain.model.Artist
 import pt.aguiarvieira.jellymusic.domain.model.MusicLibrary
 import pt.aguiarvieira.jellymusic.domain.model.Playlist
+import pt.aguiarvieira.jellymusic.domain.model.SearchResults
 import pt.aguiarvieira.jellymusic.domain.model.Track
 import pt.aguiarvieira.jellymusic.domain.model.TrackAudioInfo
 import pt.aguiarvieira.jellymusic.data.db.JellyMusicDatabase
@@ -18,6 +19,8 @@ import androidx.paging.PagingConfig
 import androidx.paging.PagingData
 import androidx.paging.map
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
@@ -39,6 +42,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 private const val ALBUM_PAGE_SIZE = 100
+private const val SEARCH_LIMIT = 40
 
 @Singleton
 class MusicRepositoryImpl @Inject constructor(
@@ -158,6 +162,72 @@ class MusicRepositoryImpl @Inject constructor(
         PlaylistsApi(api).getPlaylistItems(
             GetPlaylistItemsRequest(playlistId = UUID.fromString(playlistId)),
         ).content.items.map { it.toTrack(urlBuilder) }
+    }
+
+    override suspend fun search(query: String, libraryId: String?): Result<SearchResults> = query { api ->
+        val parent = libraryId.toParentUuid()
+        // Fire the four type-specific searches concurrently.
+        coroutineScope {
+            val tracks = async {
+                ItemsApi(api).getItems(
+                    GetItemsRequest(
+                        parentId = parent,
+                        includeItemTypes = listOf(BaseItemKind.AUDIO),
+                        recursive = true,
+                        searchTerm = query,
+                        limit = SEARCH_LIMIT,
+                        enableUserData = false,
+                        imageTypeLimit = 1,
+                        enableImageTypes = listOf(ImageType.PRIMARY),
+                    ),
+                ).content.items.map { it.toTrack(urlBuilder) }
+            }
+            val albums = async {
+                ItemsApi(api).getItems(
+                    GetItemsRequest(
+                        parentId = parent,
+                        includeItemTypes = listOf(BaseItemKind.MUSIC_ALBUM),
+                        recursive = true,
+                        searchTerm = query,
+                        limit = SEARCH_LIMIT,
+                        enableUserData = false,
+                        imageTypeLimit = 1,
+                        enableImageTypes = listOf(ImageType.PRIMARY),
+                    ),
+                ).content.items.map { it.toAlbum(urlBuilder) }
+            }
+            val playlists = async {
+                ItemsApi(api).getItems(
+                    GetItemsRequest(
+                        includeItemTypes = listOf(BaseItemKind.PLAYLIST),
+                        recursive = true,
+                        searchTerm = query,
+                        limit = SEARCH_LIMIT,
+                        enableUserData = false,
+                        imageTypeLimit = 1,
+                        enableImageTypes = listOf(ImageType.PRIMARY),
+                    ),
+                ).content.items.map { it.toPlaylist(urlBuilder) }
+            }
+            val artists = async {
+                ArtistsApi(api).getAlbumArtists(
+                    GetAlbumArtistsRequest(
+                        parentId = parent,
+                        searchTerm = query,
+                        limit = SEARCH_LIMIT,
+                        enableUserData = false,
+                        imageTypeLimit = 1,
+                        enableImageTypes = listOf(ImageType.PRIMARY),
+                    ),
+                ).content.items.map { it.toArtist(urlBuilder) }
+            }
+            SearchResults(
+                tracks = tracks.await(),
+                albums = albums.await(),
+                artists = artists.await(),
+                playlists = playlists.await(),
+            )
+        }
     }
 
     private suspend fun <T> query(block: suspend (ApiClient) -> T): Result<T> =
