@@ -50,3 +50,6 @@ replay_pid*
 
 # Kotlin
 .kotlin/
+
+#local buildscripts
+debug-build.sh
