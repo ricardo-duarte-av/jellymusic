@@ -49,9 +49,9 @@ class SearchViewModel @Inject constructor(
         .distinctUntilChanged()
         .flatMapLatest { q ->
             if (q.length < MIN_QUERY_LENGTH) {
-                flowOf(SearchUiState.Idle)
+                flowOf<SearchUiState>(SearchUiState.Idle)
             } else {
-                flow {
+                flow<SearchUiState> {
                     emit(SearchUiState.Loading)
                     val libraryId = settingsStore.selectedLibrary.first()?.id
                     val outcome = repository.search(q, libraryId).fold(
