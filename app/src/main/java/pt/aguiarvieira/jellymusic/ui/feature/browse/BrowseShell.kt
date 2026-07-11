@@ -59,12 +59,16 @@ import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemContentType
 import androidx.paging.compose.itemKey
 import pt.aguiarvieira.jellymusic.domain.model.Album
+import pt.aguiarvieira.jellymusic.domain.model.AlbumDownloadStatus
 import pt.aguiarvieira.jellymusic.domain.model.AlbumSort
 import pt.aguiarvieira.jellymusic.domain.model.MusicLibrary
 import pt.aguiarvieira.jellymusic.ui.common.ContentState
 import pt.aguiarvieira.jellymusic.ui.components.AlbumCard
 import pt.aguiarvieira.jellymusic.ui.components.ArtistCard
 import pt.aguiarvieira.jellymusic.ui.components.PlaylistCard
+import pt.aguiarvieira.jellymusic.ui.feature.downloads.DownloadDialogs
+import pt.aguiarvieira.jellymusic.ui.feature.downloads.DownloadTarget
+import pt.aguiarvieira.jellymusic.ui.feature.downloads.DownloadsViewModel
 import pt.aguiarvieira.jellymusic.ui.feature.player.MiniPlayer
 
 private enum class BrowseTab(val label: String, val icon: ImageVector) {
@@ -82,9 +86,13 @@ fun BrowseShell(
     onExpandPlayer: () -> Unit,
     onOpenSettings: () -> Unit,
     viewModel: BrowseViewModel = hiltViewModel(),
+    downloadsViewModel: DownloadsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val albumItems = viewModel.albumsPaging.collectAsLazyPagingItems()
+    val albumStatuses by downloadsViewModel.albumStatuses.collectAsStateWithLifecycle()
+    val transcodeDefault by downloadsViewModel.transcodeDefault.collectAsStateWithLifecycle()
+    var pendingDownload by remember { mutableStateOf<DownloadTarget?>(null) }
     var selectedTab by rememberSaveable { mutableStateOf(BrowseTab.ALBUMS) }
     // Grid column count, adjustable by pinch (shared across tabs).
     var columns by rememberSaveable { mutableIntStateOf(2) }
@@ -156,6 +164,11 @@ fun BrowseShell(
                         columns = columns,
                         onZoom = onZoom,
                         onAlbumClick = onAlbumClick,
+                        albumStatuses = albumStatuses,
+                        onRequestDownload = { album ->
+                            pendingDownload = DownloadTarget.Album(album.id, album.name, album.artist, album.artworkUrl)
+                        },
+                        onRemoveAlbum = downloadsViewModel::removeAlbum,
                     )
 
                     BrowseTab.ARTISTS -> ContentSection(state.artists, "No artists found") { artists ->
@@ -179,6 +192,19 @@ fun BrowseShell(
             MiniPlayer(onExpand = onExpandPlayer)
         }
     }
+
+    DownloadDialogs(
+        target = pendingDownload,
+        transcodeDefault = transcodeDefault,
+        isMetered = downloadsViewModel::isMetered,
+        onConfirm = { target, transcode ->
+            if (target is DownloadTarget.Album) {
+                downloadsViewModel.downloadAlbum(target.id, target.name, target.artist, target.artworkUrl, transcode)
+            }
+            pendingDownload = null
+        },
+        onDismiss = { pendingDownload = null },
+    )
 }
 
 /** Compact sort field + order controls, sized to sit inline next to the library dropdown. */
@@ -283,6 +309,9 @@ private fun AlbumsPagingContent(
     columns: Int,
     onZoom: (Int) -> Unit,
     onAlbumClick: (String, String) -> Unit,
+    albumStatuses: Map<String, AlbumDownloadStatus>,
+    onRequestDownload: (Album) -> Unit,
+    onRemoveAlbum: (String) -> Unit,
 ) {
     val refresh = albums.loadState.refresh
     when {
@@ -300,7 +329,13 @@ private fun AlbumsPagingContent(
                     contentType = albums.itemContentType { "album" },
                 ) { index ->
                     albums[index]?.let { album ->
-                        AlbumCard(album, onClick = { onAlbumClick(album.id, album.name) })
+                        AlbumCard(
+                            album = album,
+                            onClick = { onAlbumClick(album.id, album.name) },
+                            downloadStatus = albumStatuses[album.id],
+                            onDownload = { onRequestDownload(album) },
+                            onRemoveLocal = { onRemoveAlbum(album.id) },
+                        )
                     }
                 }
                 if (albums.loadState.append is LoadState.Loading) {

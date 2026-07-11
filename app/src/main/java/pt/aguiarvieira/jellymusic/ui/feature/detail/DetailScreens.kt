@@ -1,6 +1,8 @@
 package pt.aguiarvieira.jellymusic.ui.feature.detail
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,12 +22,16 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -37,6 +43,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -55,10 +62,15 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import pt.aguiarvieira.jellymusic.domain.model.Album
 import pt.aguiarvieira.jellymusic.domain.model.Track
+import pt.aguiarvieira.jellymusic.domain.model.TrackDownloadStatus
 import pt.aguiarvieira.jellymusic.ui.common.ContentState
 import pt.aguiarvieira.jellymusic.ui.components.AlbumCard
 import pt.aguiarvieira.jellymusic.ui.components.ArtworkImage
 import pt.aguiarvieira.jellymusic.ui.components.TrackRow
+import pt.aguiarvieira.jellymusic.ui.feature.downloads.DownloadDialogs
+import pt.aguiarvieira.jellymusic.ui.feature.downloads.DownloadTarget
+import pt.aguiarvieira.jellymusic.ui.feature.downloads.DownloadsViewModel
+import pt.aguiarvieira.jellymusic.ui.feature.downloads.TrackDownloadIndicator
 import pt.aguiarvieira.jellymusic.ui.feature.player.MiniPlayer
 import pt.aguiarvieira.jellymusic.ui.feature.player.PlaybackViewModel
 
@@ -73,8 +85,25 @@ fun AlbumDetailScreen(
     onOpenSettings: () -> Unit,
     viewModel: AlbumDetailViewModel = hiltViewModel(),
     playbackViewModel: PlaybackViewModel = hiltViewModel(),
+    downloadsViewModel: DownloadsViewModel = hiltViewModel(),
 ) {
     val tracksState by viewModel.tracks.collectAsStateWithLifecycle()
+    val trackStatuses by downloadsViewModel.trackStatuses.collectAsStateWithLifecycle()
+    val transcodeDefault by downloadsViewModel.transcodeDefault.collectAsStateWithLifecycle()
+    var pendingDownload by remember { mutableStateOf<DownloadTarget?>(null) }
+
+    DownloadDialogs(
+        target = pendingDownload,
+        transcodeDefault = transcodeDefault,
+        isMetered = downloadsViewModel::isMetered,
+        onConfirm = { target, transcode ->
+            if (target is DownloadTarget.TrackItem) {
+                downloadsViewModel.downloadTrack(target.track, transcode)
+            }
+            pendingDownload = null
+        },
+        onDismiss = { pendingDownload = null },
+    )
     Scaffold(
         // (1) No album name in the header — keeps space for the Settings action.
         topBar = {
@@ -105,6 +134,9 @@ fun AlbumDetailScreen(
                     title = viewModel.title,
                     tracks = state.value,
                     onPlay = playbackViewModel::play,
+                    trackStatuses = trackStatuses,
+                    onRequestDownload = { pendingDownload = DownloadTarget.TrackItem(it) },
+                    onRemoveTrack = downloadsViewModel::removeTrack,
                 )
             }
         }
@@ -117,6 +149,9 @@ private fun AlbumTrackList(
     title: String,
     tracks: List<Track>,
     onPlay: (List<Track>, Int) -> Unit,
+    trackStatuses: Map<String, TrackDownloadStatus>,
+    onRequestDownload: (Track) -> Unit,
+    onRemoveTrack: (String) -> Unit,
 ) {
     val density = LocalDensity.current
     val maxArtPx = with(density) { MAX_ART_HEIGHT.toPx() }
@@ -183,7 +218,13 @@ private fun AlbumTrackList(
             )
         }
         itemsIndexed(tracks, key = { _, t -> t.id }) { index, track ->
-            TrackCard(track = track, onClick = { onPlay(tracks, index) })
+            TrackCard(
+                track = track,
+                onClick = { onPlay(tracks, index) },
+                downloadStatus = trackStatuses[track.id],
+                onDownload = { onRequestDownload(track) },
+                onRemoveLocal = { onRemoveTrack(track.id) },
+            )
         }
     }
 }
@@ -246,52 +287,97 @@ private fun AlbumHeader(
 }
 
 /** (3) Each track in an M3 filled card with a small (non-pill) corner radius. */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun TrackCard(track: Track, onClick: () -> Unit) {
-    Card(
-        onClick = onClick,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 4.dp),
-        shape = RoundedCornerShape(8.dp),
-    ) {
-        Row(
+private fun TrackCard(
+    track: Track,
+    onClick: () -> Unit,
+    downloadStatus: TrackDownloadStatus? = null,
+    onDownload: (() -> Unit)? = null,
+    onRemoveLocal: (() -> Unit)? = null,
+) {
+    var menuOpen by remember { mutableStateOf(false) }
+    val hasMenu = onDownload != null || onRemoveLocal != null
+    val canRemove = downloadStatus?.isComplete == true || downloadStatus?.isActive == true
+
+    Box {
+        Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
+                .padding(horizontal = 12.dp, vertical = 4.dp)
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = if (hasMenu) ({ menuOpen = true }) else null,
+                ),
+            shape = RoundedCornerShape(8.dp),
         ) {
-            Box(modifier = Modifier.width(28.dp), contentAlignment = Alignment.Center) {
-                Text(
-                    text = track.trackNumber?.toString() ?: "•",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Spacer(Modifier.width(8.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = track.name,
-                    style = MaterialTheme.typography.titleSmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                track.artist?.let {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(modifier = Modifier.width(28.dp), contentAlignment = Alignment.Center) {
                     Text(
-                        text = it,
-                        style = MaterialTheme.typography.bodySmall,
+                        text = track.trackNumber?.toString() ?: "•",
+                        style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = track.name,
+                        style = MaterialTheme.typography.titleSmall,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
+                    track.artist?.let {
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+                // Download state sits above the duration.
+                Column(horizontalAlignment = Alignment.End) {
+                    TrackDownloadIndicator(downloadStatus)
+                    track.durationMs?.let { ms ->
+                        Text(
+                            text = formatDuration(ms),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
-            track.durationMs?.let { ms ->
-                Text(
-                    text = formatDuration(ms),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+        }
+
+        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+            onDownload?.let { download ->
+                DropdownMenuItem(
+                    text = { Text("Download") },
+                    leadingIcon = { Icon(Icons.Filled.Save, contentDescription = null) },
+                    onClick = {
+                        menuOpen = false
+                        download()
+                    },
                 )
+            }
+            if (canRemove) {
+                onRemoveLocal?.let { remove ->
+                    DropdownMenuItem(
+                        text = { Text("Remove local") },
+                        leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) },
+                        onClick = {
+                            menuOpen = false
+                            remove()
+                        },
+                    )
+                }
             }
         }
     }
@@ -309,8 +395,25 @@ fun PlaylistDetailScreen(
     onOpenSettings: () -> Unit,
     viewModel: PlaylistDetailViewModel = hiltViewModel(),
     playbackViewModel: PlaybackViewModel = hiltViewModel(),
+    downloadsViewModel: DownloadsViewModel = hiltViewModel(),
 ) {
     val tracks by viewModel.tracks.collectAsStateWithLifecycle()
+    val trackStatuses by downloadsViewModel.trackStatuses.collectAsStateWithLifecycle()
+    val transcodeDefault by downloadsViewModel.transcodeDefault.collectAsStateWithLifecycle()
+    var pendingDownload by remember { mutableStateOf<DownloadTarget?>(null) }
+
+    DownloadDialogs(
+        target = pendingDownload,
+        transcodeDefault = transcodeDefault,
+        isMetered = downloadsViewModel::isMetered,
+        onConfirm = { target, transcode ->
+            if (target is DownloadTarget.TrackItem) {
+                downloadsViewModel.downloadTrack(target.track, transcode)
+            }
+            pendingDownload = null
+        },
+        onDismiss = { pendingDownload = null },
+    )
     TrackListDetail(
         title = viewModel.title,
         tracksState = tracks,
@@ -319,6 +422,9 @@ fun PlaylistDetailScreen(
         onOpenSettings = onOpenSettings,
         onPlay = playbackViewModel::play,
         showTrackArtwork = true,
+        trackStatuses = trackStatuses,
+        onRequestDownload = { pendingDownload = DownloadTarget.TrackItem(it) },
+        onRemoveTrack = downloadsViewModel::removeTrack,
     )
 }
 
@@ -332,6 +438,9 @@ private fun TrackListDetail(
     onOpenSettings: () -> Unit,
     onPlay: (List<Track>, Int) -> Unit,
     showTrackArtwork: Boolean = false,
+    trackStatuses: Map<String, TrackDownloadStatus> = emptyMap(),
+    onRequestDownload: (Track) -> Unit = {},
+    onRemoveTrack: (String) -> Unit = {},
 ) {
     Scaffold(
         topBar = { DetailTopBar(title = title, onBack = onBack, onOpenSettings = onOpenSettings) },
@@ -379,6 +488,9 @@ private fun TrackListDetail(
                                 track = track,
                                 onClick = { onPlay(tracks, index) },
                                 showArtwork = showTrackArtwork,
+                                downloadStatus = trackStatuses[track.id],
+                                onDownload = { onRequestDownload(track) },
+                                onRemoveLocal = { onRemoveTrack(track.id) },
                             )
                         }
                     }

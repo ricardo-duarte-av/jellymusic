@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import kotlinx.coroutines.flow.first
+import pt.aguiarvieira.jellymusic.data.download.MusicDownloadManager
 import pt.aguiarvieira.jellymusic.data.jellyfin.StreamUrlBuilder
 import pt.aguiarvieira.jellymusic.data.settings.SettingsStore
 import pt.aguiarvieira.jellymusic.domain.model.Album
@@ -30,6 +31,7 @@ class MediaItemTree @Inject constructor(
     private val musicRepository: pt.aguiarvieira.jellymusic.domain.repository.MusicRepository,
     private val settingsStore: SettingsStore,
     private val urlBuilder: StreamUrlBuilder,
+    private val downloadManager: MusicDownloadManager,
 ) {
     fun rootItem(): MediaItem = browsable(ROOT_ID, "JellyMusic", MediaMetadata.MEDIA_TYPE_FOLDER_MIXED)
 
@@ -84,7 +86,8 @@ class MediaItemTree @Inject constructor(
             .build()
         return MediaItem.Builder()
             .setMediaId(TRACK_PREFIX + track.id)
-            .setUri(urlBuilder.audioStreamUrl(track.id, settings))
+            // Prefer a completed offline copy; fall back to streaming.
+            .setUri(downloadManager.localFileUri(track.id) ?: urlBuilder.audioStreamUrl(track.id, settings))
             .setMediaMetadata(metadata)
             .build()
     }

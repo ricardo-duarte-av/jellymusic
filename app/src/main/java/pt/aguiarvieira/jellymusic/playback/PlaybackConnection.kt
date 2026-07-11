@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import pt.aguiarvieira.jellymusic.data.download.MusicDownloadManager
 import pt.aguiarvieira.jellymusic.data.jellyfin.StreamUrlBuilder
 import pt.aguiarvieira.jellymusic.data.settings.SettingsStore
 import pt.aguiarvieira.jellymusic.domain.model.StreamSettings
@@ -52,6 +53,7 @@ class PlaybackConnection @Inject constructor(
     @ApplicationContext private val context: Context,
     private val mediaItemTree: MediaItemTree,
     private val urlBuilder: StreamUrlBuilder,
+    private val downloadManager: MusicDownloadManager,
     settingsStore: SettingsStore,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -120,7 +122,7 @@ class PlaybackConnection @Inject constructor(
                 .setExtras(StreamSettingsExtras.toBundle(streamSettings))
                 .build()
             item.buildUpon()
-                .setUri(urlBuilder.audioStreamUrl(trackId, streamSettings))
+                .setUri(downloadManager.localFileUri(trackId) ?: urlBuilder.audioStreamUrl(trackId, streamSettings))
                 .setMediaMetadata(metadata)
                 .build()
         }

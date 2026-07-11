@@ -8,6 +8,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import pt.aguiarvieira.jellymusic.data.db.AlbumDao
+import pt.aguiarvieira.jellymusic.data.db.DownloadDao
 import pt.aguiarvieira.jellymusic.data.db.JellyMusicDatabase
 import javax.inject.Singleton
 
@@ -24,4 +25,7 @@ object DatabaseModule {
 
     @Provides
     fun provideAlbumDao(database: JellyMusicDatabase): AlbumDao = database.albumDao()
+
+    @Provides
+    fun provideDownloadDao(database: JellyMusicDatabase): DownloadDao = database.downloadDao()
 }
