@@ -117,6 +117,33 @@ jobs:
           path: app/build/outputs/mapping/release/mapping.txt
           if-no-files-found: warn
 
+  detekt:
+    name: Detekt (static analysis)
+    runs-on: ubuntu-latest
+    # Reports its own pass/fail but is intentionally NOT a dependency of build/publish/
+    # release, so a style finding never blocks a build or a release tag. Uses the detekt
+    # CLI (no Gradle plugin, no Android SDK needed).
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Run detekt
+        run: bash scripts/detekt.sh
+
+      - name: Upload detekt reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: detekt-reports
+          path: build/reports/detekt/
+          if-no-files-found: ignore
+
   publish:
     name: Publish to Play Store
     runs-on: ubuntu-latest

@@ -4,6 +4,9 @@ agp = "9.3.0-rc02"
 kotlin = "2.4.0"
 ksp = "2.3.10"
 hilt = "2.60.1"
+# Static analysis. Run via the detekt CLI (scripts/detekt.sh), not the Gradle plugin —
+# the 1.23.x Gradle plugin predates Gradle 9, so we keep it out of the build entirely.
+detekt = "1.23.8"
 
 # --- AndroidX core ---
 coreKtx = "1.19.0"

@@ -1,0 +1,54 @@
+# Detekt overrides for JellyMusic. buildUponDefaultConfig=true, so anything not
+# listed here uses detekt's defaults. These relaxations keep the signal useful for
+# a Jetpack Compose codebase (composables are PascalCase, long, and full of dp
+# literals, which trip several default rules).
+
+complexity:
+  LongMethod:
+    threshold: 120
+    # Composable screens legitimately get long.
+    ignoreAnnotated: ['Composable']
+  LongParameterList:
+    functionThreshold: 8
+    constructorThreshold: 10
+    ignoreDefaultParameters: true
+    ignoreAnnotated: ['Composable']
+  CyclomaticComplexMethod:
+    threshold: 20
+  TooManyFunctions:
+    thresholdInFiles: 30
+    thresholdInClasses: 25
+    thresholdInInterfaces: 20
+    thresholdInObjects: 25
+    thresholdInEnums: 20
+  NestedBlockDepth:
+    # Nested `.use { }` stream blocks in the downloader add legitimate depth.
+    threshold: 6
+  ComplexCondition:
+    threshold: 5
+
+naming:
+  FunctionNaming:
+    # @Composable functions are intentionally PascalCase.
+    ignoreAnnotated: ['Composable']
+  TopLevelPropertyNaming:
+    constantPattern: '[A-Z][_A-Za-z0-9]*'
+  MatchingDeclarationName:
+    # We group related Compose helpers (dialogs, badges, targets) in purpose-named
+    # files, so the filename won't match a single top-level type.
+    active: false
+
+style:
+  MagicNumber:
+    # Low value here: the codebase is full of legitimate literals (dp values, bitrate
+    # math, byte/bitmask arithmetic). Re-enable with tighter ignores if desired.
+    active: false
+  MaxLineLength:
+    maxLineLength: 140
+  ReturnCount:
+    max: 5
+  UnusedPrivateMember:
+    active: true
+  ForbiddenComment:
+    # Don't fail the build over TODO/FIXME notes.
+    active: false

@@ -236,7 +236,8 @@ class MusicDownloadManager @Inject constructor(
                     )
                 }
             }
-        } catch (t: Throwable) {
+        } catch (@Suppress("TooGenericExceptionCaught") t: Throwable) {
+            // Any failure (IO, network, cancellation) must mark the row FAILED, then rethrow.
             partFile.delete()
             dao.updateProgress(entity.trackId, DownloadState.FAILED.name, 0, 0, null, System.currentTimeMillis())
             throw t

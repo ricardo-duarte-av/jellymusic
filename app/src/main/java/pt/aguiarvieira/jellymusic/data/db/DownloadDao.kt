@@ -34,7 +34,14 @@ interface DownloadDao {
     @Query("SELECT * FROM track_downloads WHERE state = 'COMPLETED'")
     suspend fun completedTracks(): List<TrackDownloadEntity>
 
-    @Query("UPDATE track_downloads SET state = :state, downloadedBytes = :downloaded, totalBytes = :total, filePath = :filePath, updatedAt = :now WHERE trackId = :trackId")
+    @Query(
+        """
+        UPDATE track_downloads
+        SET state = :state, downloadedBytes = :downloaded, totalBytes = :total,
+            filePath = :filePath, updatedAt = :now
+        WHERE trackId = :trackId
+        """,
+    )
     suspend fun updateProgress(
         trackId: String,
         state: String,

@@ -93,7 +93,8 @@ class AlbumRemoteMediator(
             MediatorResult.Success(endOfPaginationReached = endReached)
         } catch (e: CancellationException) {
             throw e
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            // Standard RemoteMediator contract: surface any load failure as an Error result.
             MediatorResult.Error(e)
         }
     }
