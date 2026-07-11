@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -69,18 +70,24 @@ private const val MIN_ART_FRACTION = 0.25f
 fun AlbumDetailScreen(
     onBack: () -> Unit,
     onExpandPlayer: () -> Unit,
+    onOpenSettings: () -> Unit,
     viewModel: AlbumDetailViewModel = hiltViewModel(),
     playbackViewModel: PlaybackViewModel = hiltViewModel(),
 ) {
     val tracksState by viewModel.tracks.collectAsStateWithLifecycle()
     Scaffold(
-        // (1) No album name in the header — keeps space for future actions.
+        // (1) No album name in the header — keeps space for the Settings action.
         topBar = {
             TopAppBar(
                 title = {},
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = onOpenSettings) {
+                        Icon(Icons.Filled.Settings, contentDescription = "Settings")
                     }
                 },
             )
@@ -299,6 +306,7 @@ private fun formatDuration(ms: Long): String {
 fun PlaylistDetailScreen(
     onBack: () -> Unit,
     onExpandPlayer: () -> Unit,
+    onOpenSettings: () -> Unit,
     viewModel: PlaylistDetailViewModel = hiltViewModel(),
     playbackViewModel: PlaybackViewModel = hiltViewModel(),
 ) {
@@ -308,6 +316,7 @@ fun PlaylistDetailScreen(
         tracksState = tracks,
         onBack = onBack,
         onExpandPlayer = onExpandPlayer,
+        onOpenSettings = onOpenSettings,
         onPlay = playbackViewModel::play,
         showTrackArtwork = true,
     )
@@ -320,11 +329,12 @@ private fun TrackListDetail(
     tracksState: ContentState<List<Track>>,
     onBack: () -> Unit,
     onExpandPlayer: () -> Unit,
+    onOpenSettings: () -> Unit,
     onPlay: (List<Track>, Int) -> Unit,
     showTrackArtwork: Boolean = false,
 ) {
     Scaffold(
-        topBar = { DetailTopBar(title = title, onBack = onBack) },
+        topBar = { DetailTopBar(title = title, onBack = onBack, onOpenSettings = onOpenSettings) },
         bottomBar = { MiniPlayer(onExpand = onExpandPlayer) },
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
@@ -383,6 +393,7 @@ fun ArtistDetailScreen(
     onBack: () -> Unit,
     onAlbumClick: (String, String) -> Unit,
     onExpandPlayer: () -> Unit,
+    onOpenSettings: () -> Unit,
     viewModel: ArtistDetailViewModel = hiltViewModel(),
 ) {
     val albums by viewModel.albums.collectAsStateWithLifecycle()
@@ -392,6 +403,7 @@ fun ArtistDetailScreen(
         onBack = onBack,
         onAlbumClick = onAlbumClick,
         onExpandPlayer = onExpandPlayer,
+        onOpenSettings = onOpenSettings,
     )
 }
 
@@ -403,9 +415,10 @@ private fun ArtistDetailContent(
     onBack: () -> Unit,
     onAlbumClick: (String, String) -> Unit,
     onExpandPlayer: () -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     Scaffold(
-        topBar = { DetailTopBar(title = title, onBack = onBack) },
+        topBar = { DetailTopBar(title = title, onBack = onBack, onOpenSettings = onOpenSettings) },
         bottomBar = { MiniPlayer(onExpand = onExpandPlayer) },
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
@@ -436,12 +449,17 @@ private fun ArtistDetailContent(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DetailTopBar(title: String, onBack: () -> Unit) {
+private fun DetailTopBar(title: String, onBack: () -> Unit, onOpenSettings: () -> Unit) {
     TopAppBar(
         title = { Text(title, style = MaterialTheme.typography.titleLarge) },
         navigationIcon = {
             IconButton(onClick = onBack) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+            }
+        },
+        actions = {
+            IconButton(onClick = onOpenSettings) {
+                Icon(Icons.Filled.Settings, contentDescription = "Settings")
             }
         },
     )

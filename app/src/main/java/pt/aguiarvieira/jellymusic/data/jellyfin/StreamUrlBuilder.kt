@@ -1,6 +1,7 @@
 package pt.aguiarvieira.jellymusic.data.jellyfin
 
 import pt.aguiarvieira.jellymusic.domain.model.AudioQuality
+import pt.aguiarvieira.jellymusic.domain.model.StreamSettings
 import org.jellyfin.sdk.api.operations.ImageApi
 import org.jellyfin.sdk.api.operations.UniversalAudioApi
 import org.jellyfin.sdk.model.api.ImageType
@@ -31,32 +32,40 @@ class StreamUrlBuilder @Inject constructor(
     }
 
     /**
-     * Streaming URL for playback. Uses the universal endpoint over HTTP: the server direct-plays
-     * when the source fits [quality], otherwise transcodes to a progressive stream. (HLS is a later
-     * refinement for seek-during-transcode; progressive is simpler and reliable for MVP.)
+     * Streaming URL for playback over the universal endpoint (HTTP progressive). When
+     * [settings].transcode is off the server direct-plays the original; otherwise it transcodes to
+     * the chosen codec/bitrate cap.
      */
-    fun audioStreamUrl(itemId: String, quality: AudioQuality): String? =
-        buildUniversalUrl(
-            itemId = itemId,
-            quality = quality,
-            protocol = MediaStreamProtocol.HTTP,
-            transcodingContainer = "mp3",
-        )
+    fun audioStreamUrl(itemId: String, settings: StreamSettings): String? =
+        if (settings.transcode) {
+            buildUniversalUrl(
+                itemId = itemId,
+                maxBitrateBps = settings.maxBitrateKbps * 1000,
+                codec = settings.codec.jellyfinCodec,
+                transcodingContainer = settings.codec.container,
+            )
+        } else {
+            buildUniversalUrl(itemId = itemId, maxBitrateBps = null, codec = null, transcodingContainer = null)
+        }
 
     /** Download URL. Server transcodes to a single progressive file when [quality] is capped. */
     fun audioDownloadUrl(itemId: String, quality: AudioQuality): String? =
-        buildUniversalUrl(
-            itemId = itemId,
-            quality = quality,
-            protocol = MediaStreamProtocol.HTTP,
-            transcodingContainer = "opus",
-        )
+        if (quality.isTranscoded) {
+            buildUniversalUrl(
+                itemId = itemId,
+                maxBitrateBps = quality.maxBitrate,
+                codec = "opus",
+                transcodingContainer = "opus",
+            )
+        } else {
+            buildUniversalUrl(itemId = itemId, maxBitrateBps = null, codec = null, transcodingContainer = null)
+        }
 
     private fun buildUniversalUrl(
         itemId: String,
-        quality: AudioQuality,
-        protocol: MediaStreamProtocol,
-        transcodingContainer: String,
+        maxBitrateBps: Int?,
+        codec: String?,
+        transcodingContainer: String?,
     ): String? {
         val session = clientProvider.session.value ?: return null
         val api = clientProvider.api ?: return null
@@ -65,10 +74,10 @@ class StreamUrlBuilder @Inject constructor(
             container = supportedContainers,
             userId = session.userId.toUuid(),
             deviceId = api.deviceInfo.id,
-            maxStreamingBitrate = quality.maxBitrate,
-            transcodingContainer = if (quality.isTranscoded) transcodingContainer else null,
-            transcodingProtocol = protocol,
-            audioCodec = if (quality.isTranscoded) "opus" else null,
+            maxStreamingBitrate = maxBitrateBps,
+            transcodingContainer = transcodingContainer,
+            transcodingProtocol = MediaStreamProtocol.HTTP,
+            audioCodec = codec,
             enableRedirection = true,
         )
         // Audio streaming is authenticated; ExoPlayer fetches the URL directly with no auth header,

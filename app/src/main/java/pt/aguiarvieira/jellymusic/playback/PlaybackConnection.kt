@@ -17,8 +17,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import pt.aguiarvieira.jellymusic.data.jellyfin.StreamUrlBuilder
 import pt.aguiarvieira.jellymusic.data.settings.SettingsStore
-import pt.aguiarvieira.jellymusic.domain.model.AudioQuality
+import pt.aguiarvieira.jellymusic.domain.model.StreamSettings
 import pt.aguiarvieira.jellymusic.domain.model.Track
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -28,6 +29,7 @@ enum class RepeatMode { OFF, ALL, ONE }
 data class PlaybackUiState(
     val hasMedia: Boolean = false,
     val isPlaying: Boolean = false,
+    val trackId: String? = null,
     val title: String = "",
     val artist: String = "",
     val artworkUri: String? = null,
@@ -47,6 +49,7 @@ data class PlaybackUiState(
 class PlaybackConnection @Inject constructor(
     @ApplicationContext private val context: Context,
     private val mediaItemTree: MediaItemTree,
+    private val urlBuilder: StreamUrlBuilder,
     settingsStore: SettingsStore,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -56,14 +59,23 @@ class PlaybackConnection @Inject constructor(
     private var controller: MediaController? = null
 
     @Volatile
-    private var streamingQuality: AudioQuality = AudioQuality.ORIGINAL
+    private var streamSettings: StreamSettings = StreamSettings()
 
     private val listener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) = updateState()
     }
 
     init {
-        scope.launch { settingsStore.streamingQuality.collect { streamingQuality = it } }
+        scope.launch {
+            var first = true
+            settingsStore.streamSettings.collect { newSettings ->
+                val changed = !first && newSettings != streamSettings
+                streamSettings = newSettings
+                first = false
+                // A settings change should affect only upcoming tracks, never the current one.
+                if (changed) rebuildUpcomingQueue()
+            }
+        }
 
         val token = SessionToken(context, ComponentName(context, PlaybackService::class.java))
         val future = MediaController.Builder(context, token).buildAsync()
@@ -86,11 +98,27 @@ class PlaybackConnection @Inject constructor(
 
     fun playTracks(tracks: List<Track>, startIndex: Int) {
         val c = controller ?: return
-        val items = tracks.map { mediaItemTree.trackMediaItem(it, streamingQuality) }
+        val items = tracks.map { mediaItemTree.trackMediaItem(it, streamSettings) }
         if (items.isEmpty()) return
         c.setMediaItems(items, startIndex.coerceIn(0, items.lastIndex), 0L)
         c.prepare()
         c.play()
+    }
+
+    /** Rebuilds the stream URL of every queued track after the current one with the new settings. */
+    private fun rebuildUpcomingQueue() {
+        val c = controller ?: return
+        val count = c.mediaItemCount
+        val current = c.currentMediaItemIndex
+        if (current < 0 || current >= count - 1) return
+        val rebuilt = ((current + 1) until count).map { index ->
+            val item = c.getMediaItemAt(index)
+            val trackId = item.mediaId.removePrefix("track/")
+            item.buildUpon()
+                .setUri(urlBuilder.audioStreamUrl(trackId, streamSettings))
+                .build()
+        }
+        c.replaceMediaItems(current + 1, count, rebuilt)
     }
 
     fun togglePlayPause() {
@@ -131,6 +159,7 @@ class PlaybackConnection @Inject constructor(
         _state.value = PlaybackUiState(
             hasMedia = c.currentMediaItem != null,
             isPlaying = c.isPlaying,
+            trackId = c.currentMediaItem?.mediaId?.removePrefix("track/"),
             title = metadata.title?.toString().orEmpty(),
             artist = metadata.artist?.toString().orEmpty(),
             artworkUri = metadata.artworkUri?.toString(),

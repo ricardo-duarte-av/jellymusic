@@ -3,11 +3,14 @@ package pt.aguiarvieira.jellymusic.data.settings
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import pt.aguiarvieira.jellymusic.domain.model.AlbumSort
+import pt.aguiarvieira.jellymusic.domain.model.AudioCodec
 import pt.aguiarvieira.jellymusic.domain.model.AudioQuality
 import pt.aguiarvieira.jellymusic.domain.model.MusicLibrary
+import pt.aguiarvieira.jellymusic.domain.model.StreamSettings
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -29,8 +32,13 @@ class SettingsStore @Inject constructor(
         MusicLibrary(id = id, name = prefs[KEY_LIBRARY_NAME] ?: "")
     }
 
-    val streamingQuality: Flow<AudioQuality> = context.dataStore.data.map { prefs ->
-        prefs[KEY_STREAMING_QUALITY].toAudioQuality(AudioQuality.ORIGINAL)
+    val streamSettings: Flow<StreamSettings> = context.dataStore.data.map { prefs ->
+        StreamSettings(
+            transcode = prefs[KEY_STREAM_TRANSCODE] ?: false,
+            codec = prefs[KEY_STREAM_CODEC]?.let { runCatching { AudioCodec.valueOf(it) }.getOrNull() }
+                ?: AudioCodec.OPUS,
+            maxBitrateKbps = prefs[KEY_STREAM_BITRATE] ?: 320,
+        )
     }
 
     val downloadQuality: Flow<AudioQuality> = context.dataStore.data.map { prefs ->
@@ -53,8 +61,16 @@ class SettingsStore @Inject constructor(
         }
     }
 
-    suspend fun setStreamingQuality(quality: AudioQuality) {
-        context.dataStore.edit { it[KEY_STREAMING_QUALITY] = quality.name }
+    suspend fun setStreamTranscode(enabled: Boolean) {
+        context.dataStore.edit { it[KEY_STREAM_TRANSCODE] = enabled }
+    }
+
+    suspend fun setStreamCodec(codec: AudioCodec) {
+        context.dataStore.edit { it[KEY_STREAM_CODEC] = codec.name }
+    }
+
+    suspend fun setStreamBitrate(kbps: Int) {
+        context.dataStore.edit { it[KEY_STREAM_BITRATE] = kbps }
     }
 
     suspend fun setDownloadQuality(quality: AudioQuality) {
@@ -75,7 +91,9 @@ class SettingsStore @Inject constructor(
     private companion object {
         val KEY_LIBRARY_ID = stringPreferencesKey("selected_library_id")
         val KEY_LIBRARY_NAME = stringPreferencesKey("selected_library_name")
-        val KEY_STREAMING_QUALITY = stringPreferencesKey("streaming_quality")
+        val KEY_STREAM_TRANSCODE = booleanPreferencesKey("stream_transcode")
+        val KEY_STREAM_CODEC = stringPreferencesKey("stream_codec")
+        val KEY_STREAM_BITRATE = intPreferencesKey("stream_bitrate_kbps")
         val KEY_DOWNLOAD_QUALITY = stringPreferencesKey("download_quality")
         val KEY_ALBUM_SORT = stringPreferencesKey("album_sort")
         val KEY_ALBUM_SORT_DESC = booleanPreferencesKey("album_sort_descending")

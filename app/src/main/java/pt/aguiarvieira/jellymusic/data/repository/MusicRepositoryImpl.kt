@@ -8,6 +8,7 @@ import pt.aguiarvieira.jellymusic.domain.model.Artist
 import pt.aguiarvieira.jellymusic.domain.model.MusicLibrary
 import pt.aguiarvieira.jellymusic.domain.model.Playlist
 import pt.aguiarvieira.jellymusic.domain.model.Track
+import pt.aguiarvieira.jellymusic.domain.model.TrackAudioInfo
 import pt.aguiarvieira.jellymusic.data.db.JellyMusicDatabase
 import pt.aguiarvieira.jellymusic.data.db.toAlbum
 import pt.aguiarvieira.jellymusic.domain.repository.MusicRepository
@@ -26,7 +27,9 @@ import org.jellyfin.sdk.api.operations.ItemsApi
 import org.jellyfin.sdk.api.operations.PlaylistsApi
 import org.jellyfin.sdk.model.api.BaseItemKind
 import org.jellyfin.sdk.model.api.ImageType
+import org.jellyfin.sdk.model.api.ItemFields
 import org.jellyfin.sdk.model.api.ItemSortBy
+import org.jellyfin.sdk.model.api.MediaStreamType
 import org.jellyfin.sdk.model.api.SortOrder
 import org.jellyfin.sdk.model.api.request.GetAlbumArtistsRequest
 import org.jellyfin.sdk.model.api.request.GetItemsRequest
@@ -106,6 +109,26 @@ class MusicRepositoryImpl @Inject constructor(
                 enableImageTypes = listOf(ImageType.PRIMARY),
             ),
         ).content.items.map { it.toPlaylist(urlBuilder) }
+    }
+
+    override suspend fun getTrackAudioInfo(trackId: String): Result<TrackAudioInfo?> = query { api ->
+        val item = ItemsApi(api).getItems(
+            GetItemsRequest(
+                ids = listOf(UUID.fromString(trackId)),
+                fields = listOf(ItemFields.MEDIA_SOURCES),
+            ),
+        ).content.items.firstOrNull()
+        val audio = item?.mediaSources?.firstOrNull()?.mediaStreams
+            ?.firstOrNull { it.type == MediaStreamType.AUDIO }
+        audio?.let {
+            TrackAudioInfo(
+                codec = it.codec,
+                sampleRateHz = it.sampleRate,
+                bitDepth = it.bitDepth,
+                bitrateKbps = it.bitRate?.let { bps -> bps / 1000 },
+                channels = it.channels,
+            )
+        }
     }
 
     override suspend fun getAlbumTracks(albumId: String): Result<List<Track>> = query { api ->

@@ -31,4 +31,7 @@ object Routes {
     /** Full-screen now-playing. */
     @Serializable
     object Player
+
+    @Serializable
+    object Settings
 }
