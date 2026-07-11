@@ -143,6 +143,7 @@ class MusicDownloadManager @Inject constructor(
                 title = track.name,
                 artist = track.artist,
                 album = track.album,
+                discNumber = track.discNumber,
                 trackNumber = track.trackNumber,
                 durationMs = track.durationMs,
                 artworkUrl = track.artworkUrl,

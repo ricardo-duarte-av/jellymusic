@@ -39,6 +39,8 @@ internal fun BaseItemDto.toTrack(urlBuilder: StreamUrlBuilder) = Track(
     artist = artists?.firstOrNull() ?: albumArtist,
     album = album,
     albumId = albumId?.toString(),
+    // Jellyfin exposes the disc number as parentIndexNumber for audio tracks.
+    discNumber = parentIndexNumber,
     trackNumber = indexNumber,
     durationMs = runTimeTicks?.let { it / TICKS_PER_MS },
     artworkUrl = urlBuilder.imageUrl(albumId?.toString() ?: id.toString()),

@@ -34,7 +34,10 @@ interface DownloadDao {
     @Query("SELECT * FROM track_downloads WHERE state = 'COMPLETED'")
     suspend fun completedTracks(): List<TrackDownloadEntity>
 
-    @Query("SELECT * FROM track_downloads WHERE albumId = :albumId AND state = 'COMPLETED' ORDER BY trackNumber")
+    @Query(
+        "SELECT * FROM track_downloads WHERE albumId = :albumId AND state = 'COMPLETED' " +
+            "ORDER BY discNumber, trackNumber",
+    )
     suspend fun completedTracksForAlbum(albumId: String): List<TrackDownloadEntity>
 
     @Query(

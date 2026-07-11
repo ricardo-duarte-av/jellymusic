@@ -145,7 +145,14 @@ class MusicRepositoryImpl @Inject constructor(
                 ),
             ).content.items
                 .map { it.toTrack(urlBuilder) }
-                .sortedWith(compareBy({ it.trackNumber ?: Int.MAX_VALUE }, { it.name }))
+                .sortedWith(
+                    // Disc number first so multi-disc albums order 1-1, 1-2, … 2-1, 2-2 …
+                    compareBy(
+                        { it.discNumber ?: 0 },
+                        { it.trackNumber ?: Int.MAX_VALUE },
+                        { it.name },
+                    ),
+                )
         }
         remote.getOrNull()?.takeIf { it.isNotEmpty() }?.let { return remote }
         // Offline (or server returned nothing): fall back to this album's downloaded tracks.

@@ -2,6 +2,8 @@ package pt.aguiarvieira.jellymusic.di
 
 import android.content.Context
 import androidx.room.Room
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -16,10 +18,18 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object DatabaseModule {
 
+    // v3 adds discNumber to track_downloads; migrate in place so existing downloads survive.
+    private val MIGRATION_2_3 = object : Migration(2, 3) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE track_downloads ADD COLUMN discNumber INTEGER")
+        }
+    }
+
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): JellyMusicDatabase =
         Room.databaseBuilder(context, JellyMusicDatabase::class.java, "jellymusic.db")
+            .addMigrations(MIGRATION_2_3)
             .fallbackToDestructiveMigration(dropAllTables = true)
             .build()
 
