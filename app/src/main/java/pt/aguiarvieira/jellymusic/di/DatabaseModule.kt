@@ -1,0 +1,27 @@
+package pt.aguiarvieira.jellymusic.di
+
+import android.content.Context
+import androidx.room.Room
+import dagger.Module
+import dagger.Provides
+import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
+import dagger.hilt.components.SingletonComponent
+import pt.aguiarvieira.jellymusic.data.db.AlbumDao
+import pt.aguiarvieira.jellymusic.data.db.JellyMusicDatabase
+import javax.inject.Singleton
+
+@Module
+@InstallIn(SingletonComponent::class)
+object DatabaseModule {
+
+    @Provides
+    @Singleton
+    fun provideDatabase(@ApplicationContext context: Context): JellyMusicDatabase =
+        Room.databaseBuilder(context, JellyMusicDatabase::class.java, "jellymusic.db")
+            .fallbackToDestructiveMigration(dropAllTables = true)
+            .build()
+
+    @Provides
+    fun provideAlbumDao(database: JellyMusicDatabase): AlbumDao = database.albumDao()
+}

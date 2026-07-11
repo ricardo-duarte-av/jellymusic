@@ -8,12 +8,17 @@ import pt.aguiarvieira.jellymusic.domain.model.Artist
 import pt.aguiarvieira.jellymusic.domain.model.MusicLibrary
 import pt.aguiarvieira.jellymusic.domain.model.Playlist
 import pt.aguiarvieira.jellymusic.domain.model.Track
+import pt.aguiarvieira.jellymusic.data.db.JellyMusicDatabase
+import pt.aguiarvieira.jellymusic.data.db.toAlbum
 import pt.aguiarvieira.jellymusic.domain.repository.MusicRepository
+import androidx.paging.ExperimentalPagingApi
 import androidx.paging.Pager
 import androidx.paging.PagingConfig
 import androidx.paging.PagingData
+import androidx.paging.map
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.operations.ArtistsApi
@@ -36,6 +41,7 @@ private const val ALBUM_PAGE_SIZE = 100
 class MusicRepositoryImpl @Inject constructor(
     private val clientProvider: JellyfinClientProvider,
     private val urlBuilder: StreamUrlBuilder,
+    private val database: JellyMusicDatabase,
 ) : MusicRepository {
 
     override suspend fun getAlbums(
@@ -58,20 +64,21 @@ class MusicRepositoryImpl @Inject constructor(
         ).content.items.map { it.toAlbum(urlBuilder) }
     }
 
+    @OptIn(ExperimentalPagingApi::class)
     override fun albumsPager(
         libraryId: String?,
         sort: AlbumSort,
         descending: Boolean,
-    ): Flow<PagingData<Album>> = Pager(
-        config = PagingConfig(
-            pageSize = ALBUM_PAGE_SIZE,
-            initialLoadSize = ALBUM_PAGE_SIZE,
-            enablePlaceholders = false,
-        ),
-        pagingSourceFactory = {
-            AlbumPagingSource(clientProvider, urlBuilder, libraryId, sort, descending)
-        },
-    ).flow
+    ): Flow<PagingData<Album>> {
+        val queryKey = "${libraryId ?: MusicLibrary.ALL_ID}|${sort.name}|$descending"
+        return Pager(
+            config = PagingConfig(pageSize = ALBUM_PAGE_SIZE, enablePlaceholders = false),
+            remoteMediator = AlbumRemoteMediator(
+                clientProvider, urlBuilder, database, libraryId, sort, descending, queryKey,
+            ),
+            pagingSourceFactory = { database.albumDao().pagingSource(queryKey) },
+        ).flow.map { pagingData -> pagingData.map { it.toAlbum() } }
+    }
 
     override suspend fun getArtists(libraryId: String?): Result<List<Artist>> = query { api ->
         ArtistsApi(api).getAlbumArtists(
