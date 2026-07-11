@@ -263,19 +263,20 @@ private fun DiscCard(
     onRequestDownload: (Track) -> Unit,
     onRemoveTrack: (String) -> Unit,
 ) {
-    // Lower elevation / dimmer container so the disc reads as sitting *beneath* its tracks.
+    // Subtly tinted container so the disc group reads as distinct from both the neutral background
+    // and the neutral track cards, which sit raised on top of it.
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 8.dp, vertical = 6.dp),
         shape = RoundedCornerShape(8.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         Text(
             text = "Disc ${section.disc}",
             style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.primary,
+            color = MaterialTheme.colorScheme.onSecondaryContainer,
             modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 2.dp),
         )
         section.tracks.forEachIndexed { i, track ->
