@@ -7,6 +7,7 @@ import pt.aguiarvieira.jellymusic.domain.model.AlbumSort
 import pt.aguiarvieira.jellymusic.domain.model.Artist
 import pt.aguiarvieira.jellymusic.domain.model.Playlist
 import pt.aguiarvieira.jellymusic.domain.model.Track
+import pt.aguiarvieira.jellymusic.domain.model.TrackAudioInfo
 
 /**
  * Reads music content from the active Jellyfin session. A `null` (or "all music") library id means
@@ -27,6 +28,9 @@ interface MusicRepository {
     ): Flow<PagingData<Album>>
     suspend fun getArtists(libraryId: String?): Result<List<Artist>>
     suspend fun getPlaylists(libraryId: String?): Result<List<Playlist>>
+
+    /** Original audio-stream details (codec/sample rate/bit depth/bitrate) for a track. */
+    suspend fun getTrackAudioInfo(trackId: String): Result<TrackAudioInfo?>
 
     suspend fun getAlbumTracks(albumId: String): Result<List<Track>>
     suspend fun getArtistAlbums(artistId: String): Result<List<Album>>

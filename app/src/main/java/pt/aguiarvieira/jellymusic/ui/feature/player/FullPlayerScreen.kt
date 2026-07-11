@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
@@ -47,9 +48,11 @@ import pt.aguiarvieira.jellymusic.ui.components.ArtworkImage
 @Composable
 fun FullPlayerScreen(
     onCollapse: () -> Unit,
+    onOpenSettings: () -> Unit,
     viewModel: PlaybackViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val qualityLabel by viewModel.qualityLabel.collectAsStateWithLifecycle()
 
     // Local scrubbing state so the thumb follows the finger, committed on release.
     var scrubFraction by remember { mutableStateOf<Float?>(null) }
@@ -61,6 +64,11 @@ fun FullPlayerScreen(
                 navigationIcon = {
                     IconButton(onClick = onCollapse) {
                         Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Collapse")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = onOpenSettings) {
+                        Icon(Icons.Filled.Settings, contentDescription = "Settings")
                     }
                 },
             )
@@ -100,6 +108,18 @@ fun FullPlayerScreen(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+            // File quality: original details, or "original → transcoded" when transcode is on.
+            qualityLabel?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+            }
 
             Spacer(Modifier.height(24.dp))
 

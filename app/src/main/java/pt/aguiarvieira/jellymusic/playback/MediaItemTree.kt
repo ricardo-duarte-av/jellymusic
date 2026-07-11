@@ -8,8 +8,8 @@ import pt.aguiarvieira.jellymusic.data.jellyfin.StreamUrlBuilder
 import pt.aguiarvieira.jellymusic.data.settings.SettingsStore
 import pt.aguiarvieira.jellymusic.domain.model.Album
 import pt.aguiarvieira.jellymusic.domain.model.Artist
-import pt.aguiarvieira.jellymusic.domain.model.AudioQuality
 import pt.aguiarvieira.jellymusic.domain.model.Playlist
+import pt.aguiarvieira.jellymusic.domain.model.StreamSettings
 import pt.aguiarvieira.jellymusic.domain.model.Track
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -54,22 +54,22 @@ class MediaItemTree @Inject constructor(
                 .getOrDefault(emptyList()).map { it.toMediaItem() }
 
         parentId.startsWith(ALBUM_PREFIX) -> {
-            val quality = settingsStore.streamingQuality.first()
+            val settings = settingsStore.streamSettings.first()
             musicRepository.getAlbumTracks(parentId.removePrefix(ALBUM_PREFIX))
-                .getOrDefault(emptyList()).map { trackMediaItem(it, quality) }
+                .getOrDefault(emptyList()).map { trackMediaItem(it, settings) }
         }
 
         parentId.startsWith(PLAYLIST_PREFIX) -> {
-            val quality = settingsStore.streamingQuality.first()
+            val settings = settingsStore.streamSettings.first()
             musicRepository.getPlaylistTracks(parentId.removePrefix(PLAYLIST_PREFIX))
-                .getOrDefault(emptyList()).map { trackMediaItem(it, quality) }
+                .getOrDefault(emptyList()).map { trackMediaItem(it, settings) }
         }
 
         else -> emptyList()
     }
 
     /** Public so the in-app player ([PlaybackConnection]) builds identical playable items. */
-    fun trackMediaItem(track: Track, quality: AudioQuality): MediaItem {
+    fun trackMediaItem(track: Track, settings: StreamSettings): MediaItem {
         val metadata = MediaMetadata.Builder()
             .setTitle(track.name)
             .setArtist(track.artist)
@@ -81,7 +81,7 @@ class MediaItemTree @Inject constructor(
             .build()
         return MediaItem.Builder()
             .setMediaId(TRACK_PREFIX + track.id)
-            .setUri(urlBuilder.audioStreamUrl(track.id, quality))
+            .setUri(urlBuilder.audioStreamUrl(track.id, settings))
             .setMediaMetadata(metadata)
             .build()
     }

@@ -14,6 +14,7 @@ import pt.aguiarvieira.jellymusic.ui.feature.detail.PlaylistDetailScreen
 import pt.aguiarvieira.jellymusic.ui.feature.onboarding.ConnectServerScreen
 import pt.aguiarvieira.jellymusic.ui.feature.onboarding.LoginScreen
 import pt.aguiarvieira.jellymusic.ui.feature.player.FullPlayerScreen
+import pt.aguiarvieira.jellymusic.ui.feature.settings.SettingsScreen
 
 @Composable
 fun AppNavHost(
@@ -56,8 +57,7 @@ fun AppNavHost(
                 onArtistClick = { id, name -> navController.navigate(Routes.ArtistDetail(id, name)) },
                 onPlaylistClick = { id, name -> navController.navigate(Routes.PlaylistDetail(id, name)) },
                 onExpandPlayer = { navController.navigate(Routes.Player) },
-                // Settings screen is future work; the gear is wired but inert for now.
-                onOpenSettings = { },
+                onOpenSettings = { navController.navigate(Routes.Settings) },
             )
         }
 
@@ -65,6 +65,7 @@ fun AppNavHost(
             AlbumDetailScreen(
                 onBack = { navController.popBackStack() },
                 onExpandPlayer = { navController.navigate(Routes.Player) },
+                onOpenSettings = { navController.navigate(Routes.Settings) },
             )
         }
 
@@ -73,6 +74,7 @@ fun AppNavHost(
                 onBack = { navController.popBackStack() },
                 onAlbumClick = { id, name -> navController.navigate(Routes.AlbumDetail(id, name)) },
                 onExpandPlayer = { navController.navigate(Routes.Player) },
+                onOpenSettings = { navController.navigate(Routes.Settings) },
             )
         }
 
@@ -80,6 +82,7 @@ fun AppNavHost(
             PlaylistDetailScreen(
                 onBack = { navController.popBackStack() },
                 onExpandPlayer = { navController.navigate(Routes.Player) },
+                onOpenSettings = { navController.navigate(Routes.Settings) },
             )
         }
 
@@ -88,7 +91,14 @@ fun AppNavHost(
             enterTransition = { slideInVertically(initialOffsetY = { it }) },
             popExitTransition = { slideOutVertically(targetOffsetY = { it }) },
         ) {
-            FullPlayerScreen(onCollapse = { navController.popBackStack() })
+            FullPlayerScreen(
+                onCollapse = { navController.popBackStack() },
+                onOpenSettings = { navController.navigate(Routes.Settings) },
+            )
+        }
+
+        composable<Routes.Settings> {
+            SettingsScreen(onBack = { navController.popBackStack() })
         }
     }
 }
