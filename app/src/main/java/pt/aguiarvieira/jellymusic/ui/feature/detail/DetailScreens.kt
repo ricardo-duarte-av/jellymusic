@@ -218,16 +218,33 @@ private fun AlbumTrackList(
                 onShuffle = { onPlay(tracks.shuffled(), 0) },
             )
         }
+        val multiDisc = tracks.mapNotNull { it.discNumber }.distinct().size > 1
         itemsIndexed(tracks, key = { _, t -> t.id }) { index, track ->
-            TrackCard(
-                track = track,
-                onClick = { onPlay(tracks, index) },
-                downloadStatus = trackStatuses[track.id],
-                onDownload = { onRequestDownload(track) },
-                onRemoveLocal = { onRemoveTrack(track.id) },
-            )
+            Column {
+                // A "Disc N" separator before the first track of each disc (multi-disc albums only).
+                if (multiDisc && track.discNumber != tracks.getOrNull(index - 1)?.discNumber) {
+                    DiscHeader(track.discNumber ?: 1)
+                }
+                TrackCard(
+                    track = track,
+                    onClick = { onPlay(tracks, index) },
+                    downloadStatus = trackStatuses[track.id],
+                    onDownload = { onRequestDownload(track) },
+                    onRemoveLocal = { onRemoveTrack(track.id) },
+                )
+            }
         }
     }
+}
+
+@Composable
+private fun DiscHeader(discNumber: Int) {
+    Text(
+        text = "Disc $discNumber",
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp),
+    )
 }
 
 @Composable
