@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -29,6 +30,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -219,12 +221,24 @@ private fun AlbumTrackList(
             )
         }
         val multiDisc = tracks.mapNotNull { it.discNumber }.distinct().size > 1
-        itemsIndexed(tracks, key = { _, t -> t.id }) { index, track ->
-            Column {
-                // A "Disc N" separator before the first track of each disc (multi-disc albums only).
-                if (multiDisc && track.discNumber != tracks.getOrNull(index - 1)?.discNumber) {
-                    DiscHeader(track.discNumber ?: 1)
-                }
+        if (multiDisc) {
+            // Each disc is a low-elevation container card; its track cards sit raised on top.
+            var start = 0
+            val sections = tracks.groupBy { it.discNumber ?: 1 }.map { (disc, discTracks) ->
+                DiscSection(disc, discTracks, start).also { start += discTracks.size }
+            }
+            items(sections, key = { "disc-${it.disc}" }) { section ->
+                DiscCard(
+                    section = section,
+                    allTracks = tracks,
+                    trackStatuses = trackStatuses,
+                    onPlay = onPlay,
+                    onRequestDownload = onRequestDownload,
+                    onRemoveTrack = onRemoveTrack,
+                )
+            }
+        } else {
+            itemsIndexed(tracks, key = { _, t -> t.id }) { index, track ->
                 TrackCard(
                     track = track,
                     onClick = { onPlay(tracks, index) },
@@ -237,14 +251,44 @@ private fun AlbumTrackList(
     }
 }
 
+/** A disc and its tracks, plus the tracks' starting position in the full album list. */
+private data class DiscSection(val disc: Int, val tracks: List<Track>, val startIndex: Int)
+
 @Composable
-private fun DiscHeader(discNumber: Int) {
-    Text(
-        text = "Disc $discNumber",
-        style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp),
-    )
+private fun DiscCard(
+    section: DiscSection,
+    allTracks: List<Track>,
+    trackStatuses: Map<String, TrackDownloadStatus>,
+    onPlay: (List<Track>, Int) -> Unit,
+    onRequestDownload: (Track) -> Unit,
+    onRemoveTrack: (String) -> Unit,
+) {
+    // Lower elevation / dimmer container so the disc reads as sitting *beneath* its tracks.
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+    ) {
+        Text(
+            text = "Disc ${section.disc}",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 2.dp),
+        )
+        section.tracks.forEachIndexed { i, track ->
+            TrackCard(
+                track = track,
+                onClick = { onPlay(allTracks, section.startIndex + i) },
+                downloadStatus = trackStatuses[track.id],
+                onDownload = { onRequestDownload(track) },
+                onRemoveLocal = { onRemoveTrack(track.id) },
+            )
+        }
+        Spacer(Modifier.height(4.dp))
+    }
 }
 
 @Composable
