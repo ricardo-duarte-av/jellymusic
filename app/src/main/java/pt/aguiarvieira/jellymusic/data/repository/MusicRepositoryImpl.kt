@@ -12,7 +12,10 @@ import pt.aguiarvieira.jellymusic.domain.model.Track
 import pt.aguiarvieira.jellymusic.domain.model.TrackAudioInfo
 import pt.aguiarvieira.jellymusic.data.db.JellyMusicDatabase
 import pt.aguiarvieira.jellymusic.data.db.toAlbum
+import pt.aguiarvieira.jellymusic.data.db.toArtist
+import pt.aguiarvieira.jellymusic.data.db.toCached
 import pt.aguiarvieira.jellymusic.data.db.toDomainTrack
+import pt.aguiarvieira.jellymusic.data.db.toPlaylist
 import pt.aguiarvieira.jellymusic.domain.repository.MusicRepository
 import androidx.paging.ExperimentalPagingApi
 import androidx.paging.Pager
@@ -90,32 +93,50 @@ class MusicRepositoryImpl @Inject constructor(
         ).flow.map { pagingData -> pagingData.map { it.toAlbum() } }
     }
 
-    override suspend fun getArtists(libraryId: String?): Result<List<Artist>> = query { api ->
-        ArtistsApi(api).getAlbumArtists(
-            GetAlbumArtistsRequest(
-                parentId = libraryId.toParentUuid(),
-                sortBy = listOf(ItemSortBy.SORT_NAME),
-                sortOrder = listOf(SortOrder.ASCENDING),
-                enableUserData = false,
-                imageTypeLimit = 1,
-                enableImageTypes = listOf(ImageType.PRIMARY),
-            ),
-        ).content.items.map { it.toArtist(urlBuilder) }
+    override suspend fun getArtists(libraryId: String?): Result<List<Artist>> {
+        val key = libraryId ?: MusicLibrary.ALL_ID
+        val remote = query { api ->
+            ArtistsApi(api).getAlbumArtists(
+                GetAlbumArtistsRequest(
+                    parentId = libraryId.toParentUuid(),
+                    sortBy = listOf(ItemSortBy.SORT_NAME),
+                    sortOrder = listOf(SortOrder.ASCENDING),
+                    enableUserData = false,
+                    imageTypeLimit = 1,
+                    enableImageTypes = listOf(ImageType.PRIMARY),
+                ),
+            ).content.items.map { it.toArtist(urlBuilder) }
+        }
+        remote.getOrNull()?.let { artists ->
+            database.browseCacheDao().replaceArtists(key, artists.map { it.toCached(key) })
+            return remote
+        }
+        // Offline: serve the cached artists for this library.
+        val cached = database.browseCacheDao().artistsForLibrary(key).map { it.toArtist() }
+        return if (cached.isNotEmpty()) Result.success(cached) else remote
     }
 
-    override suspend fun getPlaylists(libraryId: String?): Result<List<Playlist>> = query { api ->
-        // Playlists live in their own view, so we query the whole server rather than a library.
-        ItemsApi(api).getItems(
-            GetItemsRequest(
-                includeItemTypes = listOf(BaseItemKind.PLAYLIST),
-                recursive = true,
-                sortBy = listOf(ItemSortBy.SORT_NAME),
-                sortOrder = listOf(SortOrder.ASCENDING),
-                enableUserData = false,
-                imageTypeLimit = 1,
-                enableImageTypes = listOf(ImageType.PRIMARY),
-            ),
-        ).content.items.map { it.toPlaylist(urlBuilder) }
+    override suspend fun getPlaylists(libraryId: String?): Result<List<Playlist>> {
+        val remote = query { api ->
+            // Playlists live in their own view, so we query the whole server rather than a library.
+            ItemsApi(api).getItems(
+                GetItemsRequest(
+                    includeItemTypes = listOf(BaseItemKind.PLAYLIST),
+                    recursive = true,
+                    sortBy = listOf(ItemSortBy.SORT_NAME),
+                    sortOrder = listOf(SortOrder.ASCENDING),
+                    enableUserData = false,
+                    imageTypeLimit = 1,
+                    enableImageTypes = listOf(ImageType.PRIMARY),
+                ),
+            ).content.items.map { it.toPlaylist(urlBuilder) }
+        }
+        remote.getOrNull()?.let { playlists ->
+            database.browseCacheDao().replacePlaylists(playlists.map { it.toCached() })
+            return remote
+        }
+        val cached = database.browseCacheDao().playlists().map { it.toPlaylist() }
+        return if (cached.isNotEmpty()) Result.success(cached) else remote
     }
 
     override suspend fun getTrackAudioInfo(trackId: String): Result<TrackAudioInfo?> = query { api ->

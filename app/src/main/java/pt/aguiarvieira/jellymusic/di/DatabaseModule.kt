@@ -10,6 +10,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import pt.aguiarvieira.jellymusic.data.db.AlbumDao
+import pt.aguiarvieira.jellymusic.data.db.BrowseCacheDao
 import pt.aguiarvieira.jellymusic.data.db.DownloadDao
 import pt.aguiarvieira.jellymusic.data.db.JellyMusicDatabase
 import javax.inject.Singleton
@@ -33,11 +34,26 @@ object DatabaseModule {
         }
     }
 
+    // v5 adds artist/playlist browse caches.
+    private val MIGRATION_4_5 = object : Migration(4, 5) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS `cached_artists` (`libraryKey` TEXT NOT NULL, " +
+                    "`id` TEXT NOT NULL, `name` TEXT NOT NULL, `artworkUrl` TEXT, " +
+                    "PRIMARY KEY(`libraryKey`, `id`))",
+            )
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS `cached_playlists` (`id` TEXT NOT NULL, " +
+                    "`name` TEXT NOT NULL, `trackCount` INTEGER, `artworkUrl` TEXT, PRIMARY KEY(`id`))",
+            )
+        }
+    }
+
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): JellyMusicDatabase =
         Room.databaseBuilder(context, JellyMusicDatabase::class.java, "jellymusic.db")
-            .addMigrations(MIGRATION_2_3, MIGRATION_3_4)
+            .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
             .fallbackToDestructiveMigration(dropAllTables = true)
             .build()
 
@@ -46,4 +62,7 @@ object DatabaseModule {
 
     @Provides
     fun provideDownloadDao(database: JellyMusicDatabase): DownloadDao = database.downloadDao()
+
+    @Provides
+    fun provideBrowseCacheDao(database: JellyMusicDatabase): BrowseCacheDao = database.browseCacheDao()
 }
