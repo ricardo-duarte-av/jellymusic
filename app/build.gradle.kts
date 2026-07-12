@@ -128,6 +128,9 @@ dependencies {
     implementation(libs.androidx.room.paging)
     ksp(libs.androidx.room.compiler)
 
+    // WorkManager (background downloads)
+    implementation(libs.androidx.work.runtime)
+
     // DataStore + security
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.security.crypto)

@@ -1,18 +1,20 @@
 package pt.aguiarvieira.jellymusic.data.download
 
 import android.content.Context
+import androidx.work.Constraints
+import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import pt.aguiarvieira.jellymusic.core.util.Logx
 import pt.aguiarvieira.jellymusic.data.db.AlbumDownloadEntity
 import pt.aguiarvieira.jellymusic.data.db.DownloadDao
 import pt.aguiarvieira.jellymusic.data.db.TrackDownloadEntity
-import pt.aguiarvieira.jellymusic.data.jellyfin.StreamUrlBuilder
 import pt.aguiarvieira.jellymusic.data.settings.SettingsStore
 import pt.aguiarvieira.jellymusic.domain.model.AudioCodec
 import pt.aguiarvieira.jellymusic.domain.model.DownloadState
@@ -20,15 +22,12 @@ import pt.aguiarvieira.jellymusic.domain.model.StreamSettings
 import pt.aguiarvieira.jellymusic.domain.model.Track
 import pt.aguiarvieira.jellymusic.domain.repository.MusicRepository
 import java.io.File
-import java.net.HttpURLConnection
-import java.net.URL
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Downloads tracks to a portable file per track and tracks their state in Room. Downloads run in an
- * application-scoped coroutine (one at a time, sequentially) while the app process is alive; they do
- * not yet survive the process being killed.
+ * Owns download enqueue/removal and Room bookkeeping, and schedules the [DownloadWorker] to do the
+ * actual downloading in the background (so it survives the process being killed).
  *
  * Playback prefers a local copy: [localFileUri] returns a `file://` URI for a completed download.
  */
@@ -36,13 +35,11 @@ import javax.inject.Singleton
 class MusicDownloadManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val dao: DownloadDao,
-    private val urlBuilder: StreamUrlBuilder,
     private val musicRepository: MusicRepository,
     private val settingsStore: SettingsStore,
     private val artworkCache: ArtworkCache,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val processorMutex = Mutex()
 
     /** trackId → completed download row, kept in memory for fast playback resolution. */
     @Volatile
@@ -58,8 +55,8 @@ class MusicDownloadManager @Inject constructor(
                 completedRows = rows.filter { it.filePath != null }.associateBy { it.trackId }
             }
         }
-        // Resume any downloads left pending by a previous session.
-        kickProcessor()
+        // Pick up anything left pending by a previous session.
+        scheduleWork()
     }
 
     /** Absolute `file://` URI for a completed, still-present download, else null. */
@@ -87,7 +84,7 @@ class MusicDownloadManager @Inject constructor(
     fun downloadTrack(track: Track, transcode: Boolean) {
         scope.launch {
             upsertQueued(track, track.albumId, transcode)
-            kickProcessor()
+            scheduleWork()
         }
     }
 
@@ -108,7 +105,7 @@ class MusicDownloadManager @Inject constructor(
                 ),
             )
             tracks.forEach { upsertQueued(it, albumId, transcode) }
-            kickProcessor()
+            scheduleWork()
         }
     }
 
@@ -162,94 +159,15 @@ class MusicDownloadManager @Inject constructor(
         )
     }
 
-    private fun kickProcessor() {
-        scope.launch {
-            // Only one processor loop at a time.
-            if (!processorMutex.tryLock()) return@launch
-            try {
-                while (true) {
-                    val next = dao.nextPending() ?: break
-                    runCatching { process(next) }
-                        .onFailure { Logx.w("Downloads", "Download failed for ${next.trackId}", it) }
-                }
-            } finally {
-                processorMutex.unlock()
-            }
-        }
-    }
-
-    private suspend fun process(entity: TrackDownloadEntity) {
-        val now = System.currentTimeMillis()
-        val settings = if (entity.transcoded) {
-            StreamSettings(
-                transcode = true,
-                codec = entity.codec?.let { runCatching { AudioCodec.valueOf(it) }.getOrNull() } ?: AudioCodec.OPUS,
-                maxBitrateKbps = entity.bitrateKbps ?: 320,
+    /** Enqueue the background download worker; a single unique instance drains the whole queue. */
+    private fun scheduleWork() {
+        val request = OneTimeWorkRequestBuilder<DownloadWorker>()
+            .setConstraints(
+                Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build(),
             )
-        } else {
-            StreamSettings(transcode = false)
-        }
-        val url = urlBuilder.audioStreamUrl(entity.trackId, settings)
-        if (url == null) {
-            dao.updateProgress(entity.trackId, DownloadState.FAILED.name, 0, 0, null, now)
-            return
-        }
-
-        val ext = if (entity.transcoded) settings.codec.container else "audio"
-        val partFile = File(downloadsDir, "${entity.trackId}.part")
-        val outFile = File(downloadsDir, "${entity.trackId}.$ext")
-
-        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
-            connectTimeout = 30_000
-            readTimeout = 30_000
-            instanceFollowRedirects = true
-        }
-        try {
-            val total = connection.contentLengthLong.coerceAtLeast(0L)
-            dao.updateProgress(entity.trackId, DownloadState.DOWNLOADING.name, 0, total, null, now)
-
-            connection.inputStream.use { input ->
-                partFile.outputStream().use { output ->
-                    val buffer = ByteArray(64 * 1024)
-                    var written = 0L
-                    var lastEmit = System.currentTimeMillis()
-                    while (true) {
-                        // Bail out if the user removed this download mid-flight.
-                        if (dao.getTrack(entity.trackId) == null) {
-                            partFile.delete()
-                            return
-                        }
-                        val read = input.read(buffer)
-                        if (read < 0) break
-                        output.write(buffer, 0, read)
-                        written += read
-                        val nowMs = System.currentTimeMillis()
-                        if (nowMs - lastEmit >= 300) {
-                            dao.updateProgress(entity.trackId, DownloadState.DOWNLOADING.name, written, total, null, nowMs)
-                            lastEmit = nowMs
-                        }
-                    }
-                    output.flush()
-                    if (outFile.exists()) outFile.delete()
-                    partFile.renameTo(outFile)
-                    dao.updateProgress(
-                        entity.trackId,
-                        DownloadState.COMPLETED.name,
-                        written,
-                        if (total > 0) total else written,
-                        outFile.absolutePath,
-                        System.currentTimeMillis(),
-                    )
-                }
-            }
-        } catch (@Suppress("TooGenericExceptionCaught") t: Throwable) {
-            // Any failure (IO, network, cancellation) must mark the row FAILED, then rethrow.
-            partFile.delete()
-            dao.updateProgress(entity.trackId, DownloadState.FAILED.name, 0, 0, null, System.currentTimeMillis())
-            throw t
-        } finally {
-            connection.disconnect()
-        }
+            .build()
+        WorkManager.getInstance(context)
+            .enqueueUniqueWork(DownloadWorker.WORK_NAME, ExistingWorkPolicy.KEEP, request)
     }
 
     private fun deleteFilesFor(trackId: String) {
