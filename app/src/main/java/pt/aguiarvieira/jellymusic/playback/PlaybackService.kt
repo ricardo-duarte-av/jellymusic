@@ -5,6 +5,7 @@ import android.content.Intent
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.LibraryResult
@@ -20,13 +21,19 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.guava.future
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import org.jellyfin.sdk.model.api.PlayMethod
 import pt.aguiarvieira.jellymusic.MainActivity
 import pt.aguiarvieira.jellymusic.data.settings.QueueStore
 import pt.aguiarvieira.jellymusic.data.settings.SettingsStore
 import pt.aguiarvieira.jellymusic.domain.model.toTrack
 import javax.inject.Inject
+
+private const val PROGRESS_REPORT_INTERVAL_MS = 10_000L
 
 /**
  * The single [MediaLibraryService] that powers playback on the phone/tablet AND Android Auto. It
@@ -46,9 +53,45 @@ class PlaybackService : MediaLibraryService() {
     @Inject
     lateinit var settingsStore: SettingsStore
 
+    @Inject
+    lateinit var playbackReporter: PlaybackReporter
+
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private lateinit var player: ExoPlayer
     private lateinit var mediaSession: MediaLibrarySession
+
+    // Track being reported to the server, and its last observed position.
+    private var reportedItemId: String? = null
+    private var lastPositionMs: Long = 0L
+
+    /** Reports playback lifecycle to Jellyfin (play counts, resume points, now-playing). */
+    private val reporterListener = object : Player.Listener {
+        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            reportedItemId?.let { playbackReporter.reportStop(it, lastPositionMs) }
+            reportedItemId = mediaItem?.mediaId?.removePrefix("track/")
+            lastPositionMs = player.currentPosition
+            reportedItemId?.let { playbackReporter.reportStart(it, lastPositionMs, currentPlayMethod()) }
+        }
+
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            lastPositionMs = player.currentPosition
+            reportedItemId?.let { playbackReporter.reportProgress(it, lastPositionMs, !isPlaying, currentPlayMethod()) }
+        }
+
+        override fun onPlaybackStateChanged(playbackState: Int) {
+            if (playbackState == Player.STATE_ENDED) {
+                reportedItemId?.let { playbackReporter.reportStop(it, lastPositionMs) }
+                reportedItemId = null
+            }
+        }
+    }
+
+    private fun currentPlayMethod(): PlayMethod {
+        val extras = player.currentMediaItem?.mediaMetadata?.extras
+        val transcode = StreamSettingsExtras.settingsFrom(extras).transcode
+        val isLocal = StreamSettingsExtras.isLocal(extras)
+        return if (transcode && !isLocal) PlayMethod.TRANSCODE else PlayMethod.DIRECT_PLAY
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -62,10 +105,24 @@ class PlaybackService : MediaLibraryService() {
             )
             .setHandleAudioBecomingNoisy(true)
             .build()
+        player.addListener(reporterListener)
 
         mediaSession = MediaLibrarySession.Builder(this, player, LibraryCallback())
             .setSessionActivity(openPlayerPendingIntent())
             .build()
+
+        // Periodic progress reports so the server's resume point/now-playing stays fresh.
+        serviceScope.launch {
+            while (isActive) {
+                delay(PROGRESS_REPORT_INTERVAL_MS)
+                if (player.isPlaying) {
+                    lastPositionMs = player.currentPosition
+                    reportedItemId?.let {
+                        playbackReporter.reportProgress(it, lastPositionMs, isPaused = false, currentPlayMethod())
+                    }
+                }
+            }
+        }
     }
 
     /** Tapping the media notification opens the app on the full-screen player. */
@@ -86,6 +143,7 @@ class PlaybackService : MediaLibraryService() {
         mediaSession
 
     override fun onDestroy() {
+        reportedItemId?.let { playbackReporter.reportStop(it, player.currentPosition) }
         mediaSession.release()
         player.release()
         serviceScope.cancel()
