@@ -19,11 +19,17 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import pt.aguiarvieira.jellymusic.data.download.MusicDownloadManager
 import pt.aguiarvieira.jellymusic.data.jellyfin.StreamUrlBuilder
+import pt.aguiarvieira.jellymusic.data.settings.QueueStore
 import pt.aguiarvieira.jellymusic.data.settings.SettingsStore
+import pt.aguiarvieira.jellymusic.domain.model.PersistedQueue
+import pt.aguiarvieira.jellymusic.domain.model.QueueTrack
 import pt.aguiarvieira.jellymusic.domain.model.StreamSettings
 import pt.aguiarvieira.jellymusic.domain.model.Track
+import pt.aguiarvieira.jellymusic.domain.model.toTrack
 import javax.inject.Inject
 import javax.inject.Singleton
+
+private const val QUEUE_PERSIST_INTERVAL_MS = 5_000L
 
 enum class RepeatMode { OFF, ALL, ONE }
 
@@ -66,6 +72,7 @@ class PlaybackConnection @Inject constructor(
     private val mediaItemTree: MediaItemTree,
     private val urlBuilder: StreamUrlBuilder,
     private val downloadManager: MusicDownloadManager,
+    private val queueStore: QueueStore,
     settingsStore: SettingsStore,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -80,6 +87,7 @@ class PlaybackConnection @Inject constructor(
     // Rebuild the queue list only when the timeline or current item changes (not on position ticks).
     private var lastQueueCount = -1
     private var lastQueueCurrent = -1
+    private var lastPersistMs = 0L
 
     @Volatile
     private var streamSettings: StreamSettings = StreamSettings()
@@ -106,6 +114,7 @@ class PlaybackConnection @Inject constructor(
             {
                 controller = future.get().apply { addListener(listener) }
                 updateState()
+                restoreQueueIfEmpty()
             },
             ContextCompat.getMainExecutor(context),
         )
@@ -220,10 +229,50 @@ class PlaybackConnection @Inject constructor(
             isLocal = StreamSettingsExtras.isLocal(c.currentMediaItem?.mediaMetadata?.extras),
         )
 
-        if (c.mediaItemCount != lastQueueCount || c.currentMediaItemIndex != lastQueueCurrent) {
+        val queueChanged = c.mediaItemCount != lastQueueCount || c.currentMediaItemIndex != lastQueueCurrent
+        if (queueChanged) {
             lastQueueCount = c.mediaItemCount
             lastQueueCurrent = c.currentMediaItemIndex
             rebuildQueue(c)
+        }
+        // Persist the queue on any timeline/current change, and throttled otherwise for position.
+        val nowMs = System.currentTimeMillis()
+        if (c.mediaItemCount > 0 && (queueChanged || nowMs - lastPersistMs >= QUEUE_PERSIST_INTERVAL_MS)) {
+            lastPersistMs = nowMs
+            persistQueue(c)
+        }
+    }
+
+    private fun persistQueue(c: MediaController) {
+        val snapshot = PersistedQueue(
+            items = (0 until c.mediaItemCount).map { i ->
+                val item = c.getMediaItemAt(i)
+                val md = item.mediaMetadata
+                QueueTrack(
+                    id = item.mediaId.removePrefix("track/"),
+                    title = md.title?.toString().orEmpty(),
+                    artist = md.artist?.toString().orEmpty(),
+                    album = md.albumTitle?.toString(),
+                    artworkUrl = md.artworkUri?.toString(),
+                )
+            },
+            index = c.currentMediaItemIndex.coerceAtLeast(0),
+            positionMs = c.currentPosition.coerceAtLeast(0L),
+        )
+        scope.launch { queueStore.save(snapshot) }
+    }
+
+    /** After connecting, if nothing is queued, restore the persisted queue (paused). */
+    private fun restoreQueueIfEmpty() {
+        if ((controller?.mediaItemCount ?: 0) > 0) return
+        scope.launch {
+            val saved = queueStore.load() ?: return@launch
+            val c = controller ?: return@launch
+            if (c.mediaItemCount > 0 || saved.items.isEmpty()) return@launch
+            val items = saved.items.map { mediaItemTree.trackMediaItem(it.toTrack(), streamSettings) }
+            c.setMediaItems(items, saved.index.coerceIn(0, items.lastIndex), saved.positionMs.coerceAtLeast(0L))
+            c.prepare()
+            // Leave paused; the user presses play to resume.
         }
     }
 

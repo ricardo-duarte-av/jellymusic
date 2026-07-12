@@ -20,8 +20,12 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.guava.future
 import pt.aguiarvieira.jellymusic.MainActivity
+import pt.aguiarvieira.jellymusic.data.settings.QueueStore
+import pt.aguiarvieira.jellymusic.data.settings.SettingsStore
+import pt.aguiarvieira.jellymusic.domain.model.toTrack
 import javax.inject.Inject
 
 /**
@@ -35,6 +39,12 @@ class PlaybackService : MediaLibraryService() {
 
     @Inject
     lateinit var mediaItemTree: MediaItemTree
+
+    @Inject
+    lateinit var queueStore: QueueStore
+
+    @Inject
+    lateinit var settingsStore: SettingsStore
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private lateinit var player: ExoPlayer
@@ -83,6 +93,24 @@ class PlaybackService : MediaLibraryService() {
     }
 
     private inner class LibraryCallback : MediaLibrarySession.Callback {
+
+        /** Resume from cold (Bluetooth/media button with no active session) using the saved queue. */
+        override fun onPlaybackResumption(
+            mediaSession: MediaSession,
+            controller: MediaSession.ControllerInfo,
+        ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> = serviceScope.future {
+            val saved = queueStore.load()
+            if (saved == null || saved.items.isEmpty()) {
+                throw UnsupportedOperationException("No saved queue to resume")
+            }
+            val settings = settingsStore.streamSettings.first()
+            val items = saved.items.map { mediaItemTree.trackMediaItem(it.toTrack(), settings) }
+            MediaSession.MediaItemsWithStartPosition(
+                items,
+                saved.index.coerceIn(0, items.lastIndex),
+                saved.positionMs.coerceAtLeast(0L),
+            )
+        }
 
         override fun onGetLibraryRoot(
             session: MediaLibrarySession,
