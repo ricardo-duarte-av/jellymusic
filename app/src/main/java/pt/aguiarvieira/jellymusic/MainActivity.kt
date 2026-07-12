@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -21,6 +22,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.rememberNavController
 import pt.aguiarvieira.jellymusic.ui.app.AppViewModel
@@ -50,10 +52,25 @@ class MainActivity : ComponentActivity() {
                     val navController = rememberNavController()
                     val openPlayer by appViewModel.openPlayer.collectAsStateWithLifecycle()
                     val dynamicTheme by appViewModel.dynamicAlbumTheme.collectAsStateWithLifecycle()
+                    val session by appViewModel.session.collectAsStateWithLifecycle()
+                    val context = LocalContext.current
                     LaunchedEffect(openPlayer, startState) {
                         if (openPlayer && startState == StartState.Home) {
                             navController.navigate(Routes.Player)
                             appViewModel.consumeOpenPlayer()
+                        }
+                    }
+                    // Session lost mid-run (token rejected or signed out) → back to onboarding.
+                    LaunchedEffect(session, startState) {
+                        if (session == null && startState == StartState.Home) {
+                            Toast.makeText(
+                                context,
+                                "Session expired — please sign in again",
+                                Toast.LENGTH_LONG,
+                            ).show()
+                            navController.navigate(Routes.ConnectServer) {
+                                popUpTo(navController.graph.id) { inclusive = true }
+                            }
                         }
                     }
                     CompositionLocalProvider(LocalDynamicColorEnabled provides dynamicTheme) {

@@ -3,6 +3,7 @@ package pt.aguiarvieira.jellymusic.ui.app
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import pt.aguiarvieira.jellymusic.data.settings.SettingsStore
+import pt.aguiarvieira.jellymusic.domain.model.UserSession
 import pt.aguiarvieira.jellymusic.domain.repository.AuthRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,6 +24,9 @@ class AppViewModel @Inject constructor(
     /** Whether album art should retint album/player surfaces (user setting). */
     val dynamicAlbumTheme: StateFlow<Boolean> = settingsStore.dynamicAlbumTheme
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+    /** The active session; becomes null on sign-out or when the token is rejected mid-run. */
+    val session: StateFlow<UserSession?> = authRepository.session
 
     private val _startState = MutableStateFlow<StartState>(StartState.Loading)
     val startState: StateFlow<StartState> = _startState.asStateFlow()

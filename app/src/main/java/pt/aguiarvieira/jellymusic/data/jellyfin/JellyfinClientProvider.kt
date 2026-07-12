@@ -1,5 +1,6 @@
 package pt.aguiarvieira.jellymusic.data.jellyfin
 
+import pt.aguiarvieira.jellymusic.data.auth.CredentialStore
 import pt.aguiarvieira.jellymusic.domain.model.UserSession
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,6 +20,7 @@ import javax.inject.Singleton
 @Singleton
 class JellyfinClientProvider @Inject constructor(
     private val jellyfin: Jellyfin,
+    private val credentialStore: CredentialStore,
 ) {
     private val _session = MutableStateFlow<UserSession?>(null)
     val session: StateFlow<UserSession?> = _session.asStateFlow()
@@ -47,5 +49,14 @@ class JellyfinClientProvider @Inject constructor(
     fun clear() {
         _api = null
         _session.value = null
+    }
+
+    /**
+     * The server rejected our access token (401). Drop the session *and* its persisted credentials
+     * so we don't restore the dead token on next launch; the app reacts to [session] becoming null.
+     */
+    fun invalidateSession() {
+        credentialStore.clear()
+        clear()
     }
 }

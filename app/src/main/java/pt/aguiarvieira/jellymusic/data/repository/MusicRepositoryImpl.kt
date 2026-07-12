@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import org.jellyfin.sdk.api.client.ApiClient
+import org.jellyfin.sdk.api.client.exception.InvalidStatusException
 import org.jellyfin.sdk.api.operations.ArtistsApi
 import org.jellyfin.sdk.api.operations.ItemsApi
 import org.jellyfin.sdk.api.operations.PlaylistsApi
@@ -44,6 +45,7 @@ import javax.inject.Singleton
 
 private const val ALBUM_PAGE_SIZE = 100
 private const val SEARCH_LIMIT = 40
+private const val HTTP_UNAUTHORIZED = 401
 
 @Singleton
 class MusicRepositoryImpl @Inject constructor(
@@ -248,7 +250,12 @@ class MusicRepositoryImpl @Inject constructor(
         withContext(Dispatchers.IO) {
             val api = clientProvider.api
                 ?: return@withContext Result.failure(IllegalStateException("Not signed in"))
-            runCatching { block(api) }
+            runCatching { block(api) }.onFailure {
+                // A rejected token (401) means the session is dead — drop it so the app re-auths.
+                if (it is InvalidStatusException && it.status == HTTP_UNAUTHORIZED) {
+                    clientProvider.invalidateSession()
+                }
+            }
         }
 
     private fun String?.toParentUuid(): UUID? =

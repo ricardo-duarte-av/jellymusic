@@ -6,6 +6,7 @@ import androidx.paging.PagingState
 import androidx.paging.RemoteMediator
 import androidx.room.withTransaction
 import kotlinx.coroutines.CancellationException
+import org.jellyfin.sdk.api.client.exception.InvalidStatusException
 import org.jellyfin.sdk.api.operations.ItemsApi
 import org.jellyfin.sdk.model.api.BaseItemKind
 import org.jellyfin.sdk.model.api.ImageType
@@ -18,6 +19,8 @@ import pt.aguiarvieira.jellymusic.data.jellyfin.StreamUrlBuilder
 import pt.aguiarvieira.jellymusic.domain.model.AlbumSort
 import pt.aguiarvieira.jellymusic.domain.model.MusicLibrary
 import java.util.UUID
+
+private const val HTTP_UNAUTHORIZED = 401
 
 /**
  * Keeps the Room album cache for one `queryKey` (library + sort + order) in sync with the server.
@@ -93,6 +96,10 @@ class AlbumRemoteMediator(
             MediatorResult.Success(endOfPaginationReached = endReached)
         } catch (e: CancellationException) {
             throw e
+        } catch (e: InvalidStatusException) {
+            // A rejected token (401) means the session is dead — drop it so the app re-auths.
+            if (e.status == HTTP_UNAUTHORIZED) clientProvider.invalidateSession()
+            MediatorResult.Error(e)
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             // Standard RemoteMediator contract: surface any load failure as an Error result.
             MediatorResult.Error(e)
