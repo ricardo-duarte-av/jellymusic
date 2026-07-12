@@ -25,6 +25,7 @@ class PlaybackViewModel @Inject constructor(
 ) : ViewModel() {
 
     val state = connection.state
+    val queue = connection.queue
 
     /**
      * Human-readable quality of the current track: the original file's codec/rate/depth/bitrate, or
@@ -59,6 +60,8 @@ class PlaybackViewModel @Inject constructor(
     fun seekTo(positionMs: Long) = connection.seekTo(positionMs)
     fun toggleShuffle() = connection.toggleShuffle()
     fun cycleRepeat() = connection.cycleRepeat()
+    fun playIndex(index: Int) = connection.playIndex(index)
+    fun removeFromQueue(index: Int) = connection.removeFromQueue(index)
 
     private fun buildQualityLabel(info: TrackAudioInfo?, settings: StreamSettings, isLocal: Boolean): String? {
         val original = formatOriginal(info)

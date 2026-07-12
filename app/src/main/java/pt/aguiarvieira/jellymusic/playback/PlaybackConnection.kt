@@ -44,6 +44,16 @@ data class PlaybackUiState(
     val isLocal: Boolean = false,
 )
 
+/** One entry in the play queue, as shown in the "Up Next" list. */
+data class QueueItem(
+    val id: String,
+    val title: String,
+    val artist: String,
+    val artworkUri: String?,
+    val index: Int,
+    val isCurrent: Boolean,
+)
+
 /**
  * App-process bridge to [PlaybackService] via a Media3 [MediaController]. Exposes player state as a
  * [StateFlow] for Compose and forwards transport controls. Playable items are built with
@@ -62,7 +72,14 @@ class PlaybackConnection @Inject constructor(
     private val _state = MutableStateFlow(PlaybackUiState())
     val state: StateFlow<PlaybackUiState> = _state.asStateFlow()
 
+    private val _queue = MutableStateFlow<List<QueueItem>>(emptyList())
+    val queue: StateFlow<List<QueueItem>> = _queue.asStateFlow()
+
     private var controller: MediaController? = null
+
+    // Rebuild the queue list only when the timeline or current item changes (not on position ticks).
+    private var lastQueueCount = -1
+    private var lastQueueCurrent = -1
 
     @Volatile
     private var streamSettings: StreamSettings = StreamSettings()
@@ -151,6 +168,21 @@ class PlaybackConnection @Inject constructor(
         controller?.seekTo(positionMs)
     }
 
+    /** Jump playback to a queue entry. */
+    fun playIndex(index: Int) {
+        val c = controller ?: return
+        if (index in 0 until c.mediaItemCount) {
+            c.seekTo(index, 0L)
+            c.play()
+        }
+    }
+
+    /** Remove a queue entry. */
+    fun removeFromQueue(index: Int) {
+        val c = controller ?: return
+        if (index in 0 until c.mediaItemCount) c.removeMediaItem(index)
+    }
+
     fun toggleShuffle() {
         val c = controller ?: return
         c.shuffleModeEnabled = !c.shuffleModeEnabled
@@ -187,5 +219,26 @@ class PlaybackConnection @Inject constructor(
             appliedStreamSettings = StreamSettingsExtras.settingsFrom(c.currentMediaItem?.mediaMetadata?.extras),
             isLocal = StreamSettingsExtras.isLocal(c.currentMediaItem?.mediaMetadata?.extras),
         )
+
+        if (c.mediaItemCount != lastQueueCount || c.currentMediaItemIndex != lastQueueCurrent) {
+            lastQueueCount = c.mediaItemCount
+            lastQueueCurrent = c.currentMediaItemIndex
+            rebuildQueue(c)
+        }
+    }
+
+    private fun rebuildQueue(c: MediaController) {
+        val current = c.currentMediaItemIndex
+        _queue.value = (0 until c.mediaItemCount).map { i ->
+            val md = c.getMediaItemAt(i).mediaMetadata
+            QueueItem(
+                id = c.getMediaItemAt(i).mediaId,
+                title = md.title?.toString().orEmpty(),
+                artist = md.artist?.toString().orEmpty(),
+                artworkUri = md.artworkUri?.toString(),
+                index = i,
+                isCurrent = i == current,
+            )
+        }
     }
 }
