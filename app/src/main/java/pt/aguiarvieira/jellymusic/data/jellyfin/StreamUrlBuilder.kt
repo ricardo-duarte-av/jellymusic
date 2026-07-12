@@ -1,6 +1,5 @@
 package pt.aguiarvieira.jellymusic.data.jellyfin
 
-import pt.aguiarvieira.jellymusic.domain.model.AudioQuality
 import pt.aguiarvieira.jellymusic.domain.model.StreamSettings
 import org.jellyfin.sdk.api.operations.ImageApi
 import org.jellyfin.sdk.api.operations.UniversalAudioApi
@@ -13,11 +12,8 @@ import javax.inject.Singleton
 /**
  * Builds Jellyfin URLs for the active session:
  *  - [imageUrl] for album/artist artwork (consumed by Coil).
- *  - [audioStreamUrl] / [audioDownloadUrl] for playback and offline, both driven by server-side
- *    transcoding on the universal audio endpoint. Streaming requests HLS (so the server can
- *    transcode on the fly); downloads request a single progressive file.
- *
- * See the "Transcoding" section of the plan.
+ *  - [audioStreamUrl] for playback and downloads, driven by server-side transcoding on the universal
+ *    audio endpoint (HTTP progressive; direct-play when transcoding is off).
  */
 @Singleton
 class StreamUrlBuilder @Inject constructor(
@@ -48,18 +44,6 @@ class StreamUrlBuilder @Inject constructor(
             buildUniversalUrl(itemId = itemId, maxBitrateBps = null, codec = null, transcodingContainer = null)
         }
 
-    /** Download URL. Server transcodes to a single progressive file when [quality] is capped. */
-    fun audioDownloadUrl(itemId: String, quality: AudioQuality): String? =
-        if (quality.isTranscoded) {
-            buildUniversalUrl(
-                itemId = itemId,
-                maxBitrateBps = quality.maxBitrate,
-                codec = "opus",
-                transcodingContainer = "opus",
-            )
-        } else {
-            buildUniversalUrl(itemId = itemId, maxBitrateBps = null, codec = null, transcodingContainer = null)
-        }
 
     private fun buildUniversalUrl(
         itemId: String,

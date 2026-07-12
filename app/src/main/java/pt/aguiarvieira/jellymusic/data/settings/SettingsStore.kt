@@ -8,7 +8,6 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import pt.aguiarvieira.jellymusic.domain.model.AlbumSort
 import pt.aguiarvieira.jellymusic.domain.model.AudioCodec
-import pt.aguiarvieira.jellymusic.domain.model.AudioQuality
 import pt.aguiarvieira.jellymusic.domain.model.MusicLibrary
 import pt.aguiarvieira.jellymusic.domain.model.StreamSettings
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -39,10 +38,6 @@ class SettingsStore @Inject constructor(
                 ?: AudioCodec.OPUS,
             maxBitrateKbps = prefs[KEY_STREAM_BITRATE] ?: 320,
         )
-    }
-
-    val downloadQuality: Flow<AudioQuality> = context.dataStore.data.map { prefs ->
-        prefs[KEY_DOWNLOAD_QUALITY].toAudioQuality(AudioQuality.HIGH)
     }
 
     /** Whether the album/player surfaces retint to the album art. Defaults on. */
@@ -78,10 +73,6 @@ class SettingsStore @Inject constructor(
         context.dataStore.edit { it[KEY_STREAM_BITRATE] = kbps }
     }
 
-    suspend fun setDownloadQuality(quality: AudioQuality) {
-        context.dataStore.edit { it[KEY_DOWNLOAD_QUALITY] = quality.name }
-    }
-
     suspend fun setDynamicAlbumTheme(enabled: Boolean) {
         context.dataStore.edit { it[KEY_DYNAMIC_ALBUM_THEME] = enabled }
     }
@@ -94,16 +85,12 @@ class SettingsStore @Inject constructor(
         context.dataStore.edit { it[KEY_ALBUM_SORT_DESC] = descending }
     }
 
-    private fun String?.toAudioQuality(default: AudioQuality): AudioQuality =
-        this?.let { runCatching { AudioQuality.valueOf(it) }.getOrNull() } ?: default
-
     private companion object {
         val KEY_LIBRARY_ID = stringPreferencesKey("selected_library_id")
         val KEY_LIBRARY_NAME = stringPreferencesKey("selected_library_name")
         val KEY_STREAM_TRANSCODE = booleanPreferencesKey("stream_transcode")
         val KEY_STREAM_CODEC = stringPreferencesKey("stream_codec")
         val KEY_STREAM_BITRATE = intPreferencesKey("stream_bitrate_kbps")
-        val KEY_DOWNLOAD_QUALITY = stringPreferencesKey("download_quality")
         val KEY_DYNAMIC_ALBUM_THEME = booleanPreferencesKey("dynamic_album_theme")
         val KEY_ALBUM_SORT = stringPreferencesKey("album_sort")
         val KEY_ALBUM_SORT_DESC = booleanPreferencesKey("album_sort_descending")
