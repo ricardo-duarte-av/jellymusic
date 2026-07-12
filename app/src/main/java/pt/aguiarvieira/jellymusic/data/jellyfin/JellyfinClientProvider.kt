@@ -1,10 +1,15 @@
 package pt.aguiarvieira.jellymusic.data.jellyfin
 
 import pt.aguiarvieira.jellymusic.data.auth.CredentialStore
+import pt.aguiarvieira.jellymusic.data.settings.QueueStore
 import pt.aguiarvieira.jellymusic.domain.model.UserSession
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import org.jellyfin.sdk.Jellyfin
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.discovery.DiscoveryService
@@ -21,7 +26,9 @@ import javax.inject.Singleton
 class JellyfinClientProvider @Inject constructor(
     private val jellyfin: Jellyfin,
     private val credentialStore: CredentialStore,
+    private val queueStore: QueueStore,
 ) {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val _session = MutableStateFlow<UserSession?>(null)
     val session: StateFlow<UserSession?> = _session.asStateFlow()
 
@@ -49,6 +56,8 @@ class JellyfinClientProvider @Inject constructor(
     fun clear() {
         _api = null
         _session.value = null
+        // A queue belongs to the signed-in session; drop the persisted copy on sign-out/expiry.
+        scope.launch { queueStore.clear() }
     }
 
     /**

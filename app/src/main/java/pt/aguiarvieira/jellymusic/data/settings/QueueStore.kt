@@ -27,6 +27,10 @@ class QueueStore @Inject constructor(
         return runCatching { json.decodeFromString(PersistedQueue.serializer(), raw) }.getOrNull()
     }
 
+    suspend fun clear() {
+        context.queueDataStore.edit { it.remove(KEY) }
+    }
+
     private companion object {
         val KEY = stringPreferencesKey("queue_json")
         val json = Json { ignoreUnknownKeys = true }
