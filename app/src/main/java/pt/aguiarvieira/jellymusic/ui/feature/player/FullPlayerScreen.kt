@@ -53,6 +53,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.StateFlow
+import pt.aguiarvieira.jellymusic.playback.PlaybackProgress
 import pt.aguiarvieira.jellymusic.playback.QueueItem
 import pt.aguiarvieira.jellymusic.playback.RepeatMode
 import pt.aguiarvieira.jellymusic.ui.components.ArtworkImage
@@ -69,8 +71,6 @@ fun FullPlayerScreen(
     val qualityLabel by viewModel.qualityLabel.collectAsStateWithLifecycle()
     val queue by viewModel.queue.collectAsStateWithLifecycle()
 
-    // Local scrubbing state so the thumb follows the finger, committed on release.
-    var scrubFraction by remember { mutableStateOf<Float?>(null) }
     var showQueue by remember { mutableStateOf(false) }
 
     AlbumTheme(artworkUrl = state.artworkUri) {
@@ -164,33 +164,8 @@ fun FullPlayerScreen(
 
             Spacer(Modifier.height(24.dp))
 
-            val liveFraction = if (state.durationMs > 0) {
-                (state.positionMs.toFloat() / state.durationMs).coerceIn(0f, 1f)
-            } else {
-                0f
-            }
-            val sliderValue = scrubFraction ?: liveFraction
-            Slider(
-                value = sliderValue,
-                onValueChange = { scrubFraction = it },
-                onValueChangeFinished = {
-                    scrubFraction?.let { fraction ->
-                        viewModel.seekTo((fraction * state.durationMs).toLong())
-                    }
-                    scrubFraction = null
-                },
-            )
-            Row(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = formatTime(state.positionMs),
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.weight(1f),
-                )
-                Text(
-                    text = formatTime(state.durationMs),
-                    style = MaterialTheme.typography.labelMedium,
-                )
-            }
+            // Collects the position flow internally so only the seek bar recomposes as it advances.
+            PlayerSeekBar(progress = viewModel.progress, onSeek = viewModel::seekTo)
 
             Spacer(Modifier.height(24.dp))
 
@@ -315,6 +290,45 @@ private fun QueueSheet(
                 },
             )
         }
+    }
+}
+
+/**
+ * Seek bar + elapsed/total labels. Collects [progress] locally so it is the only thing that
+ * recomposes as playback advances (~2 Hz), keeping the rest of the player screen stable.
+ */
+@Composable
+private fun PlayerSeekBar(
+    progress: StateFlow<PlaybackProgress>,
+    onSeek: (Long) -> Unit,
+) {
+    val p by progress.collectAsStateWithLifecycle()
+    // Local scrubbing state so the thumb follows the finger, committed on release.
+    var scrubFraction by remember { mutableStateOf<Float?>(null) }
+
+    val liveFraction = if (p.durationMs > 0) {
+        (p.positionMs.toFloat() / p.durationMs).coerceIn(0f, 1f)
+    } else {
+        0f
+    }
+    Slider(
+        value = scrubFraction ?: liveFraction,
+        onValueChange = { scrubFraction = it },
+        onValueChangeFinished = {
+            scrubFraction?.let { fraction -> onSeek((fraction * p.durationMs).toLong()) }
+            scrubFraction = null
+        },
+    )
+    Row(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = formatTime(p.positionMs),
+            style = MaterialTheme.typography.labelMedium,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            text = formatTime(p.durationMs),
+            style = MaterialTheme.typography.labelMedium,
+        )
     }
 }
 

@@ -14,6 +14,7 @@ import pt.aguiarvieira.jellymusic.domain.model.StreamSettings
 import pt.aguiarvieira.jellymusic.domain.model.TrackAudioInfo
 import pt.aguiarvieira.jellymusic.domain.repository.MusicRepository
 import pt.aguiarvieira.jellymusic.playback.PlaybackConnection
+import pt.aguiarvieira.jellymusic.playback.PlaybackProgress
 import pt.aguiarvieira.jellymusic.playback.PlaybackUiState
 import pt.aguiarvieira.jellymusic.playback.QueueItem
 import pt.aguiarvieira.jellymusic.util.MainDispatcherRule
@@ -33,6 +34,7 @@ class PlaybackViewModelTest {
     private fun viewModelWith(state: PlaybackUiState): PlaybackViewModel {
         val connection = mockk<PlaybackConnection>()
         every { connection.state } returns MutableStateFlow(state)
+        every { connection.progress } returns MutableStateFlow(PlaybackProgress())
         every { connection.queue } returns MutableStateFlow(emptyList<QueueItem>())
         return PlaybackViewModel(connection, repository)
     }

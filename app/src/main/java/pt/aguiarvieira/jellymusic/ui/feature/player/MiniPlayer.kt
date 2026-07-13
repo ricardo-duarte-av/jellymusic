@@ -23,6 +23,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.StateFlow
+import pt.aguiarvieira.jellymusic.playback.PlaybackProgress
 import pt.aguiarvieira.jellymusic.ui.components.ArtworkImage
 import pt.aguiarvieira.jellymusic.ui.theme.AlbumTheme
 
@@ -85,16 +87,23 @@ fun MiniPlayer(
                     )
                 }
             }
-            val progress = if (state.durationMs > 0) {
-                (state.positionMs.toFloat() / state.durationMs).coerceIn(0f, 1f)
-            } else {
-                0f
-            }
-            LinearProgressIndicator(
-                progress = { progress },
-                modifier = Modifier.fillMaxWidth(),
-            )
+            // Collects the position flow internally so only this bar recomposes as playback advances.
+            MiniPlayerProgress(progress = viewModel.progress)
         }
         }
     }
+}
+
+@Composable
+private fun MiniPlayerProgress(progress: StateFlow<PlaybackProgress>) {
+    val p by progress.collectAsStateWithLifecycle()
+    val fraction = if (p.durationMs > 0) {
+        (p.positionMs.toFloat() / p.durationMs).coerceIn(0f, 1f)
+    } else {
+        0f
+    }
+    LinearProgressIndicator(
+        progress = { fraction },
+        modifier = Modifier.fillMaxWidth(),
+    )
 }

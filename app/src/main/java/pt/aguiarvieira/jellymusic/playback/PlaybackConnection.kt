@@ -40,14 +40,22 @@ data class PlaybackUiState(
     val title: String = "",
     val artist: String = "",
     val artworkUri: String? = null,
-    val positionMs: Long = 0L,
-    val durationMs: Long = 0L,
     val shuffleEnabled: Boolean = false,
     val repeatMode: RepeatMode = RepeatMode.OFF,
     /** The settings the current track was actually enqueued with (fixed for its lifetime). */
     val appliedStreamSettings: StreamSettings = StreamSettings(),
     /** True when the current track plays from a local downloaded file rather than streaming. */
     val isLocal: Boolean = false,
+)
+
+/**
+ * Playback position, split out from [PlaybackUiState] because it advances ~twice a second. Keeping it
+ * in its own flow means the seek bar recomposes on its own while the (static) now-playing metadata in
+ * [PlaybackUiState] stays put.
+ */
+data class PlaybackProgress(
+    val positionMs: Long = 0L,
+    val durationMs: Long = 0L,
 )
 
 /** One entry in the play queue, as shown in the "Up Next" list. */
@@ -78,6 +86,9 @@ class PlaybackConnection @Inject constructor(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val _state = MutableStateFlow(PlaybackUiState())
     val state: StateFlow<PlaybackUiState> = _state.asStateFlow()
+
+    private val _progress = MutableStateFlow(PlaybackProgress())
+    val progress: StateFlow<PlaybackProgress> = _progress.asStateFlow()
 
     private val _queue = MutableStateFlow<List<QueueItem>>(emptyList())
     val queue: StateFlow<List<QueueItem>> = _queue.asStateFlow()
@@ -119,11 +130,16 @@ class PlaybackConnection @Inject constructor(
             ContextCompat.getMainExecutor(context),
         )
 
-        // Position ticker so the seek bar advances during playback.
+        // Position ticker so the seek bar advances during playback. Only refreshes the lightweight
+        // progress flow (and periodically persists position) — the full UI state is event-driven.
         scope.launch {
             while (isActive) {
                 delay(500)
-                if (controller?.isPlaying == true) updateState()
+                val c = controller
+                if (c?.isPlaying == true) {
+                    updateProgress(c)
+                    maybePersist(c, force = false)
+                }
             }
         }
     }
@@ -217,8 +233,6 @@ class PlaybackConnection @Inject constructor(
             title = metadata.title?.toString().orEmpty(),
             artist = metadata.artist?.toString().orEmpty(),
             artworkUri = metadata.artworkUri?.toString(),
-            positionMs = c.currentPosition.coerceAtLeast(0L),
-            durationMs = c.duration.coerceAtLeast(0L),
             shuffleEnabled = c.shuffleModeEnabled,
             repeatMode = when (c.repeatMode) {
                 Player.REPEAT_MODE_ONE -> RepeatMode.ONE
@@ -228,6 +242,7 @@ class PlaybackConnection @Inject constructor(
             appliedStreamSettings = StreamSettingsExtras.settingsFrom(c.currentMediaItem?.mediaMetadata?.extras),
             isLocal = StreamSettingsExtras.isLocal(c.currentMediaItem?.mediaMetadata?.extras),
         )
+        updateProgress(c)
 
         val queueChanged = c.mediaItemCount != lastQueueCount || c.currentMediaItemIndex != lastQueueCurrent
         if (queueChanged) {
@@ -235,9 +250,21 @@ class PlaybackConnection @Inject constructor(
             lastQueueCurrent = c.currentMediaItemIndex
             rebuildQueue(c)
         }
-        // Persist the queue on any timeline/current change, and throttled otherwise for position.
+        // Persist the queue immediately on any timeline/current change; the ticker handles the
+        // throttled position snapshots during steady playback.
+        maybePersist(c, force = queueChanged)
+    }
+
+    private fun updateProgress(c: MediaController) {
+        _progress.value = PlaybackProgress(
+            positionMs = c.currentPosition.coerceAtLeast(0L),
+            durationMs = c.duration.coerceAtLeast(0L),
+        )
+    }
+
+    private fun maybePersist(c: MediaController, force: Boolean) {
         val nowMs = System.currentTimeMillis()
-        if (c.mediaItemCount > 0 && (queueChanged || nowMs - lastPersistMs >= QUEUE_PERSIST_INTERVAL_MS)) {
+        if (c.mediaItemCount > 0 && (force || nowMs - lastPersistMs >= QUEUE_PERSIST_INTERVAL_MS)) {
             lastPersistMs = nowMs
             persistQueue(c)
         }

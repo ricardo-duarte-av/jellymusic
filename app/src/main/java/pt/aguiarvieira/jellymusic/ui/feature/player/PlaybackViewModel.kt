@@ -25,6 +25,7 @@ class PlaybackViewModel @Inject constructor(
 ) : ViewModel() {
 
     val state = connection.state
+    val progress = connection.progress
     val queue = connection.queue
 
     /**
