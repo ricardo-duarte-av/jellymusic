@@ -39,8 +39,11 @@ class DownloadsViewModel @Inject constructor(
 
     val albumStatuses: StateFlow<Map<String, AlbumDownloadStatus>> =
         combine(dao.observeAlbums(), dao.observeTracks()) { albums, tracks ->
+            // Group tracks by album once (O(tracks)) instead of re-scanning the whole track list per
+            // album (O(albums × tracks)); this recomputes several times a second during downloads.
+            val tracksByAlbum = tracks.groupBy { it.albumId }
             albums.associate { album ->
-                val albumTracks = tracks.filter { it.albumId == album.albumId }
+                val albumTracks = tracksByAlbum[album.albumId].orEmpty()
                 album.albumId to AlbumDownloadStatus(
                     total = album.totalTracks,
                     completed = albumTracks.count { it.state == DownloadState.COMPLETED.name },

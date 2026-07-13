@@ -22,9 +22,21 @@ class StreamUrlBuilder @Inject constructor(
     /** Containers we can direct-play, advertised so the server only transcodes when it must. */
     private val supportedContainers = listOf("mp3", "aac", "m4a", "flac", "ogg", "opus", "wav", "webma")
 
+    /**
+     * Artwork URL for [itemId]. Capped to [ARTWORK_MAX_PX] on the server so we fetch thumbnail-sized
+     * images instead of multi-megabyte originals — the same URL feeds grid cards, list thumbnails,
+     * the media notification and Android Auto, none of which need full resolution. The cap is
+     * comfortably larger than the full-screen player hero on a phone.
+     */
     fun imageUrl(itemId: String, type: ImageType = ImageType.PRIMARY): String? {
         val api = clientProvider.api ?: return null
-        return ImageApi(api).getItemImageUrl(itemId = itemId.toUuid(), imageType = type)
+        return ImageApi(api).getItemImageUrl(
+            itemId = itemId.toUuid(),
+            imageType = type,
+            maxWidth = ARTWORK_MAX_PX,
+            maxHeight = ARTWORK_MAX_PX,
+            quality = ARTWORK_QUALITY,
+        )
     }
 
     /**
@@ -77,4 +89,10 @@ class StreamUrlBuilder @Inject constructor(
         }
 
     private fun String.toUuid(): UUID = UUID.fromString(this)
+
+    private companion object {
+        /** Server-side cap for artwork so we download thumbnails, not full-res originals. */
+        const val ARTWORK_MAX_PX = 512
+        const val ARTWORK_QUALITY = 90
+    }
 }
