@@ -36,6 +36,13 @@ import javax.inject.Inject
 private const val PROGRESS_REPORT_INTERVAL_MS = 10_000L
 
 /**
+ * Max children returned for a single browse node. Android Auto requests all children in one Binder
+ * transaction (see [PlaybackService.LibraryCallback.onGetChildren]); this keeps even the largest
+ * node (Albums) safely under the ~1MB transaction limit.
+ */
+private const val MAX_CHILDREN_PER_NODE = 500
+
+/**
  * The single [MediaLibraryService] that powers playback on the phone/tablet AND Android Auto. It
  * owns one [ExoPlayer] wrapped in a [MediaLibraryService.MediaLibrarySession]; the browse tree is
  * served from [MediaItemTree].
@@ -186,7 +193,13 @@ class PlaybackService : MediaLibraryService() {
             params: LibraryParams?,
         ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> =
             serviceScope.future {
-                val children = mediaItemTree.getChildren(parentId)
+                // Android Auto asks for every child in one call (page=0, pageSize=Int.MAX_VALUE), so the
+                // whole list crosses the Binder in a single transaction. A large node (typically Albums)
+                // exceeds the ~1MB transaction limit and throws TransactionTooLargeException, which surfaces
+                // as an *empty* tab. Cap the payload to keep every node well under that limit.
+                val children = mediaItemTree.getChildren(parentId).let {
+                    if (it.size > MAX_CHILDREN_PER_NODE) it.subList(0, MAX_CHILDREN_PER_NODE) else it
+                }
                 LibraryResult.ofItemList(ImmutableList.copyOf(children), params)
             }
     }

@@ -21,10 +21,16 @@ import javax.inject.Singleton
  *
  * ```
  * root → { Albums, Artists, Playlists }
- *   Albums    → album/<id>    → track/<id> (playable)
- *   Artists   → artist/<id>   → album/<id> → track/<id>
+ *   Albums    → A..Z,# → album/<id>    → track/<id> (playable)
+ *   Artists   → A..Z,# → artist/<id>   → album/<id> → track/<id>
  *   Playlists → playlist/<id> → track/<id>
  * ```
+ *
+ * Albums and Artists get an A–Z index level: Android Auto can't paginate a flat list (it requests
+ * every child in one Binder transaction, and a large catalogue overflows the ~1MB transaction
+ * limit, surfacing as an empty tab), so each catalogue is split by initial letter to keep every
+ * node small and every item reachable. This structure only affects the browse tree consumed by
+ * Android Auto / external MediaBrowsers — the in-app UI reads the repository directly.
  */
 @Singleton
 class MediaItemTree @Inject constructor(
@@ -43,10 +49,20 @@ class MediaItemTree @Inject constructor(
         )
 
         parentId == ALBUMS_ID ->
-            musicRepository.getAlbums(libraryId()).getOrDefault(emptyList()).map { it.toMediaItem() }
+            letterNodes(albums().map { it.name }, ALBUM_LETTER_PREFIX, MediaMetadata.MEDIA_TYPE_FOLDER_ALBUMS)
 
         parentId == ARTISTS_ID ->
-            musicRepository.getArtists(libraryId()).getOrDefault(emptyList()).map { it.toMediaItem() }
+            letterNodes(artists().map { it.name }, ARTIST_LETTER_PREFIX, MediaMetadata.MEDIA_TYPE_FOLDER_ARTISTS)
+
+        parentId.startsWith(ALBUM_LETTER_PREFIX) -> {
+            val letter = parentId.removePrefix(ALBUM_LETTER_PREFIX)
+            albums().filter { letterOf(it.name) == letter }.map { it.toMediaItem() }
+        }
+
+        parentId.startsWith(ARTIST_LETTER_PREFIX) -> {
+            val letter = parentId.removePrefix(ARTIST_LETTER_PREFIX)
+            artists().filter { letterOf(it.name) == letter }.map { it.toMediaItem() }
+        }
 
         parentId == PLAYLISTS_ID ->
             musicRepository.getPlaylists(libraryId()).getOrDefault(emptyList()).map { it.toMediaItem() }
@@ -97,6 +113,51 @@ class MediaItemTree @Inject constructor(
     }
 
     private suspend fun libraryId(): String? = settingsStore.selectedLibrary.first()?.id
+
+    // The A–Z index calls getChildren once for the letter list and again for each opened letter.
+    // Cache the (name-sorted) catalogue briefly so navigating between letters doesn't re-download the
+    // whole list every tap; a short TTL keeps it fresh enough after library edits.
+    private var albumCache: CatalogCache<Album>? = null
+    private var artistCache: CatalogCache<Artist>? = null
+
+    private suspend fun albums(): List<Album> {
+        val libraryId = libraryId()
+        albumCache?.takeIf { it.isFresh(libraryId) }?.let { return it.items }
+        val items = musicRepository.getAlbums(libraryId).getOrDefault(emptyList())
+        albumCache = CatalogCache(libraryId, items)
+        return items
+    }
+
+    private suspend fun artists(): List<Artist> {
+        val libraryId = libraryId()
+        artistCache?.takeIf { it.isFresh(libraryId) }?.let { return it.items }
+        val items = musicRepository.getArtists(libraryId).getOrDefault(emptyList())
+        artistCache = CatalogCache(libraryId, items)
+        return items
+    }
+
+    /** Builds the browsable A–Z (plus "#") index nodes for a name-sorted catalogue. */
+    private fun letterNodes(names: List<String>, prefix: String, mediaType: Int): List<MediaItem> =
+        names.map { letterOf(it) }
+            .distinct()
+            // A–Z in natural order; the "#" bucket (numbers/symbols) sorts last.
+            .sortedWith(compareBy({ it == NON_ALPHA_LETTER }, { it }))
+            .map { letter -> browsable(prefix + letter, letter, mediaType) }
+
+    /** First letter of [name], uppercased; anything non-A–Z collapses into the "#" bucket. */
+    private fun letterOf(name: String): String {
+        val c = name.trimStart().firstOrNull()?.uppercaseChar()
+        return if (c != null && c in 'A'..'Z') c.toString() else NON_ALPHA_LETTER
+    }
+
+    private class CatalogCache<T>(
+        private val libraryId: String?,
+        val items: List<T>,
+        private val loadedAtMs: Long = System.currentTimeMillis(),
+    ) {
+        fun isFresh(libraryId: String?): Boolean =
+            this.libraryId == libraryId && System.currentTimeMillis() - loadedAtMs < CACHE_TTL_MS
+    }
 
     private fun Album.toMediaItem() = browsable(
         id = ALBUM_PREFIX + id,
@@ -149,5 +210,9 @@ class MediaItemTree @Inject constructor(
         const val ALBUM_PREFIX = "album/"
         const val ARTIST_PREFIX = "artist/"
         const val PLAYLIST_PREFIX = "playlist/"
+        const val ALBUM_LETTER_PREFIX = "album_letter/"
+        const val ARTIST_LETTER_PREFIX = "artist_letter/"
+        private const val NON_ALPHA_LETTER = "#"
+        private const val CACHE_TTL_MS = 60_000L
     }
 }
