@@ -55,47 +55,47 @@ fun AppNavHost(
 
         composable<Routes.Home> {
             BrowseShell(
-                onAlbumClick = { id, name -> navController.navigate(Routes.AlbumDetail(id, name)) },
-                onArtistClick = { id, name -> navController.navigate(Routes.ArtistDetail(id, name)) },
-                onPlaylistClick = { id, name -> navController.navigate(Routes.PlaylistDetail(id, name)) },
-                onExpandPlayer = { navController.navigate(Routes.Player) },
-                onOpenSettings = { navController.navigate(Routes.Settings) },
-                onOpenSearch = { navController.navigate(Routes.Search) },
+                onAlbumClick = { id, name -> navController.navigateSingleTop(Routes.AlbumDetail(id, name)) },
+                onArtistClick = { id, name -> navController.navigateSingleTop(Routes.ArtistDetail(id, name)) },
+                onPlaylistClick = { id, name -> navController.navigateSingleTop(Routes.PlaylistDetail(id, name)) },
+                onExpandPlayer = { navController.navigateSingleTop(Routes.Player) },
+                onOpenSettings = { navController.navigateSingleTop(Routes.Settings) },
+                onOpenSearch = { navController.navigateSingleTop(Routes.Search) },
             )
         }
 
         composable<Routes.Search> {
             SearchScreen(
                 onBack = { navController.popBackStack() },
-                onAlbumClick = { id, name -> navController.navigate(Routes.AlbumDetail(id, name)) },
-                onArtistClick = { id, name -> navController.navigate(Routes.ArtistDetail(id, name)) },
-                onPlaylistClick = { id, name -> navController.navigate(Routes.PlaylistDetail(id, name)) },
-                onExpandPlayer = { navController.navigate(Routes.Player) },
+                onAlbumClick = { id, name -> navController.navigateSingleTop(Routes.AlbumDetail(id, name)) },
+                onArtistClick = { id, name -> navController.navigateSingleTop(Routes.ArtistDetail(id, name)) },
+                onPlaylistClick = { id, name -> navController.navigateSingleTop(Routes.PlaylistDetail(id, name)) },
+                onExpandPlayer = { navController.navigateSingleTop(Routes.Player) },
             )
         }
 
         composable<Routes.AlbumDetail> {
             AlbumDetailScreen(
                 onBack = { navController.popBackStack() },
-                onExpandPlayer = { navController.navigate(Routes.Player) },
-                onOpenSettings = { navController.navigate(Routes.Settings) },
+                onExpandPlayer = { navController.navigateSingleTop(Routes.Player) },
+                onOpenSettings = { navController.navigateSingleTop(Routes.Settings) },
             )
         }
 
         composable<Routes.ArtistDetail> {
             ArtistDetailScreen(
                 onBack = { navController.popBackStack() },
-                onAlbumClick = { id, name -> navController.navigate(Routes.AlbumDetail(id, name)) },
-                onExpandPlayer = { navController.navigate(Routes.Player) },
-                onOpenSettings = { navController.navigate(Routes.Settings) },
+                onAlbumClick = { id, name -> navController.navigateSingleTop(Routes.AlbumDetail(id, name)) },
+                onExpandPlayer = { navController.navigateSingleTop(Routes.Player) },
+                onOpenSettings = { navController.navigateSingleTop(Routes.Settings) },
             )
         }
 
         composable<Routes.PlaylistDetail> {
             PlaylistDetailScreen(
                 onBack = { navController.popBackStack() },
-                onExpandPlayer = { navController.navigate(Routes.Player) },
-                onOpenSettings = { navController.navigate(Routes.Settings) },
+                onExpandPlayer = { navController.navigateSingleTop(Routes.Player) },
+                onOpenSettings = { navController.navigateSingleTop(Routes.Settings) },
             )
         }
 
@@ -106,23 +106,32 @@ fun AppNavHost(
         ) {
             FullPlayerScreen(
                 onCollapse = { navController.popBackStack() },
-                onOpenSettings = { navController.navigate(Routes.Settings) },
+                onOpenSettings = { navController.navigateSingleTop(Routes.Settings) },
             )
         }
 
         composable<Routes.Settings> {
             SettingsScreen(
                 onBack = { navController.popBackStack() },
-                onOpenDownloads = { navController.navigate(Routes.Downloads) },
+                onOpenDownloads = { navController.navigateSingleTop(Routes.Downloads) },
             )
         }
 
         composable<Routes.Downloads> {
             DownloadsScreen(
                 onBack = { navController.popBackStack() },
-                onAlbumClick = { id, name -> navController.navigate(Routes.AlbumDetail(id, name)) },
-                onExpandPlayer = { navController.navigate(Routes.Player) },
+                onAlbumClick = { id, name -> navController.navigateSingleTop(Routes.AlbumDetail(id, name)) },
+                onExpandPlayer = { navController.navigateSingleTop(Routes.Player) },
             )
         }
     }
+}
+
+/**
+ * Navigates with [launchSingleTop] so a rapid double-tap (or re-entering a destination that's
+ * already on top) collapses onto the existing entry instead of stacking a duplicate — the source of
+ * the "back lands on the same album several times" behaviour.
+ */
+private fun NavHostController.navigateSingleTop(route: Any) {
+    navigate(route) { launchSingleTop = true }
 }
