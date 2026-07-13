@@ -2,6 +2,9 @@ package pt.aguiarvieira.jellymusic.data.download
 
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import pt.aguiarvieira.jellymusic.core.util.Logx
 import pt.aguiarvieira.jellymusic.data.db.DownloadDao
 import pt.aguiarvieira.jellymusic.data.db.TrackDownloadEntity
@@ -38,7 +41,11 @@ class DownloadProcessor @Inject constructor(
             val next = dao.nextPending() ?: break
             onTrack(next)
             runCatching { process(next) }
-                .onFailure { Logx.w("Downloads", "Download failed for ${next.trackId}", it) }
+                .onFailure { e ->
+                    // Stop draining if the worker was cancelled; only log genuine per-track failures.
+                    if (e is CancellationException) throw e
+                    Logx.w("Downloads", "Download failed for ${next.trackId}", e)
+                }
         }
     }
 
@@ -107,9 +114,13 @@ class DownloadProcessor @Inject constructor(
                 }
             }
         } catch (@Suppress("TooGenericExceptionCaught") t: Throwable) {
-            // Any failure (IO, network, cancellation) must mark the row FAILED, then rethrow.
             partFile.delete()
-            dao.updateProgress(entity.trackId, DownloadState.FAILED.name, 0, 0, null, System.currentTimeMillis())
+            // Persist the outcome under NonCancellable since a stopped worker cancels the coroutine
+            // mid-download: re-queue that track so a later run resumes it, but fail on real errors.
+            withContext(NonCancellable) {
+                val state = if (t is CancellationException) DownloadState.QUEUED else DownloadState.FAILED
+                dao.updateProgress(entity.trackId, state.name, 0, 0, null, System.currentTimeMillis())
+            }
             throw t
         } finally {
             connection.disconnect()

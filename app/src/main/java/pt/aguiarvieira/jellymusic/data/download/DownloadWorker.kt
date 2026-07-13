@@ -3,11 +3,8 @@ package pt.aguiarvieira.jellymusic.data.download
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
-import android.content.pm.ServiceInfo
-import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
-import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
@@ -18,9 +15,16 @@ private const val CHANNEL_ID = "downloads"
 private const val NOTIFICATION_ID = 42
 
 /**
- * Runs the download queue in the background via WorkManager, so downloads continue when the app is
- * backgrounded and resume automatically after the process is killed. Dependencies are resolved
- * through a Hilt [EntryPoint] (no hilt-work / custom WorkManager init required).
+ * Runs the download queue as a regular WorkManager background job, so downloads continue when the
+ * app is backgrounded and resume automatically after the process is killed. Progress is surfaced
+ * through an ordinary (non-foreground) notification.
+ *
+ * This intentionally does NOT run as a foreground service: user-initiated media downloads don't need
+ * one, and avoiding it keeps us off the `FOREGROUND_SERVICE_DATA_SYNC` permission (which Google Play
+ * flags and discourages for this use case). Per-track state is persisted to Room as each file
+ * completes, so if the system stops the worker (execution-time limit, lost constraints) the pending
+ * tracks stay queued and WorkManager reruns to finish them. Dependencies are resolved through a Hilt
+ * [EntryPoint] (no hilt-work / custom WorkManager init required).
  */
 class DownloadWorker(
     appContext: Context,
@@ -39,11 +43,15 @@ class DownloadWorker(
             .downloadProcessor()
 
         ensureChannel()
-        setForeground(foregroundInfo("Preparing downloads…"))
-
         val manager = applicationContext.getSystemService(NotificationManager::class.java)
-        processor.processAll { track ->
-            manager?.notify(NOTIFICATION_ID, buildNotification("Downloading ${track.title}"))
+        manager?.notify(NOTIFICATION_ID, buildNotification("Preparing downloads…"))
+        try {
+            processor.processAll { track ->
+                manager?.notify(NOTIFICATION_ID, buildNotification("Downloading ${track.title}"))
+            }
+        } finally {
+            // Not a foreground service, so the notification isn't auto-removed; clear it ourselves.
+            manager?.cancel(NOTIFICATION_ID)
         }
         return Result.success()
     }
@@ -65,13 +73,6 @@ class DownloadWorker(
             .setOngoing(true)
             .setSilent(true)
             .build()
-
-    private fun foregroundInfo(text: String): ForegroundInfo =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            ForegroundInfo(NOTIFICATION_ID, buildNotification(text), ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
-        } else {
-            ForegroundInfo(NOTIFICATION_ID, buildNotification(text))
-        }
 
     companion object {
         const val WORK_NAME = "music_downloads"
