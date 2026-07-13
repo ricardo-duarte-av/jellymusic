@@ -113,13 +113,19 @@ class DownloadProcessor @Inject constructor(
                     )
                 }
             }
+        } catch (c: CancellationException) {
+            // A stopped worker (execution-time limit / lost constraints) cancels the coroutine
+            // mid-download; re-queue the track so a later run resumes it. Persist under NonCancellable
+            // since the coroutine is already cancelled.
+            partFile.delete()
+            withContext(NonCancellable) {
+                dao.updateProgress(entity.trackId, DownloadState.QUEUED.name, 0, 0, null, System.currentTimeMillis())
+            }
+            throw c
         } catch (@Suppress("TooGenericExceptionCaught") t: Throwable) {
             partFile.delete()
-            // Persist the outcome under NonCancellable since a stopped worker cancels the coroutine
-            // mid-download: re-queue that track so a later run resumes it, but fail on real errors.
             withContext(NonCancellable) {
-                val state = if (t is CancellationException) DownloadState.QUEUED else DownloadState.FAILED
-                dao.updateProgress(entity.trackId, state.name, 0, 0, null, System.currentTimeMillis())
+                dao.updateProgress(entity.trackId, DownloadState.FAILED.name, 0, 0, null, System.currentTimeMillis())
             }
             throw t
         } finally {
