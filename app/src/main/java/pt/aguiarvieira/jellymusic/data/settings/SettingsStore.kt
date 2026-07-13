@@ -9,6 +9,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import pt.aguiarvieira.jellymusic.domain.model.AlbumSort
 import pt.aguiarvieira.jellymusic.domain.model.AudioCodec
 import pt.aguiarvieira.jellymusic.domain.model.MusicLibrary
+import pt.aguiarvieira.jellymusic.domain.model.PlaybackModes
 import pt.aguiarvieira.jellymusic.domain.model.StreamSettings
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
@@ -54,6 +55,14 @@ class SettingsStore @Inject constructor(
         prefs[KEY_ALBUM_SORT_DESC] ?: false
     }
 
+    /** Persisted shuffle/repeat, restored by the playback service so they survive restarts. */
+    val playbackModes: Flow<PlaybackModes> = context.dataStore.data.map { prefs ->
+        PlaybackModes(
+            shuffle = prefs[KEY_PLAYBACK_SHUFFLE] ?: false,
+            repeatMode = prefs[KEY_PLAYBACK_REPEAT] ?: 0,
+        )
+    }
+
     suspend fun setSelectedLibrary(library: MusicLibrary) {
         context.dataStore.edit { prefs ->
             prefs[KEY_LIBRARY_ID] = library.id
@@ -85,6 +94,13 @@ class SettingsStore @Inject constructor(
         context.dataStore.edit { it[KEY_ALBUM_SORT_DESC] = descending }
     }
 
+    suspend fun setPlaybackModes(shuffle: Boolean, repeatMode: Int) {
+        context.dataStore.edit {
+            it[KEY_PLAYBACK_SHUFFLE] = shuffle
+            it[KEY_PLAYBACK_REPEAT] = repeatMode
+        }
+    }
+
     private companion object {
         val KEY_LIBRARY_ID = stringPreferencesKey("selected_library_id")
         val KEY_LIBRARY_NAME = stringPreferencesKey("selected_library_name")
@@ -94,5 +110,7 @@ class SettingsStore @Inject constructor(
         val KEY_DYNAMIC_ALBUM_THEME = booleanPreferencesKey("dynamic_album_theme")
         val KEY_ALBUM_SORT = stringPreferencesKey("album_sort")
         val KEY_ALBUM_SORT_DESC = booleanPreferencesKey("album_sort_descending")
+        val KEY_PLAYBACK_SHUFFLE = booleanPreferencesKey("playback_shuffle")
+        val KEY_PLAYBACK_REPEAT = intPreferencesKey("playback_repeat_mode")
     }
 }
