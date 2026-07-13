@@ -25,7 +25,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.rememberNavController
-import androidx.navigation.hasRoute
 import pt.aguiarvieira.jellymusic.ui.app.AppViewModel
 import pt.aguiarvieira.jellymusic.ui.app.StartState
 import pt.aguiarvieira.jellymusic.ui.navigation.AppNavHost
@@ -57,13 +56,9 @@ class MainActivity : ComponentActivity() {
                     val context = LocalContext.current
                     LaunchedEffect(openPlayer, startState) {
                         if (openPlayer && startState == StartState.Home) {
-                            // Guard against stacking a second Player when the notification is tapped
-                            // while it's already the current destination.
-                            val alreadyOnPlayer =
-                                navController.currentDestination?.hasRoute<Routes.Player>() == true
-                            if (!alreadyOnPlayer) {
-                                navController.navigate(Routes.Player) { launchSingleTop = true }
-                            }
+                            // launchSingleTop collapses onto the existing Player entry when it's
+                            // already on top, so repeated notification taps can't stack duplicates.
+                            navController.navigate(Routes.Player) { launchSingleTop = true }
                             appViewModel.consumeOpenPlayer()
                         }
                     }
