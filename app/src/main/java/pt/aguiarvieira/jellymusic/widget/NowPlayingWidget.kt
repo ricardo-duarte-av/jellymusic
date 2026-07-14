@@ -109,12 +109,16 @@ private fun WidgetBody(data: NowPlayingWidgetData, artwork: Bitmap?) {
         },
     )
 
+    // NOTE: Glance/RemoteViews does not reliably dispatch a clickable child's action when it is
+    // nested under a clickable ancestor — you get the ripple but the child's PendingIntent is
+    // swallowed. So no clickable here may be an ancestor of another: the outer Box is NOT
+    // clickable; "open player" lives on the full-size scrim and the text leaves, and each transport
+    // button is a sibling leaf with its own action.
     Box(
         modifier = GlanceModifier
             .fillMaxSize()
             .cornerRadius(if (compact) 16.dp else 24.dp)
-            .background(Color(0xFF1C1B1F))
-            .clickable(openPlayer),
+            .background(Color(0xFF1C1B1F)),
     ) {
         if (artwork != null) {
             Image(
@@ -124,13 +128,19 @@ private fun WidgetBody(data: NowPlayingWidgetData, artwork: Bitmap?) {
                 modifier = GlanceModifier.fillMaxSize(),
             )
         }
-        // Scrim so text/controls stay legible over any artwork.
-        Box(modifier = GlanceModifier.fillMaxSize().background(Color(0x99000000))) {}
+        // Scrim so text/controls stay legible over any artwork; also the "tap body → open player"
+        // surface behind the content.
+        Box(
+            modifier = GlanceModifier
+                .fillMaxSize()
+                .background(Color(0x99000000))
+                .clickable(openPlayer),
+        ) {}
 
         when {
-            !data.hasMedia -> EmptyState(compact)
-            compact -> CompactContent(data, wide)
-            else -> FullContent(data, wide)
+            !data.hasMedia -> EmptyState(compact, openPlayer)
+            compact -> CompactContent(data, wide, openPlayer)
+            else -> FullContent(data, wide, openPlayer)
         }
     }
 }
@@ -138,7 +148,7 @@ private fun WidgetBody(data: NowPlayingWidgetData, artwork: Bitmap?) {
 /** Tall layout: title/artist stacked at the bottom with the transport row beneath. */
 @Composable
 @UnstableApi
-private fun FullContent(data: NowPlayingWidgetData, wide: Boolean) {
+private fun FullContent(data: NowPlayingWidgetData, wide: Boolean, openPlayer: Action) {
     Column(
         modifier = GlanceModifier.fillMaxSize().padding(16.dp),
         verticalAlignment = Alignment.Vertical.Bottom,
@@ -147,11 +157,13 @@ private fun FullContent(data: NowPlayingWidgetData, wide: Boolean) {
             text = data.title.ifEmpty { "Unknown title" },
             style = TextStyle(color = ColorProvider(Color.White), fontSize = 15.sp, fontWeight = FontWeight.Bold),
             maxLines = 1,
+            modifier = GlanceModifier.clickable(openPlayer),
         )
         Text(
             text = data.artist,
             style = TextStyle(color = ColorProvider(Color(0xCCFFFFFF)), fontSize = 13.sp),
             maxLines = 1,
+            modifier = GlanceModifier.clickable(openPlayer),
         )
         Spacer(GlanceModifier.height(10.dp))
         Controls(data, wide, compact = false)
@@ -161,12 +173,12 @@ private fun FullContent(data: NowPlayingWidgetData, wide: Boolean) {
 /** Single-row layout for short cells (3x1 / 4x1): text on the left, transport on the right. */
 @Composable
 @UnstableApi
-private fun CompactContent(data: NowPlayingWidgetData, wide: Boolean) {
+private fun CompactContent(data: NowPlayingWidgetData, wide: Boolean, openPlayer: Action) {
     Row(
         modifier = GlanceModifier.fillMaxSize().padding(horizontal = 12.dp),
         verticalAlignment = Alignment.Vertical.CenterVertically,
     ) {
-        Column(modifier = GlanceModifier.defaultWeight()) {
+        Column(modifier = GlanceModifier.defaultWeight().clickable(openPlayer)) {
             Text(
                 text = data.title.ifEmpty { "Unknown title" },
                 style = TextStyle(color = ColorProvider(Color.White), fontSize = 13.sp, fontWeight = FontWeight.Bold),
@@ -184,9 +196,9 @@ private fun CompactContent(data: NowPlayingWidgetData, wide: Boolean) {
 }
 
 @Composable
-private fun EmptyState(compact: Boolean) {
+private fun EmptyState(compact: Boolean, openPlayer: Action) {
     Column(
-        modifier = GlanceModifier.fillMaxSize().padding(16.dp),
+        modifier = GlanceModifier.fillMaxSize().padding(16.dp).clickable(openPlayer),
         verticalAlignment = if (compact) Alignment.Vertical.CenterVertically else Alignment.Vertical.Bottom,
     ) {
         Text(
