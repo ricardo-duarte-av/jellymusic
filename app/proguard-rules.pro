@@ -27,3 +27,16 @@
 
 # ---- Coil (network fetcher registered via ServiceLoader) ----
 -keep class coil3.util.** { *; }
+
+# ---- Glance home-screen widget ----
+# Glance does not retain ActionCallback instances: on a button tap it reads the class name out of
+# the PendingIntent and instantiates it reflectively via
+# Class.forName(name).getDeclaredConstructor().newInstance(). The `T::class.java` at the call site
+# keeps the class body, but R8 still strips the (only-reflectively-used) no-arg constructor, so in
+# release every widget button throws inside Glance's dispatch and silently does nothing — while
+# debug (no R8) works. Keep the callbacks and their constructors intact and unobfuscated.
+-keep class * implements androidx.glance.appwidget.action.ActionCallback { <init>(); }
+
+# Keep the widget + its receiver un-shrunk/un-renamed so updateAll() resolves and re-renders the
+# right provider when PlaybackService mirrors player state into the widget's DataStore.
+-keep class pt.aguiarvieira.jellymusic.widget.** { *; }
