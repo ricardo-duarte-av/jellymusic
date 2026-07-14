@@ -37,7 +37,7 @@ import pt.aguiarvieira.jellymusic.data.settings.SettingsStore
 import pt.aguiarvieira.jellymusic.domain.model.toTrack
 import androidx.glance.appwidget.updateAll
 import pt.aguiarvieira.jellymusic.widget.NowPlayingWidget
-import pt.aguiarvieira.jellymusic.widget.NowPlayingWidgetData
+import pt.aguiarvieira.jellymusic.widget.nowPlayingWidgetData
 import pt.aguiarvieira.jellymusic.widget.writeNowPlayingWidgetData
 import javax.inject.Inject
 
@@ -141,16 +141,7 @@ class PlaybackService : MediaLibraryService() {
     }
 
     private fun pushWidgetUpdate() {
-        val metadata = player.mediaMetadata
-        val data = NowPlayingWidgetData(
-            hasMedia = player.currentMediaItem != null,
-            isPlaying = player.isPlaying,
-            title = metadata.title?.toString().orEmpty(),
-            artist = metadata.artist?.toString().orEmpty(),
-            artworkUri = metadata.artworkUri?.toString(),
-            shuffleEnabled = player.shuffleModeEnabled,
-            repeatMode = player.repeatMode,
-        )
+        val data = player.nowPlayingWidgetData()
         serviceScope.launch {
             applicationContext.writeNowPlayingWidgetData(data)
             NowPlayingWidget().updateAll(applicationContext)

@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import androidx.media3.common.Player
 import kotlinx.coroutines.flow.first
 
 /**
@@ -26,6 +27,25 @@ data class NowPlayingWidgetData(
     /** Raw Media3 repeat mode: Player.REPEAT_MODE_OFF / ONE / ALL. */
     val repeatMode: Int = 0,
 )
+
+/**
+ * Snapshots a [Player]'s now-playing state. Must be read on the player's application thread (main).
+ * A Media3 [androidx.media3.session.MediaController] applies transport commands to its local state
+ * optimistically, so calling this right after issuing a command reflects the new state — which lets
+ * the widget refresh instantly instead of waiting for the service to echo the change back.
+ */
+fun Player.nowPlayingWidgetData(): NowPlayingWidgetData {
+    val metadata = mediaMetadata
+    return NowPlayingWidgetData(
+        hasMedia = currentMediaItem != null,
+        isPlaying = isPlaying,
+        title = metadata.title?.toString().orEmpty(),
+        artist = metadata.artist?.toString().orEmpty(),
+        artworkUri = metadata.artworkUri?.toString(),
+        shuffleEnabled = shuffleModeEnabled,
+        repeatMode = repeatMode,
+    )
+}
 
 private val Context.nowPlayingWidgetDataStore by preferencesDataStore(name = "jellymusic_now_playing_widget")
 
