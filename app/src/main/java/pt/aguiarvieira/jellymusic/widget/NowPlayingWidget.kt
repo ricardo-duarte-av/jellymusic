@@ -4,6 +4,10 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
@@ -78,15 +82,20 @@ class NowPlayingWidget : GlanceAppWidget() {
         ),
     )
 
+    // NOTE: read the store *inside* provideContent, not once here. Glance keeps the widget's
+    // composition session alive; updateAll() recomposes that session rather than re-running
+    // provideGlance, so a value read here would freeze at the session's first render. Collecting the
+    // store as state means a write from PlaybackService recomposes the live widget.
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val data = context.readNowPlayingWidgetData()
-        android.util.Log.d(
-            "NowPlayingWidget",
-            "[render] provideGlance $id read → isPlaying=${data.isPlaying} title='${data.title}'",
-        )
-        val artwork = data.artworkUri?.let { loadArtwork(context, it) }
-        val iconColor = albumIconColor(artwork)
-        provideContent { WidgetBody(data, artwork, iconColor) }
+        val initial = context.readNowPlayingWidgetData()
+        provideContent {
+            val data by remember { context.nowPlayingWidgetDataFlow() }.collectAsState(initial)
+            // Artwork is a suspend load; re-run it only when the cover actually changes.
+            val artwork by produceState<Bitmap?>(initialValue = null, key1 = data.artworkUri) {
+                value = data.artworkUri?.let { loadArtwork(context, it) }
+            }
+            WidgetBody(data, artwork, albumIconColor(artwork))
+        }
     }
 
     /**

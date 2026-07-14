@@ -1,13 +1,16 @@
 package pt.aguiarvieira.jellymusic.widget
 
 import android.content.Context
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.media3.common.Player
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 
 /**
  * The snapshot of now-playing state the home-screen widget renders. It lives in its own tiny
@@ -57,18 +60,27 @@ private val KEY_ARTWORK = stringPreferencesKey("artwork_uri")
 private val KEY_SHUFFLE = booleanPreferencesKey("shuffle")
 private val KEY_REPEAT = intPreferencesKey("repeat")
 
-suspend fun Context.readNowPlayingWidgetData(): NowPlayingWidgetData {
-    val prefs = nowPlayingWidgetDataStore.data.first()
-    return NowPlayingWidgetData(
-        hasMedia = prefs[KEY_HAS_MEDIA] ?: false,
-        isPlaying = prefs[KEY_IS_PLAYING] ?: false,
-        title = prefs[KEY_TITLE].orEmpty(),
-        artist = prefs[KEY_ARTIST].orEmpty(),
-        artworkUri = prefs[KEY_ARTWORK],
-        shuffleEnabled = prefs[KEY_SHUFFLE] ?: false,
-        repeatMode = prefs[KEY_REPEAT] ?: 0,
-    )
-}
+private fun Preferences.toNowPlayingWidgetData() = NowPlayingWidgetData(
+    hasMedia = this[KEY_HAS_MEDIA] ?: false,
+    isPlaying = this[KEY_IS_PLAYING] ?: false,
+    title = this[KEY_TITLE].orEmpty(),
+    artist = this[KEY_ARTIST].orEmpty(),
+    artworkUri = this[KEY_ARTWORK],
+    shuffleEnabled = this[KEY_SHUFFLE] ?: false,
+    repeatMode = this[KEY_REPEAT] ?: 0,
+)
+
+suspend fun Context.readNowPlayingWidgetData(): NowPlayingWidgetData =
+    nowPlayingWidgetDataStore.data.first().toNowPlayingWidgetData()
+
+/**
+ * Live view of the widget's now-playing store. The widget composition collects this so a write from
+ * [pt.aguiarvieira.jellymusic.playback.PlaybackService] recomposes the *existing* Glance session —
+ * updateAll() alone doesn't, because it recomposes rather than re-running provideGlance, so content
+ * that read the store only once would stay frozen.
+ */
+fun Context.nowPlayingWidgetDataFlow(): Flow<NowPlayingWidgetData> =
+    nowPlayingWidgetDataStore.data.map { it.toNowPlayingWidgetData() }
 
 suspend fun Context.writeNowPlayingWidgetData(data: NowPlayingWidgetData) {
     nowPlayingWidgetDataStore.edit { prefs ->

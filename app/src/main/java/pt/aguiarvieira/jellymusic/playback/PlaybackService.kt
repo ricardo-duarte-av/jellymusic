@@ -144,15 +144,11 @@ class PlaybackService : MediaLibraryService() {
 
     private fun pushWidgetUpdate() {
         val data = player.nowPlayingWidgetData()
-        android.util.Log.d(
-            "NowPlayingWidget",
-            "[service] listener fired → isPlaying=${data.isPlaying} title='${data.title}'",
-        )
         serviceScope.launch {
+            // The write is what actually refreshes the widget: its composition collects this store as
+            // state (see NowPlayingWidget), so a write recomposes the live session. updateAll() stays
+            // as a belt-and-suspenders trigger for the case where no session is currently running.
             applicationContext.writeNowPlayingWidgetData(data)
-            val ids = androidx.glance.appwidget.GlanceAppWidgetManager(applicationContext)
-                .getGlanceIds(NowPlayingWidget::class.java)
-            android.util.Log.d("NowPlayingWidget", "[service] wrote data, updateAll over ${ids.size} widget(s)")
             NowPlayingWidget().updateAll(applicationContext)
         }
     }
