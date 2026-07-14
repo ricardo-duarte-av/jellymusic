@@ -49,6 +49,18 @@
             </intent-filter>
         </service>
 
+        <!-- Home-screen now-playing widget (Glance). -->
+        <receiver
+            android:name=".widget.NowPlayingWidgetReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/now_playing_widget_info" />
+        </receiver>
+
         <!-- Android Auto media app declaration. -->
         <meta-data
             android:name="com.google.android.gms.car.application"

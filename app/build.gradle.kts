@@ -16,8 +16,8 @@ android {
         applicationId = "pt.aguiarvieira.jellymusic"
         minSdk = 29
         targetSdk = 37
-        versionCode = 18
-        versionName = "0.1.17"
+        versionCode = 19
+        versionName = "0.1.18"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -130,6 +130,9 @@ dependencies {
 
     // WorkManager (background downloads)
     implementation(libs.androidx.work.runtime)
+
+    // Glance (home-screen now-playing widget)
+    implementation(libs.androidx.glance.appwidget)
 
     // DataStore + security
     implementation(libs.androidx.datastore.preferences)

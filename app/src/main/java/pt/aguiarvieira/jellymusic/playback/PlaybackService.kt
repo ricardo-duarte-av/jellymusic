@@ -35,6 +35,10 @@ import pt.aguiarvieira.jellymusic.MainActivity
 import pt.aguiarvieira.jellymusic.data.settings.QueueStore
 import pt.aguiarvieira.jellymusic.data.settings.SettingsStore
 import pt.aguiarvieira.jellymusic.domain.model.toTrack
+import androidx.glance.appwidget.updateAll
+import pt.aguiarvieira.jellymusic.widget.NowPlayingWidget
+import pt.aguiarvieira.jellymusic.widget.NowPlayingWidgetData
+import pt.aguiarvieira.jellymusic.widget.writeNowPlayingWidgetData
 import javax.inject.Inject
 
 private const val PROGRESS_REPORT_INTERVAL_MS = 10_000L
@@ -122,6 +126,37 @@ class PlaybackService : MediaLibraryService() {
         serviceScope.launch { settingsStore.setPlaybackModes(player.shuffleModeEnabled, player.repeatMode) }
     }
 
+    /**
+     * Mirrors the player's now-playing state into the home-screen widget's store and refreshes it.
+     * The widget renders from that store (not a live player), so it must be kept current here — the
+     * one place always alive during playback.
+     */
+    private val widgetListener = object : Player.Listener {
+        override fun onMediaMetadataChanged(mediaMetadata: androidx.media3.common.MediaMetadata) = pushWidgetUpdate()
+        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) = pushWidgetUpdate()
+        override fun onIsPlayingChanged(isPlaying: Boolean) = pushWidgetUpdate()
+        override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) = pushWidgetUpdate()
+        override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) = pushWidgetUpdate()
+        override fun onRepeatModeChanged(repeatMode: Int) = pushWidgetUpdate()
+    }
+
+    private fun pushWidgetUpdate() {
+        val metadata = player.mediaMetadata
+        val data = NowPlayingWidgetData(
+            hasMedia = player.currentMediaItem != null,
+            isPlaying = player.isPlaying,
+            title = metadata.title?.toString().orEmpty(),
+            artist = metadata.artist?.toString().orEmpty(),
+            artworkUri = metadata.artworkUri?.toString(),
+            shuffleEnabled = player.shuffleModeEnabled,
+            repeatMode = player.repeatMode,
+        )
+        serviceScope.launch {
+            applicationContext.writeNowPlayingWidgetData(data)
+            NowPlayingWidget().updateAll(applicationContext)
+        }
+    }
+
     /** The custom buttons (expanded-notification overflow + Android Auto), reflecting current state. */
     private fun mediaButtonPreferences(): List<CommandButton> = listOf(
         CommandButton.Builder(
@@ -179,6 +214,8 @@ class PlaybackService : MediaLibraryService() {
             mediaSession.setMediaButtonPreferences(mediaButtonPreferences())
         }
         player.addListener(modeListener)
+        player.addListener(widgetListener)
+        pushWidgetUpdate()
 
         // Periodic progress reports so the server's resume point/now-playing stays fresh.
         serviceScope.launch {

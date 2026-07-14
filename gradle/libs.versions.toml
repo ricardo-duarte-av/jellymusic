@@ -22,6 +22,9 @@ material3 = "1.5.0-alpha23"
 # --- Media3 (playback + Android Auto + downloads) ---
 media3 = "1.11.0-beta01"
 
+# --- Home-screen widget ---
+glance = "1.1.1"
+
 # --- Data / persistence ---
 room = "2.8.4"
 work = "2.10.1"
@@ -80,6 +83,9 @@ androidx-media3-exoplayer-hls = { group = "androidx.media3", name = "media3-exop
 androidx-media3-datasource = { group = "androidx.media3", name = "media3-datasource", version.ref = "media3" }
 androidx-media3-session = { group = "androidx.media3", name = "media3-session", version.ref = "media3" }
 androidx-media3-common = { group = "androidx.media3", name = "media3-common", version.ref = "media3" }
+
+# Glance (home-screen now-playing widget)
+androidx-glance-appwidget = { group = "androidx.glance", name = "glance-appwidget", version.ref = "glance" }
 
 # Room
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
