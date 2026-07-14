@@ -2,7 +2,6 @@ package pt.aguiarvieira.jellymusic.playback
 
 import android.content.ComponentName
 import android.content.Context
-import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -18,7 +17,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import pt.aguiarvieira.jellymusic.BuildConfig
 import pt.aguiarvieira.jellymusic.data.download.MusicDownloadManager
 import pt.aguiarvieira.jellymusic.data.jellyfin.StreamUrlBuilder
 import pt.aguiarvieira.jellymusic.data.settings.QueueStore
@@ -257,21 +255,15 @@ class PlaybackConnection @Inject constructor(
     }
 
     private fun updateProgress(c: MediaController) {
-        val rawPosition = c.currentPosition
-        val rawDuration = c.duration
-        // Diagnostic for issue #1 (seek bar stuck at 0:00). Debug builds only — grep "JMProgress" in
-        // logcat to see the raw values the MediaController reports vs. what reaches the UI.
-        if (BuildConfig.DEBUG) {
-            Log.d(
-                "JMProgress",
-                "rawPos=$rawPosition rawDur=$rawDuration playing=${c.isPlaying} " +
-                    "state=${c.playbackState} canSeek=${c.isCommandAvailable(Player.COMMAND_GET_CURRENT_MEDIA_ITEM)} " +
-                    "item=${c.currentMediaItem?.mediaId}",
-            )
-        }
+        // A transcoded HTTP-progressive stream reports an unknown (TIME_UNSET) timeline duration until
+        // ~15s of buffering. Fall back to the exact duration Jellyfin stamped into the media metadata
+        // (see MediaItemTree.trackMediaItem) so the seek bar shows a real length — and seeks compute a
+        // real target — from the first frame rather than sitting at 0:00.
+        val timelineDuration = c.duration
+        val duration = if (timelineDuration > 0) timelineDuration else (c.mediaMetadata.durationMs ?: 0L)
         _progress.value = PlaybackProgress(
-            positionMs = rawPosition.coerceAtLeast(0L),
-            durationMs = rawDuration.coerceAtLeast(0L),
+            positionMs = c.currentPosition.coerceAtLeast(0L),
+            durationMs = duration.coerceAtLeast(0L),
         )
     }
 
@@ -294,6 +286,7 @@ class PlaybackConnection @Inject constructor(
                     artist = md.artist?.toString().orEmpty(),
                     album = md.albumTitle?.toString(),
                     artworkUrl = md.artworkUri?.toString(),
+                    durationMs = md.durationMs,
                 )
             },
             index = c.currentMediaItemIndex.coerceAtLeast(0),

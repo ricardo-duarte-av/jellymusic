@@ -101,6 +101,11 @@ class MediaItemTree @Inject constructor(
             .setIsBrowsable(false)
             .setIsPlayable(true)
             .setMediaType(MediaMetadata.MEDIA_TYPE_MUSIC)
+            // Jellyfin knows each track's exact duration; stamp it into the metadata so the seek bar
+            // has a correct length from the first frame. A transcoded HTTP-progressive stream reports
+            // an unknown timeline duration (TIME_UNSET) until ~15s of buffering, which otherwise left
+            // the bar and time labels stuck at 0:00 (and made seeks compute a target of 0).
+            .setDurationMs(track.durationMs)
             // Record what's actually playing (format + local/stream) so the UI can report it; this is
             // fixed for the item's lifetime rather than tracking the live settings.
             .setExtras(StreamSettingsExtras.toBundle(playbackSettings, isLocal))

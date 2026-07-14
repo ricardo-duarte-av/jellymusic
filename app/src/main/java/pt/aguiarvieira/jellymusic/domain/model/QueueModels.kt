@@ -10,6 +10,7 @@ data class QueueTrack(
     val artist: String,
     val album: String? = null,
     val artworkUrl: String? = null,
+    val durationMs: Long? = null,
 )
 
 /** A snapshot of the play queue: the ordered items, the current index and position. */
@@ -29,6 +30,6 @@ fun QueueTrack.toTrack(): Track = Track(
     albumId = null,
     discNumber = null,
     trackNumber = null,
-    durationMs = null,
+    durationMs = durationMs,
     artworkUrl = artworkUrl,
 )
