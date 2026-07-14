@@ -33,7 +33,6 @@ import androidx.glance.layout.ContentScale
 import androidx.glance.layout.Row
 import androidx.glance.layout.Spacer
 import androidx.glance.layout.fillMaxSize
-import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
 import androidx.glance.layout.size
@@ -55,18 +54,24 @@ import pt.aguiarvieira.jellymusic.R
 /** Below this width the widget shows transport only; at or above it, shuffle + repeat are added. */
 private val WIDE_BREAKPOINT = 260.dp
 
+/** Below this height the widget uses the single-row compact layout (e.g. a 3x1 / 4x1 cell). */
+private val COMPACT_HEIGHT = 90.dp
+
 /** Bounded artwork size keeps the widget under the RemoteViews memory limit. */
 private const val ARTWORK_PX = 512
 
 @UnstableApi
 class NowPlayingWidget : GlanceAppWidget() {
 
-    // Two size buckets: Glance renders the largest that fits the current cell span. The wide one
-    // crosses [WIDE_BREAKPOINT], unlocking the shuffle + repeat buttons.
+    // Size buckets: Glance renders the largest that fits the current cell span. Width crossing
+    // [WIDE_BREAKPOINT] unlocks shuffle + repeat; height below [COMPACT_HEIGHT] switches to the
+    // single-row compact layout so the widget works down to a 3x1 / 4x1 cell.
     override val sizeMode = SizeMode.Responsive(
         setOf(
             DpSize(180.dp, 110.dp),
             DpSize(300.dp, 110.dp),
+            DpSize(180.dp, 50.dp),
+            DpSize(300.dp, 50.dp),
         ),
     )
 
@@ -92,7 +97,9 @@ class NowPlayingWidget : GlanceAppWidget() {
 @UnstableApi
 private fun WidgetBody(data: NowPlayingWidgetData, artwork: Bitmap?) {
     val context = LocalContext.current
-    val wide = LocalSize.current.width >= WIDE_BREAKPOINT
+    val size = LocalSize.current
+    val wide = size.width >= WIDE_BREAKPOINT
+    val compact = size.height < COMPACT_HEIGHT
 
     // Tapping the widget body opens the full-screen player, exactly like the media notification.
     val openPlayer = actionStartActivity(
@@ -105,7 +112,7 @@ private fun WidgetBody(data: NowPlayingWidgetData, artwork: Bitmap?) {
     Box(
         modifier = GlanceModifier
             .fillMaxSize()
-            .cornerRadius(24.dp)
+            .cornerRadius(if (compact) 16.dp else 24.dp)
             .background(Color(0xFF1C1B1F))
             .clickable(openPlayer),
     ) {
@@ -120,69 +127,117 @@ private fun WidgetBody(data: NowPlayingWidgetData, artwork: Bitmap?) {
         // Scrim so text/controls stay legible over any artwork.
         Box(modifier = GlanceModifier.fillMaxSize().background(Color(0x99000000))) {}
 
-        Column(
-            modifier = GlanceModifier.fillMaxSize().padding(16.dp),
-            verticalAlignment = Alignment.Vertical.Bottom,
-        ) {
-            if (data.hasMedia) {
-                Text(
-                    text = data.title.ifEmpty { "Unknown title" },
-                    style = TextStyle(color = ColorProvider(Color.White), fontSize = 15.sp, fontWeight = FontWeight.Bold),
-                    maxLines = 1,
-                )
-                Text(
-                    text = data.artist,
-                    style = TextStyle(color = ColorProvider(Color(0xCCFFFFFF)), fontSize = 13.sp),
-                    maxLines = 1,
-                )
-                Spacer(GlanceModifier.height(10.dp))
-                Controls(data, wide)
-            } else {
-                Text(
-                    text = "Nothing playing",
-                    style = TextStyle(color = ColorProvider(Color.White), fontSize = 15.sp, fontWeight = FontWeight.Bold),
-                )
-                Text(
-                    text = "Tap to open JellyMusic",
-                    style = TextStyle(color = ColorProvider(Color(0xCCFFFFFF)), fontSize = 13.sp),
-                )
-            }
+        when {
+            !data.hasMedia -> EmptyState(compact)
+            compact -> CompactContent(data, wide)
+            else -> FullContent(data, wide)
+        }
+    }
+}
+
+/** Tall layout: title/artist stacked at the bottom with the transport row beneath. */
+@Composable
+@UnstableApi
+private fun FullContent(data: NowPlayingWidgetData, wide: Boolean) {
+    Column(
+        modifier = GlanceModifier.fillMaxSize().padding(16.dp),
+        verticalAlignment = Alignment.Vertical.Bottom,
+    ) {
+        Text(
+            text = data.title.ifEmpty { "Unknown title" },
+            style = TextStyle(color = ColorProvider(Color.White), fontSize = 15.sp, fontWeight = FontWeight.Bold),
+            maxLines = 1,
+        )
+        Text(
+            text = data.artist,
+            style = TextStyle(color = ColorProvider(Color(0xCCFFFFFF)), fontSize = 13.sp),
+            maxLines = 1,
+        )
+        Spacer(GlanceModifier.height(10.dp))
+        Controls(data, wide, compact = false)
+    }
+}
+
+/** Single-row layout for short cells (3x1 / 4x1): text on the left, transport on the right. */
+@Composable
+@UnstableApi
+private fun CompactContent(data: NowPlayingWidgetData, wide: Boolean) {
+    Row(
+        modifier = GlanceModifier.fillMaxSize().padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.Vertical.CenterVertically,
+    ) {
+        Column(modifier = GlanceModifier.defaultWeight()) {
+            Text(
+                text = data.title.ifEmpty { "Unknown title" },
+                style = TextStyle(color = ColorProvider(Color.White), fontSize = 13.sp, fontWeight = FontWeight.Bold),
+                maxLines = 1,
+            )
+            Text(
+                text = data.artist,
+                style = TextStyle(color = ColorProvider(Color(0xCCFFFFFF)), fontSize = 11.sp),
+                maxLines = 1,
+            )
+        }
+        Spacer(GlanceModifier.width(8.dp))
+        Controls(data, wide, compact = true)
+    }
+}
+
+@Composable
+private fun EmptyState(compact: Boolean) {
+    Column(
+        modifier = GlanceModifier.fillMaxSize().padding(16.dp),
+        verticalAlignment = if (compact) Alignment.Vertical.CenterVertically else Alignment.Vertical.Bottom,
+    ) {
+        Text(
+            text = "Nothing playing",
+            style = TextStyle(color = ColorProvider(Color.White), fontSize = 15.sp, fontWeight = FontWeight.Bold),
+            maxLines = 1,
+        )
+        if (!compact) {
+            Text(
+                text = "Tap to open JellyMusic",
+                style = TextStyle(color = ColorProvider(Color(0xCCFFFFFF)), fontSize = 13.sp),
+                maxLines = 1,
+            )
         }
     }
 }
 
 @Composable
 @UnstableApi
-private fun Controls(data: NowPlayingWidgetData, wide: Boolean) {
-    Row(
-        modifier = GlanceModifier.fillMaxWidth(),
-        verticalAlignment = Alignment.Vertical.CenterVertically,
-    ) {
+private fun Controls(data: NowPlayingWidgetData, wide: Boolean, compact: Boolean) {
+    val iconSize = if (compact) 34.dp else 40.dp
+    val playSize = if (compact) 40.dp else 48.dp
+    val gap = if (compact) 2.dp else 6.dp
+    Row(verticalAlignment = Alignment.Vertical.CenterVertically) {
         if (wide) {
             IconButton(
                 res = R.drawable.ic_widget_shuffle,
                 onClick = actionRunCallback<ToggleShuffleAction>(),
                 active = data.shuffleEnabled,
                 highlightWhenActive = true,
+                size = iconSize,
             )
-            Spacer(GlanceModifier.width(6.dp))
+            Spacer(GlanceModifier.width(gap))
         }
-        IconButton(res = R.drawable.ic_widget_previous, onClick = actionRunCallback<PreviousAction>())
-        Spacer(GlanceModifier.width(6.dp))
+        IconButton(res = R.drawable.ic_widget_previous, onClick = actionRunCallback<PreviousAction>(), size = iconSize)
+        Spacer(GlanceModifier.width(gap))
         IconButton(
             res = if (data.isPlaying) R.drawable.ic_widget_pause else R.drawable.ic_widget_play,
             onClick = actionRunCallback<TogglePlayPauseAction>(),
-            size = 48.dp,
+            size = playSize,
         )
-        Spacer(GlanceModifier.width(6.dp))
-        IconButton(res = R.drawable.ic_widget_next, onClick = actionRunCallback<NextAction>())
+        Spacer(GlanceModifier.width(gap))
+        IconButton(res = R.drawable.ic_widget_next, onClick = actionRunCallback<NextAction>(), size = iconSize)
         if (wide) {
-            Spacer(GlanceModifier.width(6.dp))
+            Spacer(GlanceModifier.width(gap))
             IconButton(
                 res = if (data.repeatMode == Player.REPEAT_MODE_ONE) R.drawable.ic_widget_repeat_one else R.drawable.ic_widget_repeat,
                 onClick = actionRunCallback<CycleRepeatAction>(),
                 active = data.repeatMode != Player.REPEAT_MODE_OFF,
                 highlightWhenActive = true,
+                size = iconSize,
             )
         }
     }
