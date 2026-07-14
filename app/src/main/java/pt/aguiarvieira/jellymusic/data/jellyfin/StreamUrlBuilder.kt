@@ -40,28 +40,42 @@ class StreamUrlBuilder @Inject constructor(
     }
 
     /**
-     * Streaming URL for playback over the universal endpoint (HTTP progressive). When
-     * [settings].transcode is off the server direct-plays the original; otherwise it transcodes to
-     * the chosen codec/bitrate cap.
+     * Progressive (HTTP) stream URL over the universal endpoint. Used for **downloads**, which save a
+     * plain file. When [settings].transcode is off the server direct-plays the original; otherwise it
+     * transcodes to the chosen codec/bitrate cap. See [playbackStreamUrl] for in-app playback.
      */
-    fun audioStreamUrl(itemId: String, settings: StreamSettings): String? =
-        if (settings.transcode) {
-            buildUniversalUrl(
-                itemId = itemId,
-                maxBitrateBps = settings.maxBitrateKbps * 1000,
-                codec = settings.codec.jellyfinCodec,
-                transcodingContainer = settings.codec.container,
-            )
-        } else {
-            buildUniversalUrl(itemId = itemId, maxBitrateBps = null, codec = null, transcodingContainer = null)
-        }
+    fun audioStreamUrl(itemId: String, settings: StreamSettings): String? {
+        val (bps, codec, container) = transcodeArgs(settings)
+        return buildUniversalUrl(itemId, bps, codec, container, MediaStreamProtocol.HTTP)
+    }
 
+    /**
+     * Stream URL for in-app **playback**. Transcoded playback is requested as HLS — a seekable VOD
+     * playlist — because the progressive transcode stream is not byte-range seekable
+     * (`Accept-Ranges: none`), so `Player.seekTo` on it is a no-op. Direct play (transcode off) stays
+     * progressive: the original file *is* byte-range seekable. The caller must tag transcoded items
+     * with the HLS MIME type so ExoPlayer builds an HlsMediaSource.
+     */
+    fun playbackStreamUrl(itemId: String, settings: StreamSettings): String? {
+        val (bps, codec, container) = transcodeArgs(settings)
+        val protocol = if (settings.transcode) MediaStreamProtocol.HLS else MediaStreamProtocol.HTTP
+        return buildUniversalUrl(itemId, bps, codec, container, protocol)
+    }
+
+    /** Transcode (bitrate, codec, container) args, or all-null for direct play. */
+    private fun transcodeArgs(settings: StreamSettings): Triple<Int?, String?, String?> =
+        if (settings.transcode) {
+            Triple(settings.maxBitrateKbps * 1000, settings.codec.jellyfinCodec, settings.codec.container)
+        } else {
+            Triple(null, null, null)
+        }
 
     private fun buildUniversalUrl(
         itemId: String,
         maxBitrateBps: Int?,
         codec: String?,
         transcodingContainer: String?,
+        protocol: MediaStreamProtocol,
     ): String? {
         val session = clientProvider.session.value ?: return null
         val api = clientProvider.api ?: return null
@@ -72,7 +86,7 @@ class StreamUrlBuilder @Inject constructor(
             deviceId = api.deviceInfo.id,
             maxStreamingBitrate = maxBitrateBps,
             transcodingContainer = transcodingContainer,
-            transcodingProtocol = MediaStreamProtocol.HTTP,
+            transcodingProtocol = protocol,
             audioCodec = codec,
             enableRedirection = true,
         )

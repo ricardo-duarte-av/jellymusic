@@ -3,6 +3,7 @@ package pt.aguiarvieira.jellymusic.playback
 import android.content.ComponentName
 import android.content.Context
 import androidx.core.content.ContextCompat
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaController
@@ -167,8 +168,12 @@ class PlaybackConnection @Inject constructor(
             val metadata = item.mediaMetadata.buildUpon()
                 .setExtras(StreamSettingsExtras.toBundle(playbackSettings, isLocal))
                 .build()
+            // Transcoded streams are HLS (seekable); clear the MIME otherwise so a switch back to
+            // direct play rebuilds as a progressive item.
+            val transcodeStream = streamSettings.transcode && !isLocal
             item.buildUpon()
-                .setUri(localUri ?: urlBuilder.audioStreamUrl(trackId, streamSettings))
+                .setUri(localUri ?: urlBuilder.playbackStreamUrl(trackId, streamSettings))
+                .setMimeType(if (transcodeStream) MimeTypes.APPLICATION_M3U8 else null)
                 .setMediaMetadata(metadata)
                 .build()
         }

@@ -3,6 +3,7 @@ package pt.aguiarvieira.jellymusic.playback
 import android.net.Uri
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.MimeTypes
 import kotlinx.coroutines.flow.first
 import pt.aguiarvieira.jellymusic.data.download.MusicDownloadManager
 import pt.aguiarvieira.jellymusic.data.jellyfin.StreamUrlBuilder
@@ -110,9 +111,14 @@ class MediaItemTree @Inject constructor(
             // fixed for the item's lifetime rather than tracking the live settings.
             .setExtras(StreamSettingsExtras.toBundle(playbackSettings, isLocal))
             .build()
+        // Transcoded playback is served as HLS (seekable); direct play and local files are progressive.
+        val transcodeStream = settings.transcode && !isLocal
         return MediaItem.Builder()
             .setMediaId(TRACK_PREFIX + track.id)
-            .setUri(localUri ?: urlBuilder.audioStreamUrl(track.id, settings))
+            .setUri(localUri ?: urlBuilder.playbackStreamUrl(track.id, settings))
+            // Tag transcoded streams so ExoPlayer builds an HlsMediaSource for the .m3u8 playlist
+            // instead of trying to play it as a progressive file.
+            .apply { if (transcodeStream) setMimeType(MimeTypes.APPLICATION_M3U8) }
             .setMediaMetadata(metadata)
             .build()
     }
