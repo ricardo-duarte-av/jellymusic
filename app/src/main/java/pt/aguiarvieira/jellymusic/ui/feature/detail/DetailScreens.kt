@@ -565,6 +565,21 @@ private fun TrackListDetail(
                                     style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
+                                Spacer(Modifier.height(16.dp))
+                                // Play (enqueue + play) and Shuffle (enqueue shuffled + play),
+                                // matching the album viewer.
+                                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    Button(onClick = { onPlay(tracks, 0) }) {
+                                        Icon(Icons.Filled.PlayArrow, contentDescription = null)
+                                        Spacer(Modifier.width(8.dp))
+                                        Text("Play")
+                                    }
+                                    FilledTonalButton(onClick = { onPlay(tracks.shuffled(), 0) }) {
+                                        Icon(Icons.Filled.Shuffle, contentDescription = null)
+                                        Spacer(Modifier.width(8.dp))
+                                        Text("Shuffle")
+                                    }
+                                }
                             }
                         }
                         itemsIndexed(tracks, key = { _, t -> t.id }) { index, track ->
