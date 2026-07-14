@@ -28,6 +28,9 @@ private const val TAG = "NowPlayingWidget"
  * [Dispatchers.Main]. We bind with the application context, not the [Context] passed to the
  * callback: that one is a BroadcastReceiver context, which is not allowed to bindService().
  */
+// Catch-all is intentional: Glance silently swallows anything thrown from onAction, so we catch
+// everything here purely to log it — otherwise a failure in the controller path is invisible.
+@Suppress("TooGenericExceptionCaught")
 @UnstableApi
 private suspend fun withController(context: Context, action: String, block: (MediaController) -> Unit) {
     val appContext = context.applicationContext
