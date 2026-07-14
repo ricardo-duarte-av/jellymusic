@@ -1,6 +1,7 @@
 package pt.aguiarvieira.jellymusic.ui.feature.player
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.size
@@ -38,10 +40,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -53,12 +57,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
 import pt.aguiarvieira.jellymusic.playback.PlaybackProgress
 import pt.aguiarvieira.jellymusic.playback.QueueItem
 import pt.aguiarvieira.jellymusic.playback.RepeatMode
 import pt.aguiarvieira.jellymusic.ui.components.ArtworkImage
 import pt.aguiarvieira.jellymusic.ui.theme.AlbumTheme
+import kotlin.math.abs
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -303,25 +309,79 @@ private fun PlayerSeekBar(
     onSeek: (Long) -> Unit,
 ) {
     val p by progress.collectAsStateWithLifecycle()
-    // Local scrubbing state so the thumb follows the finger, committed on release.
+    // While dragging, the thumb follows the finger. After release we keep showing the seeked
+    // position (holding scrubFraction) until playback actually reaches it, so the bar never snaps
+    // back to the old position in the gap before the player reports the new one.
     var scrubFraction by remember { mutableStateOf<Float?>(null) }
+    var isScrubbing by remember { mutableStateOf(false) }
 
     val liveFraction = if (p.durationMs > 0) {
         (p.positionMs.toFloat() / p.durationMs).coerceIn(0f, 1f)
     } else {
         0f
     }
-    Slider(
-        value = scrubFraction ?: liveFraction,
-        onValueChange = { scrubFraction = it },
-        onValueChangeFinished = {
-            scrubFraction?.let { fraction -> onSeek((fraction * p.durationMs).toLong()) }
+    val displayFraction = scrubFraction ?: liveFraction
+
+    // Once the seek is committed, hand control back to the live position as soon as it catches up.
+    LaunchedEffect(isScrubbing, p.positionMs) {
+        val target = scrubFraction ?: return@LaunchedEffect
+        if (!isScrubbing && abs(liveFraction - target) < 0.01f) {
             scrubFraction = null
-        },
-    )
+        }
+    }
+    // Safety net: if playback never quite reaches the target (e.g. a non-seekable stream), release
+    // the held value after a short grace period instead of freezing the thumb.
+    LaunchedEffect(isScrubbing) {
+        if (!isScrubbing && scrubFraction != null) {
+            delay(SEEK_SETTLE_GRACE_MS)
+            scrubFraction = null
+        }
+    }
+
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val bubbleWidth = 56.dp
+        val maxOffset = maxWidth - bubbleWidth
+        val bubbleOffset = (maxOffset * displayFraction).coerceIn(0.dp, maxOffset)
+        // Floating time tag that tracks the thumb while the user is holding the bar.
+        if (isScrubbing) {
+            Surface(
+                shape = MaterialTheme.shapes.small,
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .offset(x = bubbleOffset)
+                    .width(bubbleWidth),
+            ) {
+                Text(
+                    text = formatTime((displayFraction * p.durationMs).toLong()),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 2.dp),
+                )
+            }
+        }
+        Slider(
+            value = displayFraction,
+            onValueChange = {
+                scrubFraction = it
+                isScrubbing = true
+            },
+            onValueChangeFinished = {
+                scrubFraction?.let { fraction -> onSeek((fraction * p.durationMs).toLong()) }
+                isScrubbing = false
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.BottomStart)
+                .padding(top = 28.dp),
+        )
+    }
     Row(modifier = Modifier.fillMaxWidth()) {
         Text(
-            text = formatTime(p.positionMs),
+            text = formatTime((displayFraction * p.durationMs).toLong()),
             style = MaterialTheme.typography.labelMedium,
             modifier = Modifier.weight(1f),
         )
@@ -331,6 +391,8 @@ private fun PlayerSeekBar(
         )
     }
 }
+
+private const val SEEK_SETTLE_GRACE_MS = 1_000L
 
 private fun formatTime(ms: Long): String {
     if (ms <= 0) return "0:00"
