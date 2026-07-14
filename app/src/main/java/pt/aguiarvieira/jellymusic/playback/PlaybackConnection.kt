@@ -2,6 +2,7 @@ package pt.aguiarvieira.jellymusic.playback
 
 import android.content.ComponentName
 import android.content.Context
+import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -17,6 +18,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import pt.aguiarvieira.jellymusic.BuildConfig
 import pt.aguiarvieira.jellymusic.data.download.MusicDownloadManager
 import pt.aguiarvieira.jellymusic.data.jellyfin.StreamUrlBuilder
 import pt.aguiarvieira.jellymusic.data.settings.QueueStore
@@ -130,16 +132,15 @@ class PlaybackConnection @Inject constructor(
             ContextCompat.getMainExecutor(context),
         )
 
-        // Position ticker so the seek bar advances during playback. Only refreshes the lightweight
-        // progress flow (and periodically persists position) — the full UI state is event-driven.
+        // Position ticker so the seek bar advances during playback. Refresh the lightweight progress
+        // flow unconditionally (so a real duration/position shows even while paused or buffering, not
+        // only mid-play); persist only during active playback. The full UI state is event-driven.
         scope.launch {
             while (isActive) {
                 delay(500)
-                val c = controller
-                if (c?.isPlaying == true) {
-                    updateProgress(c)
-                    maybePersist(c, force = false)
-                }
+                val c = controller ?: continue
+                updateProgress(c)
+                if (c.isPlaying) maybePersist(c, force = false)
             }
         }
     }
@@ -256,9 +257,21 @@ class PlaybackConnection @Inject constructor(
     }
 
     private fun updateProgress(c: MediaController) {
+        val rawPosition = c.currentPosition
+        val rawDuration = c.duration
+        // Diagnostic for issue #1 (seek bar stuck at 0:00). Debug builds only — grep "JMProgress" in
+        // logcat to see the raw values the MediaController reports vs. what reaches the UI.
+        if (BuildConfig.DEBUG) {
+            Log.d(
+                "JMProgress",
+                "rawPos=$rawPosition rawDur=$rawDuration playing=${c.isPlaying} " +
+                    "state=${c.playbackState} canSeek=${c.isCommandAvailable(Player.COMMAND_GET_CURRENT_MEDIA_ITEM)} " +
+                    "item=${c.currentMediaItem?.mediaId}",
+            )
+        }
         _progress.value = PlaybackProgress(
-            positionMs = c.currentPosition.coerceAtLeast(0L),
-            durationMs = c.duration.coerceAtLeast(0L),
+            positionMs = rawPosition.coerceAtLeast(0L),
+            durationMs = rawDuration.coerceAtLeast(0L),
         )
     }
 
