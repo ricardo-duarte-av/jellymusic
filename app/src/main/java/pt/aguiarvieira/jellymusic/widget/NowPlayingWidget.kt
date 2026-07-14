@@ -100,6 +100,11 @@ private fun WidgetBody(data: NowPlayingWidgetData, artwork: Bitmap?) {
     val size = LocalSize.current
     val wide = size.width >= WIDE_BREAKPOINT
     val compact = size.height < COMPACT_HEIGHT
+    // Shuffle/repeat need a wide cell; in the single-row compact form the app icon takes that room
+    // instead, so toggles only show in the tall wide layout. The icon identifies the widget and is
+    // shown everywhere except the tightest 3x1 (compact + narrow).
+    val showToggles = wide && !compact
+    val showIcon = wide || !compact
 
     // Tapping the widget body opens the full-screen player, exactly like the media notification.
     val openPlayer = actionStartActivity(
@@ -139,16 +144,35 @@ private fun WidgetBody(data: NowPlayingWidgetData, artwork: Bitmap?) {
 
         when {
             !data.hasMedia -> EmptyState(compact, openPlayer)
-            compact -> CompactContent(data, wide, openPlayer)
-            else -> FullContent(data, wide, openPlayer)
+            compact -> CompactContent(data, showToggles, showIcon, openPlayer)
+            else -> FullContent(data, showToggles, openPlayer)
         }
+
+        // Tall layouts show the app icon as a top-right overlay (the compact form places it inline
+        // at the end of the row instead — see CompactContent).
+        if (!compact) AppIconOverlay()
+    }
+}
+
+/** App icon pinned to the top-right corner, identifying the widget. */
+@Composable
+private fun AppIconOverlay() {
+    Box(
+        modifier = GlanceModifier.fillMaxSize().padding(10.dp),
+        contentAlignment = Alignment.TopEnd,
+    ) {
+        Image(
+            provider = ImageProvider(R.mipmap.ic_launcher),
+            contentDescription = "JellyMusic",
+            modifier = GlanceModifier.size(24.dp),
+        )
     }
 }
 
 /** Tall layout: title/artist stacked at the bottom with the transport row beneath. */
 @Composable
 @UnstableApi
-private fun FullContent(data: NowPlayingWidgetData, wide: Boolean, openPlayer: Action) {
+private fun FullContent(data: NowPlayingWidgetData, showToggles: Boolean, openPlayer: Action) {
     Column(
         modifier = GlanceModifier.fillMaxSize().padding(16.dp),
         verticalAlignment = Alignment.Vertical.Bottom,
@@ -166,14 +190,19 @@ private fun FullContent(data: NowPlayingWidgetData, wide: Boolean, openPlayer: A
             modifier = GlanceModifier.clickable(openPlayer),
         )
         Spacer(GlanceModifier.height(10.dp))
-        Controls(data, wide, compact = false)
+        Controls(data, showToggles, compact = false)
     }
 }
 
-/** Single-row layout for short cells (3x1 / 4x1): text on the left, transport on the right. */
+/** Single-row layout for short cells (3x1 / 4x1): text on the left, transport (+ icon) on the right. */
 @Composable
 @UnstableApi
-private fun CompactContent(data: NowPlayingWidgetData, wide: Boolean, openPlayer: Action) {
+private fun CompactContent(
+    data: NowPlayingWidgetData,
+    showToggles: Boolean,
+    showIcon: Boolean,
+    openPlayer: Action,
+) {
     Row(
         modifier = GlanceModifier.fillMaxSize().padding(horizontal = 12.dp),
         verticalAlignment = Alignment.Vertical.CenterVertically,
@@ -191,7 +220,17 @@ private fun CompactContent(data: NowPlayingWidgetData, wide: Boolean, openPlayer
             )
         }
         Spacer(GlanceModifier.width(8.dp))
-        Controls(data, wide, compact = true)
+        Controls(data, showToggles, compact = true)
+        // Single-row form has no top corner, so the icon goes inline at the end (only when wide
+        // enough — a 4x1; a 3x1 omits it entirely).
+        if (showIcon) {
+            Spacer(GlanceModifier.width(8.dp))
+            Image(
+                provider = ImageProvider(R.mipmap.ic_launcher),
+                contentDescription = "JellyMusic",
+                modifier = GlanceModifier.size(22.dp),
+            )
+        }
     }
 }
 
@@ -218,12 +257,12 @@ private fun EmptyState(compact: Boolean, openPlayer: Action) {
 
 @Composable
 @UnstableApi
-private fun Controls(data: NowPlayingWidgetData, wide: Boolean, compact: Boolean) {
+private fun Controls(data: NowPlayingWidgetData, showToggles: Boolean, compact: Boolean) {
     val iconSize = if (compact) 34.dp else 40.dp
     val playSize = if (compact) 40.dp else 48.dp
     val gap = if (compact) 2.dp else 6.dp
     Row(verticalAlignment = Alignment.Vertical.CenterVertically) {
-        if (wide) {
+        if (showToggles) {
             IconButton(
                 res = R.drawable.ic_widget_shuffle,
                 onClick = actionRunCallback<ToggleShuffleAction>(),
@@ -242,7 +281,7 @@ private fun Controls(data: NowPlayingWidgetData, wide: Boolean, compact: Boolean
         )
         Spacer(GlanceModifier.width(gap))
         IconButton(res = R.drawable.ic_widget_next, onClick = actionRunCallback<NextAction>(), size = iconSize)
-        if (wide) {
+        if (showToggles) {
             Spacer(GlanceModifier.width(gap))
             IconButton(
                 res = if (data.repeatMode == Player.REPEAT_MODE_ONE) R.drawable.ic_widget_repeat_one else R.drawable.ic_widget_repeat,

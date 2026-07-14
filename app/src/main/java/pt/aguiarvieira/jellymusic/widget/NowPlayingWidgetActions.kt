@@ -30,17 +30,22 @@ import pt.aguiarvieira.jellymusic.playback.PlaybackService
  */
 @UnstableApi
 private suspend fun withController(context: Context, block: (MediaController) -> Unit) {
+    // A Glance ActionCallback receives a BroadcastReceiver context, which is not allowed to
+    // bindService() — and MediaController.Builder.buildAsync() binds the session's service under
+    // the hood. Binding with that restricted context fails silently (the future completes
+    // exceptionally), so the button appears to do nothing. Use the application context to bind.
+    val appContext = context.applicationContext
     withContext(Dispatchers.Main.immediate) {
-        val token = SessionToken(context, ComponentName(context, PlaybackService::class.java))
-        val controller = MediaController.Builder(context, token).buildAsync().await()
+        val token = SessionToken(appContext, ComponentName(appContext, PlaybackService::class.java))
+        val controller = MediaController.Builder(appContext, token).buildAsync().await()
         try {
             block(controller)
-            context.writeNowPlayingWidgetData(controller.nowPlayingWidgetData())
+            appContext.writeNowPlayingWidgetData(controller.nowPlayingWidgetData())
         } finally {
             controller.release()
         }
     }
-    NowPlayingWidget().updateAll(context)
+    NowPlayingWidget().updateAll(appContext)
 }
 
 @UnstableApi
