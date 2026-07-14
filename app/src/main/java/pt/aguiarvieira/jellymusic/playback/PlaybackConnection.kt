@@ -16,6 +16,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import pt.aguiarvieira.jellymusic.data.download.MusicDownloadManager
@@ -29,8 +33,6 @@ import pt.aguiarvieira.jellymusic.domain.model.Track
 import pt.aguiarvieira.jellymusic.domain.model.toTrack
 import javax.inject.Inject
 import javax.inject.Singleton
-
-private const val QUEUE_PERSIST_INTERVAL_MS = 5_000L
 
 enum class RepeatMode { OFF, ALL, ONE }
 
@@ -99,7 +101,7 @@ class PlaybackConnection @Inject constructor(
     // Rebuild the queue list only when the timeline or current item changes (not on position ticks).
     private var lastQueueCount = -1
     private var lastQueueCurrent = -1
-    private var lastPersistMs = 0L
+    private var wasPlaying = false
 
     @Volatile
     private var streamSettings: StreamSettings = StreamSettings()
@@ -131,16 +133,26 @@ class PlaybackConnection @Inject constructor(
             ContextCompat.getMainExecutor(context),
         )
 
-        // Position ticker so the seek bar advances during playback. Refresh the lightweight progress
-        // flow unconditionally (so a real duration/position shows even while paused or buffering, not
-        // only mid-play); persist only during active playback. The full UI state is event-driven.
+        // Position ticker that advances the seek bar — the single most frequent wakeup in the app, so
+        // it runs only when it can possibly matter: something is actually playing AND a screen is
+        // observing [progress] (the mini-player or full player, which collect it with lifecycle). When
+        // playback pauses, or the UI leaves the foreground, the ticker stops entirely — no 2 Hz
+        // wakeups in the background. The system media notification's scrubber and the widget don't use
+        // this flow (they read the MediaSession directly), so gating it here can't stale them. A
+        // one-off duration/position for a paused or freshly-observed track still lands via the
+        // event-driven [updateState] path, so the bar shows a real length without ticking.
         scope.launch {
-            while (isActive) {
-                delay(500)
-                val c = controller ?: continue
-                updateProgress(c)
-                if (c.isPlaying) maybePersist(c, force = false)
-            }
+            val observing = _progress.subscriptionCount.map { it > 0 }
+            val playing = _state.map { it.isPlaying }
+            combine(observing, playing) { obs, play -> obs && play }
+                .distinctUntilChanged()
+                .collectLatest { active ->
+                    if (!active) return@collectLatest
+                    while (isActive) {
+                        controller?.let { updateProgress(it) }
+                        delay(500)
+                    }
+                }
         }
     }
 
@@ -254,9 +266,14 @@ class PlaybackConnection @Inject constructor(
             lastQueueCurrent = c.currentMediaItemIndex
             rebuildQueue(c)
         }
-        // Persist the queue immediately on any timeline/current change; the ticker handles the
-        // throttled position snapshots during steady playback.
-        maybePersist(c, force = queueChanged)
+        // Persist the queue on structural changes (add/remove/track transition) and when playback
+        // pauses — that's exactly what restoring a resume point needs. No periodic mid-track writes:
+        // during steady playback the foreground service keeps the process alive, so there's nothing
+        // to survive, and rewriting the whole queue JSON every few seconds was the app's biggest
+        // avoidable disk-and-battery cost.
+        val justPaused = !c.isPlaying && wasPlaying
+        wasPlaying = c.isPlaying
+        if (c.mediaItemCount > 0 && (queueChanged || justPaused)) persistQueue(c)
     }
 
     private fun updateProgress(c: MediaController) {
@@ -270,14 +287,6 @@ class PlaybackConnection @Inject constructor(
             positionMs = c.currentPosition.coerceAtLeast(0L),
             durationMs = duration.coerceAtLeast(0L),
         )
-    }
-
-    private fun maybePersist(c: MediaController, force: Boolean) {
-        val nowMs = System.currentTimeMillis()
-        if (c.mediaItemCount > 0 && (force || nowMs - lastPersistMs >= QUEUE_PERSIST_INTERVAL_MS)) {
-            lastPersistMs = nowMs
-            persistQueue(c)
-        }
     }
 
     private fun persistQueue(c: MediaController) {
