@@ -163,6 +163,7 @@ private fun Controls(data: NowPlayingWidgetData, wide: Boolean) {
                 res = R.drawable.ic_widget_shuffle,
                 onClick = actionRunCallback<ToggleShuffleAction>(),
                 active = data.shuffleEnabled,
+                highlightWhenActive = true,
             )
             Spacer(GlanceModifier.width(6.dp))
         }
@@ -181,6 +182,7 @@ private fun Controls(data: NowPlayingWidgetData, wide: Boolean) {
                 res = if (data.repeatMode == Player.REPEAT_MODE_ONE) R.drawable.ic_widget_repeat_one else R.drawable.ic_widget_repeat,
                 onClick = actionRunCallback<CycleRepeatAction>(),
                 active = data.repeatMode != Player.REPEAT_MODE_OFF,
+                highlightWhenActive = true,
             )
         }
     }
@@ -191,14 +193,29 @@ private fun IconButton(
     res: Int,
     onClick: Action,
     active: Boolean = true,
+    highlightWhenActive: Boolean = false,
     size: Dp = 40.dp,
 ) {
-    Image(
-        provider = ImageProvider(res),
-        contentDescription = null,
-        colorFilter = ColorFilter.tint(ColorProvider(if (active) Color.White else Color(0x80FFFFFF))),
-        modifier = GlanceModifier.size(size).padding(6.dp).clickable(onClick),
-    )
+    Box(
+        modifier = GlanceModifier.size(size).clickable(onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        // Subtle translucent disc behind an engaged toggle (shuffle/repeat) so "on" reads clearly.
+        if (highlightWhenActive && active) {
+            Box(
+                modifier = GlanceModifier
+                    .size(size)
+                    .background(ImageProvider(R.drawable.widget_highlight)),
+                content = {},
+            )
+        }
+        Image(
+            provider = ImageProvider(res),
+            contentDescription = null,
+            colorFilter = ColorFilter.tint(ColorProvider(if (active) Color.White else Color(0x80FFFFFF))),
+            modifier = GlanceModifier.size(size).padding(6.dp),
+        )
+    }
 }
 
 @UnstableApi

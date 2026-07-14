@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Translucent disc drawn behind an engaged toggle (shuffle/repeat) in the widget. Using a shape
+     drawable (rather than Glance cornerRadius, which only rounds on API 31+) keeps it circular on
+     every supported version. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <solid android:color="#33FFFFFF" />
+</shape>
