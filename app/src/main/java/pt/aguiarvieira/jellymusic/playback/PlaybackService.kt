@@ -144,8 +144,15 @@ class PlaybackService : MediaLibraryService() {
 
     private fun pushWidgetUpdate() {
         val data = player.nowPlayingWidgetData()
+        android.util.Log.d(
+            "NowPlayingWidget",
+            "[service] listener fired → isPlaying=${data.isPlaying} title='${data.title}'",
+        )
         serviceScope.launch {
             applicationContext.writeNowPlayingWidgetData(data)
+            val ids = androidx.glance.appwidget.GlanceAppWidgetManager(applicationContext)
+                .getGlanceIds(NowPlayingWidget::class.java)
+            android.util.Log.d("NowPlayingWidget", "[service] wrote data, updateAll over ${ids.size} widget(s)")
             NowPlayingWidget().updateAll(applicationContext)
         }
     }

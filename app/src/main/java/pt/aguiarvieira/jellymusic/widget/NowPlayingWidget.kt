@@ -80,6 +80,10 @@ class NowPlayingWidget : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val data = context.readNowPlayingWidgetData()
+        android.util.Log.d(
+            "NowPlayingWidget",
+            "[render] provideGlance $id read → isPlaying=${data.isPlaying} title='${data.title}'",
+        )
         val artwork = data.artworkUri?.let { loadArtwork(context, it) }
         val iconColor = albumIconColor(artwork)
         provideContent { WidgetBody(data, artwork, iconColor) }
