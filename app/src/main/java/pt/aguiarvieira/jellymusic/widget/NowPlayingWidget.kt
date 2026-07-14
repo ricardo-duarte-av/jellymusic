@@ -43,6 +43,9 @@ import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.palette.graphics.Palette
+import com.materialkolor.PaletteStyle
+import com.materialkolor.dynamicColorScheme
 import coil3.imageLoader
 import coil3.request.ImageRequest
 import coil3.request.SuccessResult
@@ -78,7 +81,29 @@ class NowPlayingWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val data = context.readNowPlayingWidgetData()
         val artwork = data.artworkUri?.let { loadArtwork(context, it) }
-        provideContent { WidgetBody(data, artwork) }
+        val iconColor = albumIconColor(artwork)
+        provideContent { WidgetBody(data, artwork, iconColor) }
+    }
+
+    /**
+     * Tint for the app-icon glyph, derived from the current cover the same way the app themes its
+     * album/player surfaces: a Palette seed fed through MaterialKolor. We build a dark scheme (the
+     * widget always sits on a dark scrim) and take its primary so the glyph stays light and legible.
+     * Falls back to white when there's no art or no seed can be extracted.
+     */
+    private fun albumIconColor(bitmap: Bitmap?): Color {
+        bitmap ?: return Color.White
+        val palette = Palette.from(bitmap).generate()
+        val rgb = palette.vibrantSwatch?.rgb
+            ?: palette.dominantSwatch?.rgb
+            ?: palette.mutedSwatch?.rgb
+            ?: return Color.White
+        return dynamicColorScheme(
+            seedColor = Color(rgb),
+            isDark = true,
+            isAmoled = false,
+            style = PaletteStyle.Expressive,
+        ).primary
     }
 
     private suspend fun loadArtwork(context: Context, uri: String): Bitmap? {
@@ -95,7 +120,7 @@ class NowPlayingWidget : GlanceAppWidget() {
 
 @Composable
 @UnstableApi
-private fun WidgetBody(data: NowPlayingWidgetData, artwork: Bitmap?) {
+private fun WidgetBody(data: NowPlayingWidgetData, artwork: Bitmap?, iconColor: Color) {
     val context = LocalContext.current
     val size = LocalSize.current
     val wide = size.width >= WIDE_BREAKPOINT
@@ -144,29 +169,35 @@ private fun WidgetBody(data: NowPlayingWidgetData, artwork: Bitmap?) {
 
         when {
             !data.hasMedia -> EmptyState(compact, openPlayer)
-            compact -> CompactContent(data, showToggles, showIcon, openPlayer)
+            compact -> CompactContent(data, showToggles, showIcon, iconColor, openPlayer)
             else -> FullContent(data, showToggles, openPlayer)
         }
 
         // Tall layouts show the app icon as a top-right overlay (the compact form places it inline
         // at the end of the row instead — see CompactContent).
-        if (!compact) AppIconOverlay()
+        if (!compact) AppIconOverlay(iconColor)
     }
 }
 
-/** App icon pinned to the top-right corner, identifying the widget. */
+/** App-icon glyph pinned to the top-right corner, tinted with the album color, identifying the widget. */
 @Composable
-private fun AppIconOverlay() {
+private fun AppIconOverlay(iconColor: Color) {
     Box(
         modifier = GlanceModifier.fillMaxSize().padding(10.dp),
         contentAlignment = Alignment.TopEnd,
     ) {
-        Image(
-            provider = ImageProvider(R.mipmap.ic_launcher),
-            contentDescription = "JellyMusic",
-            modifier = GlanceModifier.size(24.dp),
-        )
+        AppIcon(iconColor, 24.dp)
     }
+}
+
+@Composable
+private fun AppIcon(iconColor: Color, size: Dp) {
+    Image(
+        provider = ImageProvider(R.drawable.ic_launcher_foreground),
+        contentDescription = "JellyMusic",
+        colorFilter = ColorFilter.tint(ColorProvider(iconColor)),
+        modifier = GlanceModifier.size(size),
+    )
 }
 
 /** Tall layout: title/artist stacked at the bottom with the transport row beneath. */
@@ -201,6 +232,7 @@ private fun CompactContent(
     data: NowPlayingWidgetData,
     showToggles: Boolean,
     showIcon: Boolean,
+    iconColor: Color,
     openPlayer: Action,
 ) {
     Row(
@@ -225,11 +257,7 @@ private fun CompactContent(
         // enough — a 4x1; a 3x1 omits it entirely).
         if (showIcon) {
             Spacer(GlanceModifier.width(8.dp))
-            Image(
-                provider = ImageProvider(R.mipmap.ic_launcher),
-                contentDescription = "JellyMusic",
-                modifier = GlanceModifier.size(22.dp),
-            )
+            AppIcon(iconColor, 22.dp)
         }
     }
 }
