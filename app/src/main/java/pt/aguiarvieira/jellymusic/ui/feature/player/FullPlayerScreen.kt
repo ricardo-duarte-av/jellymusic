@@ -1,11 +1,14 @@
 package pt.aguiarvieira.jellymusic.ui.feature.player
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -52,6 +55,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -64,6 +68,7 @@ import pt.aguiarvieira.jellymusic.playback.QueueItem
 import pt.aguiarvieira.jellymusic.playback.RepeatMode
 import pt.aguiarvieira.jellymusic.ui.components.ArtworkImage
 import pt.aguiarvieira.jellymusic.ui.theme.AlbumTheme
+import pt.aguiarvieira.jellymusic.ui.theme.LocalDynamicColorEnabled
 import kotlin.math.abs
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -103,135 +108,149 @@ fun FullPlayerScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 32.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
+                .padding(padding),
         ) {
-            ArtworkImage(
-                url = state.artworkUri,
-                contentDescription = state.title,
+            // 3-colour banner of the M3 roles extracted from the album art (when dynamic color is on).
+            if (LocalDynamicColorEnabled.current) {
+                AlbumColorBanner(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 32.dp),
+                )
+            }
+            Column(
                 modifier = Modifier
+                    .weight(1f)
                     .fillMaxWidth()
-                    .aspectRatio(1f),
-                shape = MaterialTheme.shapes.extraLarge,
-            )
+                    .padding(horizontal = 32.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                ArtworkImage(
+                    url = state.artworkUri,
+                    contentDescription = state.title,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(1f),
+                    shape = MaterialTheme.shapes.extraLarge,
+                )
 
-            Spacer(Modifier.height(32.dp))
+                Spacer(Modifier.height(32.dp))
 
-            Text(
-                text = state.title,
-                style = MaterialTheme.typography.headlineSmallEmphasized,
-                textAlign = TextAlign.Center,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = state.artist,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            // File quality: original details, "original → transcoded" when streaming transcode is on,
-            // or just the transcoded format when playing a downloaded transcoded file.
-            qualityLabel?.let {
                 Text(
-                    text = it,
-                    style = MaterialTheme.typography.labelMedium,
+                    text = state.title,
+                    style = MaterialTheme.typography.headlineSmallEmphasized,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = state.artist,
+                    style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 6.dp),
                 )
-            }
-            // Source: playing from a local download vs streaming from the server.
-            if (state.hasMedia) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(top = 4.dp),
-                ) {
-                    Icon(
-                        imageVector = if (state.isLocal) Icons.Filled.Save else Icons.Filled.CloudQueue,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(14.dp),
-                    )
-                    Spacer(Modifier.width(4.dp))
+                // File quality: original details, "original → transcoded" when streaming transcode is on,
+                // or just the transcoded format when playing a downloaded transcoded file.
+                qualityLabel?.let {
                     Text(
-                        text = buildString {
-                            append(if (state.isLocal) "Downloaded" else "Streaming")
-                            // Append this track's ReplayGain value when the server has scanned it.
-                            state.normalizationGainDb?.let { append("  ·  ReplayGain %+.1f dB".format(it)) }
-                        },
-                        style = MaterialTheme.typography.labelSmall,
+                        text = it,
+                        style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 6.dp),
                     )
                 }
-            }
+                // Source: playing from a local download vs streaming from the server.
+                if (state.hasMedia) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(top = 4.dp),
+                    ) {
+                        Icon(
+                            imageVector = if (state.isLocal) Icons.Filled.Save else Icons.Filled.CloudQueue,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(14.dp),
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = buildString {
+                                append(if (state.isLocal) "Downloaded" else "Streaming")
+                                // Append this track's ReplayGain value when the server has scanned it.
+                                state.normalizationGainDb?.let { append("  ·  ReplayGain %+.1f dB".format(it)) }
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
 
-            Spacer(Modifier.height(24.dp))
+                Spacer(Modifier.height(24.dp))
 
-            // Collects the position flow internally so only the seek bar recomposes as it advances.
-            PlayerSeekBar(progress = viewModel.progress, onSeek = viewModel::seekTo)
+                // Collects the position flow internally so only the seek bar recomposes as it advances.
+                PlayerSeekBar(progress = viewModel.progress, onSeek = viewModel::seekTo)
 
-            Spacer(Modifier.height(24.dp))
+                Spacer(Modifier.height(24.dp))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceEvenly,
-            ) {
-                // Shuffle toggle — tinted when enabled.
-                IconButton(onClick = viewModel::toggleShuffle, modifier = Modifier.size(48.dp)) {
-                    Icon(
-                        imageVector = Icons.Filled.Shuffle,
-                        contentDescription = if (state.shuffleEnabled) "Shuffle on" else "Shuffle off",
-                        tint = if (state.shuffleEnabled) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                    )
-                }
-                IconButton(onClick = viewModel::previous, modifier = Modifier.size(56.dp)) {
-                    Icon(
-                        Icons.Filled.SkipPrevious,
-                        contentDescription = "Previous",
-                        modifier = Modifier.size(40.dp),
-                    )
-                }
-                FilledIconButton(onClick = viewModel::togglePlayPause, modifier = Modifier.size(72.dp)) {
-                    Icon(
-                        imageVector = if (state.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                        contentDescription = if (state.isPlaying) "Pause" else "Play",
-                        modifier = Modifier.size(40.dp),
-                    )
-                }
-                IconButton(onClick = viewModel::next, modifier = Modifier.size(56.dp)) {
-                    Icon(
-                        Icons.Filled.SkipNext,
-                        contentDescription = "Next",
-                        modifier = Modifier.size(40.dp),
-                    )
-                }
-                // Repeat toggle — off / all / one, tinted when active.
-                IconButton(onClick = viewModel::cycleRepeat, modifier = Modifier.size(48.dp)) {
-                    Icon(
-                        imageVector = if (state.repeatMode == RepeatMode.ONE) {
-                            Icons.Filled.RepeatOne
-                        } else {
-                            Icons.Filled.Repeat
-                        },
-                        contentDescription = "Repeat ${state.repeatMode.name.lowercase()}",
-                        tint = if (state.repeatMode == RepeatMode.OFF) {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        } else {
-                            MaterialTheme.colorScheme.primary
-                        },
-                    )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                ) {
+                    // Shuffle toggle — tinted when enabled.
+                    IconButton(onClick = viewModel::toggleShuffle, modifier = Modifier.size(48.dp)) {
+                        Icon(
+                            imageVector = Icons.Filled.Shuffle,
+                            contentDescription = if (state.shuffleEnabled) "Shuffle on" else "Shuffle off",
+                            tint = if (state.shuffleEnabled) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                        )
+                    }
+                    IconButton(onClick = viewModel::previous, modifier = Modifier.size(56.dp)) {
+                        Icon(
+                            Icons.Filled.SkipPrevious,
+                            contentDescription = "Previous",
+                            modifier = Modifier.size(40.dp),
+                        )
+                    }
+                    FilledIconButton(onClick = viewModel::togglePlayPause, modifier = Modifier.size(72.dp)) {
+                        Icon(
+                            imageVector = if (state.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                            contentDescription = if (state.isPlaying) "Pause" else "Play",
+                            modifier = Modifier.size(40.dp),
+                        )
+                    }
+                    IconButton(onClick = viewModel::next, modifier = Modifier.size(56.dp)) {
+                        Icon(
+                            Icons.Filled.SkipNext,
+                            contentDescription = "Next",
+                            modifier = Modifier.size(40.dp),
+                        )
+                    }
+                    // Repeat toggle — off / all / one, tinted when active.
+                    IconButton(onClick = viewModel::cycleRepeat, modifier = Modifier.size(48.dp)) {
+                        Icon(
+                            imageVector = if (state.repeatMode == RepeatMode.ONE) {
+                                Icons.Filled.RepeatOne
+                            } else {
+                                Icons.Filled.Repeat
+                            },
+                            contentDescription = "Repeat ${state.repeatMode.name.lowercase()}",
+                            tint = if (state.repeatMode == RepeatMode.OFF) {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            } else {
+                                MaterialTheme.colorScheme.primary
+                            },
+                        )
+                    }
                 }
             }
         }
@@ -393,6 +412,29 @@ private fun PlayerSeekBar(
             text = formatTime(p.durationMs),
             style = MaterialTheme.typography.labelMedium,
         )
+    }
+}
+
+/**
+ * A thin full-width strip of the three key M3 roles (primary / secondary / tertiary) that were
+ * derived from the album art by [AlbumTheme]. Only shown when dynamic album color is enabled.
+ */
+@Composable
+private fun AlbumColorBanner(modifier: Modifier = Modifier) {
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        modifier = modifier
+            .height(12.dp)
+            .clip(MaterialTheme.shapes.small),
+    ) {
+        listOf(scheme.primary, scheme.secondary, scheme.tertiary).forEach { color ->
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .background(color),
+            )
+        }
     }
 }
 
