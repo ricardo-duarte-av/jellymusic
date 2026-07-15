@@ -1,0 +1,73 @@
+package pt.aguiarvieira.jellymusic.ui.feature.settings
+
+/**
+ * One version's user-facing changes. Hand-written — NOT generated from commits.
+ *
+ * A [version] of `null` is the "Unreleased" bucket: changes committed to `main` but not yet cut into
+ * a tagged release. When a release is tagged, its unreleased entries move under a new heading stamped
+ * with the [version] and [date]. See CLAUDE.md — the changelog must be updated before every commit.
+ */
+data class ChangelogVersion(
+    val version: String?,
+    val date: String?, // dd/MM/yyyy
+    val changes: List<String>,
+)
+
+/** Newest first. Unreleased (version = null) always on top. */
+val CHANGELOG: List<ChangelogVersion> = listOf(
+    ChangelogVersion(
+        version = "0.1.36",
+        date = "15/07/2026",
+        changes = listOf(
+            "Added a Changelog screen and an About screen to Settings.",
+        ),
+    ),
+    ChangelogVersion(
+        version = "0.1.35",
+        date = "15/07/2026",
+        changes = listOf(
+            "Track cards now show full audio detail: codec, sample rate, bit depth, bitrate and ReplayGain.",
+        ),
+    ),
+    ChangelogVersion(
+        version = "0.1.34",
+        date = "15/07/2026",
+        changes = listOf(
+            "Show codec and ReplayGain info on track cards.",
+            "Show the current track's ReplayGain value on the now-playing screen.",
+        ),
+    ),
+    ChangelogVersion(
+        version = "0.1.33",
+        date = "15/07/2026",
+        changes = listOf(
+            "ReplayGain / loudness normalization: even out volume between tracks using the server's LUFS scan.",
+            "Added a Playback setting to toggle normalization and a pre-amp slider.",
+        ),
+    ),
+    ChangelogVersion(
+        version = "0.1.32",
+        date = "14/07/2026",
+        changes = listOf("Reduced battery drain during playback."),
+    ),
+    ChangelogVersion(
+        version = "0.1.31",
+        date = "14/07/2026",
+        changes = listOf("Fixed the home-screen widget buttons and playback-state mirroring."),
+    ),
+    ChangelogVersion(
+        version = "0.1.24",
+        date = "14/07/2026",
+        changes = listOf(
+            "Added the now-playing home-screen widget, with compact sizes.",
+            "New app icon.",
+        ),
+    ),
+    ChangelogVersion(
+        version = "0.1.0",
+        date = "10/07/2026",
+        changes = listOf(
+            "Initial releases: browse albums/artists/playlists, playback, search, offline downloads and Android Auto.",
+        ),
+    ),
+)

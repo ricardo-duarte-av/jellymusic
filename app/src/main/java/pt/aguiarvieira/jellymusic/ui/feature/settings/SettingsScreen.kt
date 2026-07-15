@@ -15,6 +15,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -34,6 +36,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -46,6 +49,8 @@ import pt.aguiarvieira.jellymusic.domain.model.STREAM_BITRATE_OPTIONS
 fun SettingsScreen(
     onBack: () -> Unit,
     onOpenDownloads: () -> Unit,
+    onOpenChangelog: () -> Unit,
+    onOpenAbout: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val settings by viewModel.streamSettings.collectAsStateWithLifecycle()
@@ -221,6 +226,50 @@ fun SettingsScreen(
                 }
                 Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
             }
+
+            HorizontalDivider()
+
+            // Changelog and About are always the last two entries (changelog first). See CLAUDE.md.
+            SettingsNavRow(
+                icon = Icons.Filled.History,
+                title = "Changelog",
+                subtitle = "What's new in each version",
+                onClick = onOpenChangelog,
+            )
+            SettingsNavRow(
+                icon = Icons.Filled.Info,
+                title = "About",
+                subtitle = "Version and source code",
+                onClick = onOpenAbout,
+            )
         }
+    }
+}
+
+/** A tappable settings entry that navigates to a sub-screen (icon · title/subtitle · chevron). */
+@Composable
+private fun SettingsNavRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, contentDescription = null)
+        Column(modifier = Modifier.weight(1f).padding(start = 16.dp)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
     }
 }

@@ -16,6 +16,8 @@ import pt.aguiarvieira.jellymusic.ui.feature.onboarding.ConnectServerScreen
 import pt.aguiarvieira.jellymusic.ui.feature.onboarding.LoginScreen
 import pt.aguiarvieira.jellymusic.ui.feature.player.FullPlayerScreen
 import pt.aguiarvieira.jellymusic.ui.feature.search.SearchScreen
+import pt.aguiarvieira.jellymusic.ui.feature.settings.AboutScreen
+import pt.aguiarvieira.jellymusic.ui.feature.settings.ChangelogScreen
 import pt.aguiarvieira.jellymusic.ui.feature.settings.SettingsScreen
 
 @Composable
@@ -114,6 +116,8 @@ fun AppNavHost(
             SettingsScreen(
                 onBack = { navController.popBackStack() },
                 onOpenDownloads = { navController.navigateSingleTop(Routes.Downloads) },
+                onOpenChangelog = { navController.navigateSingleTop(Routes.Changelog) },
+                onOpenAbout = { navController.navigateSingleTop(Routes.About) },
             )
         }
 
@@ -123,6 +127,14 @@ fun AppNavHost(
                 onAlbumClick = { id, name -> navController.navigateSingleTop(Routes.AlbumDetail(id, name)) },
                 onExpandPlayer = { navController.navigateSingleTop(Routes.Player) },
             )
+        }
+
+        composable<Routes.Changelog> {
+            ChangelogScreen(onBack = { navController.popBackStack() })
+        }
+
+        composable<Routes.About> {
+            AboutScreen(onBack = { navController.popBackStack() })
         }
     }
 }

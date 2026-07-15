@@ -42,4 +42,12 @@ object Routes {
     /** Offline downloads manager. */
     @Serializable
     object Downloads
+
+    /** Per-version list of changes (hand-maintained). */
+    @Serializable
+    object Changelog
+
+    /** App info: version, source links. */
+    @Serializable
+    object About
 }
