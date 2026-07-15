@@ -124,7 +124,7 @@ fun SettingsScreen(
                 ) {
                     Text("Pre-amp", style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
                     Text(
-                        text = String.format("%+.1f dB", preampDraft),
+                        text = "%+.1f dB".format(preampDraft),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
