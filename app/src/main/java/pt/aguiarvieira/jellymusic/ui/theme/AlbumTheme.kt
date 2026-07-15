@@ -40,11 +40,14 @@ fun AlbumTheme(artworkUrl: String?, content: @Composable () -> Unit) {
         content()
         return
     }
+    // TonalSpot (the stock Android dynamic-color style) keeps the accent hue close to the seed, so
+    // the UI visibly matches the album art. Expressive was livelier but hue-rotated the accents away
+    // from the cover's actual colours.
     val scheme = rememberDynamicColorScheme(
         seedColor = seed,
         isDark = isSystemInDarkTheme(),
         isAmoled = false,
-        style = PaletteStyle.Expressive,
+        style = PaletteStyle.TonalSpot,
     )
     MaterialExpressiveTheme(
         colorScheme = scheme,

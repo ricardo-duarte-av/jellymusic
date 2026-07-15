@@ -16,8 +16,8 @@ android {
         applicationId = "pt.aguiarvieira.jellymusic"
         minSdk = 29
         targetSdk = 37
-        versionCode = 38
-        versionName = "0.1.37"
+        versionCode = 39
+        versionName = "0.1.38"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }

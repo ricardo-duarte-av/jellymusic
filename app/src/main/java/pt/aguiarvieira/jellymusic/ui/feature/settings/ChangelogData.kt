@@ -16,6 +16,14 @@ data class ChangelogVersion(
 /** Newest first. Unreleased (version = null) always on top. */
 val CHANGELOG: List<ChangelogVersion> = listOf(
     ChangelogVersion(
+        version = "0.1.38",
+        date = "15/07/2026",
+        changes = listOf(
+            "Album-art colours now match the cover more closely (primary, a muted variant, " +
+                "and a complementary accent) instead of being shifted to unrelated hues.",
+        ),
+    ),
+    ChangelogVersion(
         version = "0.1.37",
         date = "15/07/2026",
         changes = listOf(

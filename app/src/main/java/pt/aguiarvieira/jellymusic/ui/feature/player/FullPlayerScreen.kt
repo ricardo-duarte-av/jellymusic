@@ -110,7 +110,8 @@ fun FullPlayerScreen(
                 .fillMaxSize()
                 .padding(padding),
         ) {
-            // 3-colour banner of the M3 roles extracted from the album art (when dynamic color is on).
+            // 3-colour banner of the M3 roles (primary / secondary / tertiary) generated from the
+            // album art by AlbumTheme, shown when dynamic color is on.
             if (LocalDynamicColorEnabled.current) {
                 AlbumColorBanner(
                     modifier = Modifier
@@ -416,8 +417,9 @@ private fun PlayerSeekBar(
 }
 
 /**
- * A thin full-width strip of the three key M3 roles (primary / secondary / tertiary) that were
- * derived from the album art by [AlbumTheme]. Only shown when dynamic album color is enabled.
+ * A thin full-width strip of the three key M3 roles (primary / secondary / tertiary) generated from
+ * the album art by [AlbumTheme]. With the TonalSpot palette these track the cover's hue: primary at
+ * the source hue, secondary a muted variant, tertiary a +60° shift.
  */
 @Composable
 private fun AlbumColorBanner(modifier: Modifier = Modifier) {
