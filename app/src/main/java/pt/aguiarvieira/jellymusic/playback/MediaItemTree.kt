@@ -109,7 +109,7 @@ class MediaItemTree @Inject constructor(
             .setDurationMs(track.durationMs)
             // Record what's actually playing (format + local/stream) so the UI can report it; this is
             // fixed for the item's lifetime rather than tracking the live settings.
-            .setExtras(StreamSettingsExtras.toBundle(playbackSettings, isLocal))
+            .setExtras(StreamSettingsExtras.toBundle(playbackSettings, isLocal, track.normalizationGainDb))
             .build()
         // Transcoded playback is served as HLS (seekable); direct play and local files are progressive.
         val transcodeStream = settings.transcode && !isLocal

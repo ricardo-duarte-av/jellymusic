@@ -178,7 +178,14 @@ class PlaybackConnection @Inject constructor(
             val isLocal = localUri != null
             val playbackSettings = if (isLocal) downloadManager.localFormat(trackId) ?: streamSettings else streamSettings
             val metadata = item.mediaMetadata.buildUpon()
-                .setExtras(StreamSettingsExtras.toBundle(playbackSettings, isLocal))
+                // Preserve the track's normalization gain across a settings-driven queue rebuild.
+                .setExtras(
+                    StreamSettingsExtras.toBundle(
+                        playbackSettings,
+                        isLocal,
+                        StreamSettingsExtras.gainDbFrom(item.mediaMetadata.extras),
+                    ),
+                )
                 .build()
             // Transcoded streams are HLS (seekable); clear the MIME otherwise so a switch back to
             // direct play rebuilds as a progressive item.
@@ -301,6 +308,7 @@ class PlaybackConnection @Inject constructor(
                     album = md.albumTitle?.toString(),
                     artworkUrl = md.artworkUri?.toString(),
                     durationMs = md.durationMs,
+                    normalizationGainDb = StreamSettingsExtras.gainDbFrom(md.extras),
                 )
             },
             index = c.currentMediaItemIndex.coerceAtLeast(0),

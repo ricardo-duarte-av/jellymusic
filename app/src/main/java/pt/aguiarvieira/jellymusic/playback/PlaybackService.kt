@@ -1,6 +1,7 @@
 package pt.aguiarvieira.jellymusic.playback
 
 import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import androidx.media3.common.AudioAttributes
@@ -8,7 +9,10 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.audio.AudioSink
+import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.extractor.DefaultExtractorsFactory
 import androidx.media3.session.CommandButton
@@ -81,6 +85,11 @@ class PlaybackService : MediaLibraryService() {
     private lateinit var player: ExoPlayer
     private lateinit var mediaSession: MediaLibrarySession
 
+    /** Applies per-track ReplayGain in the audio pipeline; gain is (re)set on transitions/settings. */
+    private val gainProcessor = GainAudioProcessor()
+    private var replayGainEnabled = true
+    private var replayGainPreampDb = 0f
+
     // Track being reported to the server, and its last observed position.
     private var reportedItemId: String? = null
     private var lastPositionMs: Long = 0L
@@ -112,6 +121,22 @@ class PlaybackService : MediaLibraryService() {
         val transcode = StreamSettingsExtras.settingsFrom(extras).transcode
         val isLocal = StreamSettingsExtras.isLocal(extras)
         return if (transcode && !isLocal) PlayMethod.TRANSCODE else PlayMethod.DIRECT_PLAY
+    }
+
+    /** Re-applies the ReplayGain level each time the playing track changes. */
+    private val gainListener = object : Player.Listener {
+        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) = applyGainForCurrentItem()
+    }
+
+    /**
+     * Computes and pushes the effective gain for the current track into [gainProcessor]: the track's
+     * Jellyfin normalization gain plus the manual preamp when ReplayGain is on, else unity (bypass).
+     */
+    private fun applyGainForCurrentItem() {
+        val trackGainDb = StreamSettingsExtras.gainDbFrom(player.currentMediaItem?.mediaMetadata?.extras)
+        gainProcessor.setGainDb(
+            if (replayGainEnabled) (trackGainDb ?: 0f) + replayGainPreampDb else null,
+        )
     }
 
     /**
@@ -190,7 +215,22 @@ class PlaybackService : MediaLibraryService() {
         val extractorsFactory = DefaultExtractorsFactory()
             .setConstantBitrateSeekingEnabled(true)
             .setConstantBitrateSeekingAlwaysEnabled(true)
-        player = ExoPlayer.Builder(this)
+        // Install the ReplayGain processor in the audio pipeline via a custom sink. Force float
+        // output so every bit depth (incl. 24-bit hi-res FLAC) reaches the processor as float PCM —
+        // its float branch then normalizes all of them, and boost gains avoid 16-bit clip
+        // quantization. Media3 falls back to 16-bit where the device can't do float, which the
+        // processor's 16-bit branch still handles.
+        val renderersFactory = object : DefaultRenderersFactory(this) {
+            override fun buildAudioSink(
+                context: Context,
+                enableFloatOutput: Boolean,
+                enableAudioTrackPlaybackParams: Boolean,
+            ): AudioSink = DefaultAudioSink.Builder(context)
+                .setEnableFloatOutput(true)
+                .setAudioProcessors(arrayOf(gainProcessor))
+                .build()
+        }
+        player = ExoPlayer.Builder(this, renderersFactory)
             .setMediaSourceFactory(DefaultMediaSourceFactory(this, extractorsFactory))
             .setAudioAttributes(
                 AudioAttributes.Builder()
@@ -218,7 +258,18 @@ class PlaybackService : MediaLibraryService() {
         }
         player.addListener(modeListener)
         player.addListener(widgetListener)
+        player.addListener(gainListener)
         pushWidgetUpdate()
+
+        // Keep ReplayGain settings live: re-apply to the current track whenever the toggle or preamp
+        // changes (and once on startup to seed the values).
+        serviceScope.launch {
+            settingsStore.replayGainSettings.collect { rg ->
+                replayGainEnabled = rg.enabled
+                replayGainPreampDb = rg.preampDb
+                applyGainForCurrentItem()
+            }
+        }
 
         // Periodic progress reports so the server's resume point/now-playing stays fresh.
         serviceScope.launch {

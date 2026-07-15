@@ -152,6 +152,7 @@ class MusicDownloadManager @Inject constructor(
                 transcoded = transcode,
                 codec = if (transcode) settings.codec.name else null,
                 bitrateKbps = if (transcode) settings.maxBitrateKbps else null,
+                normalizationGainDb = track.normalizationGainDb,
                 state = DownloadState.QUEUED.name,
                 filePath = null,
                 updatedAt = System.currentTimeMillis(),

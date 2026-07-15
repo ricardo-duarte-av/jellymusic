@@ -22,17 +22,23 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import pt.aguiarvieira.jellymusic.domain.model.AudioCodec
+import pt.aguiarvieira.jellymusic.domain.model.ReplayGainSettings
 import pt.aguiarvieira.jellymusic.domain.model.STREAM_BITRATE_OPTIONS
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -44,6 +50,7 @@ fun SettingsScreen(
 ) {
     val settings by viewModel.streamSettings.collectAsStateWithLifecycle()
     val dynamicTheme by viewModel.dynamicAlbumTheme.collectAsStateWithLifecycle()
+    val replayGain by viewModel.replayGainSettings.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {
@@ -83,6 +90,57 @@ fun SettingsScreen(
                     )
                 }
                 Switch(checked = dynamicTheme, onCheckedChange = viewModel::setDynamicAlbumTheme)
+            }
+
+            HorizontalDivider()
+
+            Text(
+                text = "Playback",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Loudness normalization", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        text = "Even out volume between tracks using the server's ReplayGain scan.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(checked = replayGain.enabled, onCheckedChange = viewModel::setReplayGainEnabled)
+            }
+
+            if (replayGain.enabled) {
+                // Local draft for smooth dragging; persisted only when the gesture finishes.
+                var preampDraft by remember { mutableFloatStateOf(replayGain.preampDb) }
+                LaunchedEffect(replayGain.preampDb) { preampDraft = replayGain.preampDb }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Pre-amp", style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
+                    Text(
+                        text = String.format("%+.1f dB", preampDraft),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Slider(
+                    value = preampDraft,
+                    onValueChange = { preampDraft = it },
+                    onValueChangeFinished = { viewModel.setReplayGainPreampDb(preampDraft) },
+                    valueRange = ReplayGainSettings.PREAMP_MIN_DB..ReplayGainSettings.PREAMP_MAX_DB,
+                )
+                Text(
+                    text = "Applies on top of each track's gain. Changes take effect immediately, " +
+                        "including on the current track.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
 
             HorizontalDivider()

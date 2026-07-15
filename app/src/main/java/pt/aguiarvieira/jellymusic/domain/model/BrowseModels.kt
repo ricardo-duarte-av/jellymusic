@@ -31,6 +31,12 @@ data class Track(
     val trackNumber: Int?,
     val durationMs: Long?,
     val artworkUrl: String?,
+    /**
+     * Jellyfin's loudness-normalization gain in dB (from its server-side LUFS scan), applied at
+     * playback by the ReplayGain audio processor. Negative attenuates loud masters, positive boosts
+     * quiet tracks. Null when the server hasn't scanned the item.
+     */
+    val normalizationGainDb: Float? = null,
 )
 
 /** Combined results of a library search, grouped by content type. */

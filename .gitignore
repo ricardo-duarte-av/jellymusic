@@ -53,3 +53,6 @@ replay_pid*
 
 #local buildscripts
 debug-build.sh
+
+# Project instructions (holds test-server credentials — keep local only)
+CLAUDE.md

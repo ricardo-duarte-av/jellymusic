@@ -15,13 +15,20 @@ object StreamSettingsExtras {
     private const val KEY_CODEC = "jm_codec"
     private const val KEY_BITRATE = "jm_bitrate"
     private const val KEY_LOCAL = "jm_local"
+    private const val KEY_GAIN_DB = "jm_gain_db"
 
-    fun toBundle(settings: StreamSettings, isLocal: Boolean): Bundle = Bundle().apply {
+    fun toBundle(settings: StreamSettings, isLocal: Boolean, gainDb: Float? = null): Bundle = Bundle().apply {
         putBoolean(KEY_TRANSCODE, settings.transcode)
         putString(KEY_CODEC, settings.codec.name)
         putInt(KEY_BITRATE, settings.maxBitrateKbps)
         putBoolean(KEY_LOCAL, isLocal)
+        // Jellyfin's LUFS normalization gain (dB) for this track, applied by GainAudioProcessor.
+        if (gainDb != null) putFloat(KEY_GAIN_DB, gainDb)
     }
+
+    /** The track's normalization gain in dB, or null when the server hasn't scanned it. */
+    fun gainDbFrom(extras: Bundle?): Float? =
+        if (extras?.containsKey(KEY_GAIN_DB) == true) extras.getFloat(KEY_GAIN_DB) else null
 
     fun settingsFrom(extras: Bundle?): StreamSettings {
         if (extras == null || !extras.containsKey(KEY_TRANSCODE)) return StreamSettings()

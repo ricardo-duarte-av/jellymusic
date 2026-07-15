@@ -3,6 +3,7 @@ package pt.aguiarvieira.jellymusic.data.settings
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -10,6 +11,7 @@ import pt.aguiarvieira.jellymusic.domain.model.AlbumSort
 import pt.aguiarvieira.jellymusic.domain.model.AudioCodec
 import pt.aguiarvieira.jellymusic.domain.model.MusicLibrary
 import pt.aguiarvieira.jellymusic.domain.model.PlaybackModes
+import pt.aguiarvieira.jellymusic.domain.model.ReplayGainSettings
 import pt.aguiarvieira.jellymusic.domain.model.StreamSettings
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
@@ -38,6 +40,14 @@ class SettingsStore @Inject constructor(
             codec = prefs[KEY_STREAM_CODEC]?.let { runCatching { AudioCodec.valueOf(it) }.getOrNull() }
                 ?: AudioCodec.OPUS,
             maxBitrateKbps = prefs[KEY_STREAM_BITRATE] ?: 320,
+        )
+    }
+
+    /** ReplayGain (loudness-normalization) playback preferences. Defaults to enabled, 0 dB preamp. */
+    val replayGainSettings: Flow<ReplayGainSettings> = context.dataStore.data.map { prefs ->
+        ReplayGainSettings(
+            enabled = prefs[KEY_REPLAYGAIN_ENABLED] ?: true,
+            preampDb = prefs[KEY_REPLAYGAIN_PREAMP_DB] ?: 0f,
         )
     }
 
@@ -82,6 +92,14 @@ class SettingsStore @Inject constructor(
         context.dataStore.edit { it[KEY_STREAM_BITRATE] = kbps }
     }
 
+    suspend fun setReplayGainEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[KEY_REPLAYGAIN_ENABLED] = enabled }
+    }
+
+    suspend fun setReplayGainPreampDb(db: Float) {
+        context.dataStore.edit { it[KEY_REPLAYGAIN_PREAMP_DB] = db }
+    }
+
     suspend fun setDynamicAlbumTheme(enabled: Boolean) {
         context.dataStore.edit { it[KEY_DYNAMIC_ALBUM_THEME] = enabled }
     }
@@ -107,6 +125,8 @@ class SettingsStore @Inject constructor(
         val KEY_STREAM_TRANSCODE = booleanPreferencesKey("stream_transcode")
         val KEY_STREAM_CODEC = stringPreferencesKey("stream_codec")
         val KEY_STREAM_BITRATE = intPreferencesKey("stream_bitrate_kbps")
+        val KEY_REPLAYGAIN_ENABLED = booleanPreferencesKey("replaygain_enabled")
+        val KEY_REPLAYGAIN_PREAMP_DB = floatPreferencesKey("replaygain_preamp_db")
         val KEY_DYNAMIC_ALBUM_THEME = booleanPreferencesKey("dynamic_album_theme")
         val KEY_ALBUM_SORT = stringPreferencesKey("album_sort")
         val KEY_ALBUM_SORT_DESC = booleanPreferencesKey("album_sort_descending")

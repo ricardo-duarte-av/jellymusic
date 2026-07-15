@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import pt.aguiarvieira.jellymusic.data.settings.SettingsStore
 import pt.aguiarvieira.jellymusic.domain.model.AudioCodec
+import pt.aguiarvieira.jellymusic.domain.model.ReplayGainSettings
 import pt.aguiarvieira.jellymusic.domain.model.StreamSettings
 import javax.inject.Inject
 
@@ -19,8 +20,19 @@ class SettingsViewModel @Inject constructor(
     val streamSettings = settingsStore.streamSettings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), StreamSettings())
 
+    val replayGainSettings = settingsStore.replayGainSettings
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ReplayGainSettings())
+
     val dynamicAlbumTheme = settingsStore.dynamicAlbumTheme
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+
+    fun setReplayGainEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsStore.setReplayGainEnabled(enabled) }
+    }
+
+    fun setReplayGainPreampDb(db: Float) {
+        viewModelScope.launch { settingsStore.setReplayGainPreampDb(db) }
+    }
 
     fun setDynamicAlbumTheme(enabled: Boolean) {
         viewModelScope.launch { settingsStore.setDynamicAlbumTheme(enabled) }

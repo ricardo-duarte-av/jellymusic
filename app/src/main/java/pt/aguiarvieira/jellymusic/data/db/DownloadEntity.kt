@@ -25,6 +25,8 @@ data class TrackDownloadEntity(
     val transcoded: Boolean,
     val codec: String?,        // AudioCodec.name when transcoded
     val bitrateKbps: Int?,     // when transcoded
+    /** Jellyfin LUFS normalization gain (dB), captured at download so ReplayGain works offline. */
+    val normalizationGainDb: Float? = null,
     val state: String,         // DownloadState.name
     val downloadedBytes: Long = 0L,
     val totalBytes: Long = 0L, // 0 when the server didn't advertise a length
@@ -61,4 +63,5 @@ fun TrackDownloadEntity.toDomainTrack(): Track = Track(
     durationMs = durationMs,
     // Prefer the cached local cover so downloaded tracks show art offline.
     artworkUrl = artworkPath?.let { "file://$it" } ?: artworkUrl,
+    normalizationGainDb = normalizationGainDb,
 )

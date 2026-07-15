@@ -44,6 +44,7 @@ internal fun BaseItemDto.toTrack(urlBuilder: StreamUrlBuilder) = Track(
     trackNumber = indexNumber,
     durationMs = runTimeTicks?.let { it / TICKS_PER_MS },
     artworkUrl = urlBuilder.imageUrl(albumId?.toString() ?: id.toString()),
+    normalizationGainDb = normalizationGain,
 )
 
 internal fun AlbumSort.toItemSortBy(): ItemSortBy = when (this) {
