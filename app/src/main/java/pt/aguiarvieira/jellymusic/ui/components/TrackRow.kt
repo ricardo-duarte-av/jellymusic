@@ -142,10 +142,19 @@ private fun trackSupporting(
     }
 }
 
-/** Compact "CODEC · ↓ local · RG ±x.x dB" line shown under a track title. Null when empty. */
+/**
+ * Compact metadata line shown under a track title, mirroring the now-playing quality label:
+ * "FLAC · 44.1 kHz · 24-bit · 1206 kbps · ↓ AAC 256 · RG ±x.x dB". Each part shows only when known;
+ * null when nothing is available.
+ */
 internal fun trackMetaLine(track: Track, downloadStatus: TrackDownloadStatus?): String? {
     val parts = buildList {
-        track.audioInfo?.codec?.let { add(it.uppercase()) }
+        track.audioInfo?.let { info ->
+            info.codec?.let { add(it.uppercase()) }
+            info.sampleRateHz?.let { add("%.1f kHz".format(it / 1000.0)) }
+            info.bitDepth?.let { add("$it-bit") }
+            info.bitrateKbps?.let { add("$it kbps") }
+        }
         downloadStatus?.localFormat?.let { add("↓ $it") }
         track.normalizationGainDb?.let { add("RG %+.1f dB".format(it)) }
     }
