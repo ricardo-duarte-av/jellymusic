@@ -10,6 +10,8 @@ enum class DownloadState { QUEUED, DOWNLOADING, COMPLETED, FAILED }
 data class TrackDownloadStatus(
     val state: DownloadState,
     val progress: Float = 0f,
+    /** Compact label of the local copy's format when completed, e.g. "AAC 256" or "Original". */
+    val localFormat: String? = null,
 ) {
     val isComplete: Boolean get() = state == DownloadState.COMPLETED
     val isActive: Boolean get() = state == DownloadState.QUEUED || state == DownloadState.DOWNLOADING

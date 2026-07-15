@@ -37,6 +37,8 @@ data class Track(
      * quiet tracks. Null when the server hasn't scanned the item.
      */
     val normalizationGainDb: Float? = null,
+    /** Original audio-stream details, populated only when the query requested MediaSources. */
+    val audioInfo: TrackAudioInfo? = null,
 )
 
 /** Combined results of a library search, grouped by content type. */

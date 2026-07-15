@@ -49,6 +49,8 @@ data class PlaybackUiState(
     val appliedStreamSettings: StreamSettings = StreamSettings(),
     /** True when the current track plays from a local downloaded file rather than streaming. */
     val isLocal: Boolean = false,
+    /** The current track's Jellyfin ReplayGain value in dB, or null when unscanned. */
+    val normalizationGainDb: Float? = null,
 )
 
 /**
@@ -264,6 +266,7 @@ class PlaybackConnection @Inject constructor(
             },
             appliedStreamSettings = StreamSettingsExtras.settingsFrom(c.currentMediaItem?.mediaMetadata?.extras),
             isLocal = StreamSettingsExtras.isLocal(c.currentMediaItem?.mediaMetadata?.extras),
+            normalizationGainDb = StreamSettingsExtras.gainDbFrom(c.currentMediaItem?.mediaMetadata?.extras),
         )
         updateProgress(c)
 

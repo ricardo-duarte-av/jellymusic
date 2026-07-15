@@ -165,6 +165,8 @@ class MusicRepositoryImpl @Inject constructor(
                 GetItemsRequest(
                     parentId = UUID.fromString(albumId),
                     includeItemTypes = listOf(BaseItemKind.AUDIO),
+                    // MediaSources carries the audio stream's codec/rate/depth, shown on track rows.
+                    fields = listOf(ItemFields.MEDIA_SOURCES),
                 ),
             ).content.items
                 .map { it.toTrack(urlBuilder) }
@@ -197,7 +199,10 @@ class MusicRepositoryImpl @Inject constructor(
 
     override suspend fun getPlaylistTracks(playlistId: String): Result<List<Track>> = query { api ->
         PlaylistsApi(api).getPlaylistItems(
-            GetPlaylistItemsRequest(playlistId = UUID.fromString(playlistId)),
+            GetPlaylistItemsRequest(
+                playlistId = UUID.fromString(playlistId),
+                fields = listOf(ItemFields.MEDIA_SOURCES),
+            ),
         ).content.items.map { it.toTrack(urlBuilder) }
     }
 
@@ -216,6 +221,7 @@ class MusicRepositoryImpl @Inject constructor(
                         enableUserData = false,
                         imageTypeLimit = 1,
                         enableImageTypes = listOf(ImageType.PRIMARY),
+                        fields = listOf(ItemFields.MEDIA_SOURCES),
                     ),
                 ).content.items.map { it.toTrack(urlBuilder) }
             }

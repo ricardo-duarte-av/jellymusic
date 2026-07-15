@@ -55,9 +55,7 @@ fun TrackRow(
             headlineContent = {
                 Text(track.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
             },
-            supportingContent = track.artist?.let { artist ->
-                { Text(artist, maxLines = 1, overflow = TextOverflow.Ellipsis) }
-            },
+            supportingContent = trackSupporting(track, downloadStatus),
             leadingContent = {
                 if (showArtwork) {
                     ArtworkImage(
@@ -115,6 +113,43 @@ fun TrackRow(
             }
         }
     }
+}
+
+/**
+ * Supporting slot for a track row: the artist, plus a compact metadata line combining the upstream
+ * codec, the downloaded local format (when present), and the ReplayGain value. Null when there's
+ * nothing to show, so the row stays single-line.
+ */
+private fun trackSupporting(
+    track: Track,
+    downloadStatus: TrackDownloadStatus?,
+): (@Composable () -> Unit)? {
+    val meta = trackMetaLine(track, downloadStatus)
+    if (track.artist == null && meta == null) return null
+    return {
+        Column {
+            track.artist?.let { Text(it, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+            meta?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+/** Compact "CODEC · ↓ local · RG ±x.x dB" line shown under a track title. Null when empty. */
+internal fun trackMetaLine(track: Track, downloadStatus: TrackDownloadStatus?): String? {
+    val parts = buildList {
+        track.audioInfo?.codec?.let { add(it.uppercase()) }
+        downloadStatus?.localFormat?.let { add("↓ $it") }
+        track.normalizationGainDb?.let { add("RG %+.1f dB".format(it)) }
+    }
+    return parts.takeIf { it.isNotEmpty() }?.joinToString("  ·  ")
 }
 
 private fun formatDuration(ms: Long): String {

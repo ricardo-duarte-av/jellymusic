@@ -161,7 +161,11 @@ fun FullPlayerScreen(
                     )
                     Spacer(Modifier.width(4.dp))
                     Text(
-                        text = if (state.isLocal) "Downloaded" else "Streaming",
+                        text = buildString {
+                            append(if (state.isLocal) "Downloaded" else "Streaming")
+                            // Append this track's ReplayGain value when the server has scanned it.
+                            state.normalizationGainDb?.let { append("  ·  ReplayGain %+.1f dB".format(it)) }
+                        },
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

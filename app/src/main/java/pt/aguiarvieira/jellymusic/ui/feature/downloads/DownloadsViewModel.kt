@@ -98,6 +98,12 @@ class DownloadsViewModel @Inject constructor(
             downloadedBytes > 0 && denom > 0 -> (downloadedBytes.toFloat() / denom).coerceIn(0f, 0.99f)
             else -> -1f // queued or unknown size → indeterminate
         }
-        return TrackDownloadStatus(downloadState, progress)
+        // The local copy's format, shown on track rows once downloaded.
+        val localFormat = when {
+            downloadState != DownloadState.COMPLETED -> null
+            transcoded -> listOfNotNull(codec, bitrateKbps?.toString()).joinToString(" ").ifEmpty { null }
+            else -> "Original"
+        }
+        return TrackDownloadStatus(downloadState, progress, localFormat)
     }
 }

@@ -70,6 +70,7 @@ import pt.aguiarvieira.jellymusic.ui.common.ContentState
 import pt.aguiarvieira.jellymusic.ui.components.AlbumCard
 import pt.aguiarvieira.jellymusic.ui.components.ArtworkImage
 import pt.aguiarvieira.jellymusic.ui.components.TrackRow
+import pt.aguiarvieira.jellymusic.ui.components.trackMetaLine
 import pt.aguiarvieira.jellymusic.ui.feature.downloads.DownloadDialogs
 import pt.aguiarvieira.jellymusic.ui.feature.downloads.DownloadTarget
 import pt.aguiarvieira.jellymusic.ui.feature.downloads.DownloadsViewModel
@@ -415,6 +416,16 @@ private fun TrackCard(
                             Text(
                                 text = it,
                                 style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        // Upstream codec + local download format + ReplayGain.
+                        trackMetaLine(track, downloadStatus)?.let {
+                            Text(
+                                text = it,
+                                style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,

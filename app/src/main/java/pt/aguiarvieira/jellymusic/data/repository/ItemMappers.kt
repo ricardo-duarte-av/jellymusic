@@ -2,12 +2,14 @@ package pt.aguiarvieira.jellymusic.data.repository
 
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.ItemSortBy
+import org.jellyfin.sdk.model.api.MediaStreamType
 import pt.aguiarvieira.jellymusic.data.jellyfin.StreamUrlBuilder
 import pt.aguiarvieira.jellymusic.domain.model.Album
 import pt.aguiarvieira.jellymusic.domain.model.AlbumSort
 import pt.aguiarvieira.jellymusic.domain.model.Artist
 import pt.aguiarvieira.jellymusic.domain.model.Playlist
 import pt.aguiarvieira.jellymusic.domain.model.Track
+import pt.aguiarvieira.jellymusic.domain.model.TrackAudioInfo
 
 private const val TICKS_PER_MS = 10_000L
 
@@ -45,6 +47,18 @@ internal fun BaseItemDto.toTrack(urlBuilder: StreamUrlBuilder) = Track(
     durationMs = runTimeTicks?.let { it / TICKS_PER_MS },
     artworkUrl = urlBuilder.imageUrl(albumId?.toString() ?: id.toString()),
     normalizationGainDb = normalizationGain,
+    // Populated only when the query requested MediaSources (e.g. album/playlist/search track lists).
+    audioInfo = mediaSources?.firstOrNull()?.mediaStreams
+        ?.firstOrNull { it.type == MediaStreamType.AUDIO }
+        ?.let {
+            TrackAudioInfo(
+                codec = it.codec,
+                sampleRateHz = it.sampleRate,
+                bitDepth = it.bitDepth,
+                bitrateKbps = it.bitRate?.let { bps -> bps / 1000 },
+                channels = it.channels,
+            )
+        },
 )
 
 internal fun AlbumSort.toItemSortBy(): ItemSortBy = when (this) {
