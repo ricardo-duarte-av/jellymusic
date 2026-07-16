@@ -109,8 +109,17 @@ class ScreenshotTest {
             composeRule.onAllNodesWithTag("miniPlayer").onFirst().performClick()
             composeRule.waitForIdle()
         }
-        // Collapse the player / leave album detail.
-        repeat(2) { runCatching { pressBack() } }
+        // Return to Home deterministically: collapse the full player if it opened, then a
+        // single Back off album detail. (A fixed number of Backs is fragile — if the player
+        // didn't expand, one Back too many exits the app entirely.)
+        runCatching {
+            composeRule.onNodeWithContentDescription("Collapse").performClick()
+            composeRule.waitForIdle()
+        }
+        runCatching {
+            pressBack()
+            waitForText("Albums")
+        }
 
         // --- Search ----------------------------------------------------------------
         capture("06-search") {
