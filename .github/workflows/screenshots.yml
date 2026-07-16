@@ -175,13 +175,15 @@ jobs:
         run: |
           set -uo pipefail
           rm -rf pulled && mkdir -p pulled
-          # The test writes to the app's internal files dir; reach it via run-as (the debug
-          # build is debuggable). exec-out keeps the PNG bytes intact (no newline mangling).
-          files=$(adb exec-out run-as "$APP_ID" ls files/screenshots 2>/dev/null | tr -d '\r')
-          echo "on-device screenshots: $files"
-          for f in $files; do
-            adb exec-out run-as "$APP_ID" cat "files/screenshots/$f" > "pulled/$f"
-          done
+          # The test writes to the app's internal files dir. The google_apis (non-Play)
+          # image is rootable, so become root and read it directly — simpler and more
+          # reliable than run-as (which reported "unknown package" here).
+          adb root
+          adb wait-for-device
+          for i in $(seq 1 10); do adb shell true 2>/dev/null && break; sleep 2; done
+          adb pull "/data/user/0/${APP_ID}/files/screenshots/." pulled/ \
+            || adb pull "/data/data/${APP_ID}/files/screenshots/." pulled/ \
+            || true
           ls -la pulled || true
 
       - name: Stage screenshots
