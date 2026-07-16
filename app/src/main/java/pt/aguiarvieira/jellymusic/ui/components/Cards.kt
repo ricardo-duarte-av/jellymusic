@@ -30,6 +30,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -58,6 +59,8 @@ fun AlbumCard(
         Card(
             modifier = modifier
                 .padding(6.dp)
+                // Stable handle for the screenshot instrumentation test to open an album.
+                .testTag("albumCard")
                 .combinedClickable(
                     onClick = onClick,
                     onLongClick = if (hasMenu) ({ menuOpen = true }) else null,
