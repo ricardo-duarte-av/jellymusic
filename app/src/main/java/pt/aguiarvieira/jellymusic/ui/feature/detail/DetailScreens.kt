@@ -51,6 +51,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
@@ -314,10 +315,10 @@ private fun AlbumHeader(
     onPlay: () -> Unit,
     onShuffle: () -> Unit,
 ) {
+    Column(modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface)) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surface)
             .padding(horizontal = 24.dp, vertical = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -360,6 +361,18 @@ private fun AlbumHeader(
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+    // Bottom shade marking where the pinned header ends and the track list begins.
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .height(8.dp)
+            .background(
+                Brush.verticalGradient(
+                    listOf(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f), Color.Transparent),
+                ),
+            ),
+    )
     }
 }
 
