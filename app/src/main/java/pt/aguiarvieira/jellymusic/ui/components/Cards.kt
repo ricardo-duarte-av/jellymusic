@@ -139,6 +139,7 @@ fun AlbumCard(
 fun ArtistCard(artist: Artist, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
+            .testTag("artistCard")
             .clickable(onClick = onClick)
             .padding(6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -167,7 +168,9 @@ fun ArtistCard(artist: Artist, onClick: () -> Unit, modifier: Modifier = Modifie
 fun PlaylistCard(playlist: Playlist, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Card(
         onClick = onClick,
-        modifier = modifier.padding(6.dp),
+        modifier = modifier
+            .testTag("playlistCard")
+            .padding(6.dp),
     ) {
         Card(modifier = Modifier.padding(8.dp)) {
             ArtworkImage(

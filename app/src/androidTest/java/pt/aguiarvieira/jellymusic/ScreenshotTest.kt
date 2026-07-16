@@ -76,23 +76,27 @@ class ScreenshotTest {
         // Two "Sign in" nodes exist (heading + button); the last is the button.
         composeRule.onAllNodesWithText("Sign in").onLast().performClick()
 
-        // Landed on the browse shell.
-        waitForText("Albums")
+        // Landed on the browse shell — wait for the album grid to actually populate
+        // (the "Albums" tab label is present instantly, so it's not a content signal).
+        waitForTag("albumCard")
+        settle()
         screenshot("01-albums")
 
         // --- Browse tabs -----------------------------------------------------------
         capture("02-artists") {
             composeRule.onNodeWithText("Artists").performClick()
-            waitForText("Artists")
+            waitForTag("artistCard")
+            settle()
         }
         capture("03-playlists") {
             composeRule.onNodeWithText("Playlists").performClick()
-            composeRule.waitForIdle()
+            waitForTag("playlistCard")
+            settle()
         }
         // Back to Albums for the content-dependent captures below.
         runCatching {
             composeRule.onNodeWithText("Albums").performClick()
-            waitForText("Albums")
+            waitForTag("albumCard")
         }
 
         // --- Album detail + now-playing (content-dependent, best-effort) -----------
@@ -101,6 +105,7 @@ class ScreenshotTest {
         capture("04-album-detail") {
             composeRule.onAllNodesWithTag("albumCard").onFirst().performClick()
             waitForText("Play")
+            settle()
         }
         capture("05-now-playing") {
             // Start the album, then expand the mini-player into the full player.
@@ -126,7 +131,7 @@ class ScreenshotTest {
             composeRule.onNodeWithContentDescription("Search").performClick()
             waitForText("Search music")
             composeRule.onNode(hasSetTextAction()).performTextInput("a")
-            composeRule.waitForIdle()
+            settle()
         }
         // Close the IME first — otherwise the first Back only dismisses the keyboard and
         // leaves us on Search instead of returning Home.
@@ -169,6 +174,18 @@ class ScreenshotTest {
             composeRule.onAllNodesWithText(text, substring = true)
                 .fetchSemanticsNodes().isNotEmpty()
         }
+    }
+
+    /** Waits until at least one node with [tag] exists — i.e. real content has loaded. */
+    private fun waitForTag(tag: String, timeoutMs: Long = NETWORK_TIMEOUT_MS) {
+        composeRule.waitUntil(timeoutMs) {
+            composeRule.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()
+        }
+    }
+
+    /** Brief pause so async artwork (Coil) finishes decoding before the screenshot. */
+    private fun settle(ms: Long = 2_000) {
+        Thread.sleep(ms)
     }
 
     private fun pressBack() {
