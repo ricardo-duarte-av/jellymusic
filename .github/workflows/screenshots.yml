@@ -91,19 +91,54 @@ jobs:
 
       - name: Boot emulator
         run: |
-          set -euo pipefail
-          nohup "$ANDROID_HOME/emulator/emulator" -avd ci \
+          # Note: no `set -e` — we handle failures explicitly so we can dump logs first.
+          set -uo pipefail
+          EMU="$ANDROID_HOME/emulator/emulator"
+          nohup "$EMU" -avd ci \
             -no-window -no-snapshot -no-boot-anim -noaudio \
-            -gpu swiftshader_indirect -camera-back none -accel on \
+            -gpu swiftshader_indirect -camera-back none -accel on -verbose \
             > "$RUNNER_TEMP/emulator.log" 2>&1 &
-          # Wait for the system to finish booting (up to ~10 min).
-          adb wait-for-device
-          timeout 600 bash -c 'until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\r")" = "1" ]; do sleep 3; done'
+          EMU_PID=$!
+          echo "emulator pid=$EMU_PID"
+          # Stream the emulator log into the job output so a hang is diagnosable live.
+          tail -F "$RUNNER_TEMP/emulator.log" & TAIL_PID=$!
+
+          # 1) Bounded wait for the device to register with adb (unbounded wait-for-device
+          #    is what silently hangs forever when the emulator dies on launch).
+          if ! timeout 180 adb wait-for-device; then
+            echo "::error::emulator never registered with adb within 180s"
+            echo "--- emulator.log ---"; cat "$RUNNER_TEMP/emulator.log" || true
+            adb devices || true
+            exit 1
+          fi
+
+          # 2) Bounded wait for full boot (120 * 5s = 600s), with progress + liveness check.
+          booted=0
+          for i in $(seq 1 120); do
+            if ! kill -0 "$EMU_PID" 2>/dev/null; then
+              echo "::error::emulator process exited during boot"
+              break
+            fi
+            state=$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')
+            if [ "$state" = "1" ]; then booted=1; break; fi
+            echo "[boot wait $((i * 5))s] sys.boot_completed='$state'"
+            sleep 5
+          done
+
+          kill "$TAIL_PID" 2>/dev/null || true
+          if [ "$booted" != "1" ]; then
+            echo "::error::emulator failed to finish booting"
+            echo "--- emulator.log (tail 200) ---"; tail -n 200 "$RUNNER_TEMP/emulator.log" || true
+            adb devices || true
+            exit 1
+          fi
+
           adb shell input keyevent 82 || true   # dismiss lock screen
           # Static UI: kill system animations.
-          adb shell settings put global window_animation_scale 0
-          adb shell settings put global transition_animation_scale 0
-          adb shell settings put global animator_duration_scale 0
+          adb shell settings put global window_animation_scale 0 || true
+          adb shell settings put global transition_animation_scale 0 || true
+          adb shell settings put global animator_duration_scale 0 || true
+          echo "Emulator booted."
 
       - name: Run screenshot test
         run: |
