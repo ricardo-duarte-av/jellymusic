@@ -4,13 +4,12 @@ A music-only Android client for [Jellyfin](https://jellyfin.org), built with Mat
 Browse your libraries, stream or download for offline, and play on your phone, tablet, or in the car —
 with a now-playing screen that recolors itself to the album art.
 
-![JellyMusic — player, albums and artists](screenshots/jellyfunc.jpg)
-
 <p>
-  <img src="screenshots/jellymusic1.jpg" width="220" alt="Albums grid" />
-  <img src="screenshots/jellymusic2.jpg" width="220" alt="Artists" />
-  <img src="screenshots/jellymusic3.jpg" width="220" alt="Album detail" />
-  <img src="screenshots/jellymusic5.jpg" width="220" alt="Now playing" />
+  <img src="screenshots/albumlist.jpg" width="220" alt="Albums grid" />
+  <img src="screenshots/albumview.jpg" width="220" alt="Album detail" />
+  <img src="screenshots/nowplaying.jpg" width="220" alt="Now playing" />
+  <img src="screenshots/search_screen.jpg" width="220" alt="Search" />
+  <img src="screenshots/widget.jpg" width="220" alt="Home-screen widget" />
 </p>
 
 ## Features
@@ -21,7 +20,7 @@ with a now-playing screen that recolors itself to the album art.
 
 **Browse**
 - Albums (paged, sortable), artists and playlists; pick a single library or "All music"
-- Search across songs, albums, artists and playlists
+- Search across songs, albums, artists and playlists, with per-type filter chips
 - Album view with collapsing cover art, per-disc grouping, and play / shuffle
 
 **Playback**
@@ -29,6 +28,7 @@ with a now-playing screen that recolors itself to the album art.
 - Shuffle, repeat, and an "Up Next" queue you can reorder into and remove from
 - The queue survives the app being killed, and resumes from a Bluetooth / media-button press
 - Reports play counts, resume points and "now playing" back to your Jellyfin server
+- A home-screen widget with album art, transport controls and an album-coloured icon
 
 **Now playing**
 - Per-album dynamic color theme derived from the cover art (toggle in Settings)

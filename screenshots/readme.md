@@ -2,9 +2,8 @@
 
 | File | Shows |
 | --- | --- |
-| `jellyfunc.jpg` | Composite hero — now-playing, albums grid and artists |
-| `jellymusic1.jpg` | Albums grid with library picker, sort and search |
-| `jellymusic2.jpg` | Artists |
-| `jellymusic3.jpg` | Album detail — collapsing cover, play / shuffle, track list |
-| `jellymusic4.jpg` | Now playing — quality readout and streaming indicator |
-| `jellymusic5.jpg` | Now playing — per-album color derived from the cover |
+| `albumlist.jpg` | Albums grid with library picker, sort and search |
+| `albumview.jpg` | Album detail — collapsing cover, play / shuffle, track list with quality readout |
+| `nowplaying.jpg` | Now playing — album-colour banner, quality readout, streaming and ReplayGain indicators |
+| `search_screen.jpg` | Search — per-type filter chips (Playlists / Artists / Albums / Songs) and grouped results |
+| `widget.jpg` | Home-screen widget — album art, controls and album-coloured icon |
