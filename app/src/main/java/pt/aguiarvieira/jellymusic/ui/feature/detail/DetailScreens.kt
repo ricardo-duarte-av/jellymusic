@@ -362,14 +362,14 @@ private fun AlbumHeader(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
-    // Bottom shade marking where the pinned header ends and the track list begins.
+    // Bottom shade (album-tinted) marking where the pinned header ends and the list begins.
     Box(
         Modifier
             .fillMaxWidth()
             .height(8.dp)
             .background(
                 Brush.verticalGradient(
-                    listOf(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f), Color.Transparent),
+                    listOf(MaterialTheme.colorScheme.primary.copy(alpha = 0.20f), Color.Transparent),
                 ),
             ),
     )

@@ -46,14 +46,14 @@ fun MiniPlayer(
     // Retint to the now-playing album's cover.
     AlbumTheme(artworkUrl = state.artworkUri) {
         Column(modifier.fillMaxWidth()) {
-        // Soft top shade so the bar separates from the (similarly-coloured) list above it.
+        // Soft top shade (album-tinted) so the bar separates from the list above it.
         Box(
             Modifier
                 .fillMaxWidth()
                 .height(6.dp)
                 .background(
                     Brush.verticalGradient(
-                        listOf(Color.Transparent, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)),
+                        listOf(Color.Transparent, MaterialTheme.colorScheme.primary.copy(alpha = 0.20f)),
                     ),
                 ),
         )
