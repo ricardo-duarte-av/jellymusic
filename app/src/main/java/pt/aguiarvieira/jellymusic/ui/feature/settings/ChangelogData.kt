@@ -16,6 +16,14 @@ data class ChangelogVersion(
 /** Newest first. Unreleased (version = null) always on top. */
 val CHANGELOG: List<ChangelogVersion> = listOf(
     ChangelogVersion(
+        version = "0.1.40",
+        date = "16/07/2026",
+        changes = listOf(
+            "Search results are now ordered Playlists, Artists, Albums, Songs, with filter " +
+                "buttons above the results to show only the kinds you tap.",
+        ),
+    ),
+    ChangelogVersion(
         version = "0.1.39",
         date = "16/07/2026",
         changes = listOf(
