@@ -58,6 +58,9 @@ import coil3.toBitmap
 import pt.aguiarvieira.jellymusic.MainActivity
 import pt.aguiarvieira.jellymusic.R
 
+/** Circle background + glyph tint for the app-icon badge, both pulled from the album scheme. */
+private data class IconColors(val background: Color, val glyph: Color)
+
 /** Below this width the widget shows transport only; at or above it, shuffle + repeat are added. */
 private val WIDE_BREAKPOINT = 260.dp
 
@@ -94,29 +97,33 @@ class NowPlayingWidget : GlanceAppWidget() {
             val artwork by produceState<Bitmap?>(initialValue = null, key1 = data.artworkUri) {
                 value = data.artworkUri?.let { loadArtwork(context, it) }
             }
-            WidgetBody(data, artwork, albumIconColor(artwork))
+            WidgetBody(data, artwork, albumIconColors(artwork))
         }
     }
 
     /**
-     * Tint for the app-icon glyph, derived from the current cover the same way the app themes its
-     * album/player surfaces: a Palette seed fed through MaterialKolor. We build a dark scheme (the
-     * widget always sits on a dark scrim) and take its primary so the glyph stays light and legible.
-     * Falls back to white when there's no art or no seed can be extracted.
+     * Colours for the app-icon badge, derived from the current cover the same way the app themes its
+     * album/player surfaces: a Palette seed fed through MaterialKolor's TonalSpot scheme (matching the
+     * in-app tint, so the icon reflects the album's real hue rather than a rotated one). We build a
+     * dark scheme (the widget always sits on a dark scrim) and take the primaryContainer / on-pair so
+     * the note stays legible on its disc. Falls back to a neutral disc + white note when there's no
+     * art or no seed can be extracted.
      */
-    private fun albumIconColor(bitmap: Bitmap?): Color {
-        bitmap ?: return Color.White
+    private fun albumIconColors(bitmap: Bitmap?): IconColors {
+        val fallback = IconColors(background = Color(0x33FFFFFF), glyph = Color.White)
+        bitmap ?: return fallback
         val palette = Palette.from(bitmap).generate()
         val rgb = palette.vibrantSwatch?.rgb
             ?: palette.dominantSwatch?.rgb
             ?: palette.mutedSwatch?.rgb
-            ?: return Color.White
-        return dynamicColorScheme(
+            ?: return fallback
+        val scheme = dynamicColorScheme(
             seedColor = Color(rgb),
             isDark = true,
             isAmoled = false,
-            style = PaletteStyle.Expressive,
-        ).primary
+            style = PaletteStyle.TonalSpot,
+        )
+        return IconColors(background = scheme.primaryContainer, glyph = scheme.onPrimaryContainer)
     }
 
     private suspend fun loadArtwork(context: Context, uri: String): Bitmap? {
@@ -133,7 +140,7 @@ class NowPlayingWidget : GlanceAppWidget() {
 
 @Composable
 @UnstableApi
-private fun WidgetBody(data: NowPlayingWidgetData, artwork: Bitmap?, iconColor: Color) {
+private fun WidgetBody(data: NowPlayingWidgetData, artwork: Bitmap?, iconColors: IconColors) {
     val context = LocalContext.current
     val size = LocalSize.current
     val wide = size.width >= WIDE_BREAKPOINT
@@ -182,35 +189,44 @@ private fun WidgetBody(data: NowPlayingWidgetData, artwork: Bitmap?, iconColor: 
 
         when {
             !data.hasMedia -> EmptyState(compact, openPlayer)
-            compact -> CompactContent(data, showToggles, showIcon, iconColor, openPlayer)
+            compact -> CompactContent(data, showToggles, showIcon, iconColors, openPlayer)
             else -> FullContent(data, showToggles, openPlayer)
         }
 
         // Tall layouts show the app icon as a top-right overlay (the compact form places it inline
         // at the end of the row instead — see CompactContent).
-        if (!compact) AppIconOverlay(iconColor)
+        if (!compact) AppIconOverlay(iconColors)
     }
 }
 
-/** App-icon glyph pinned to the top-right corner, tinted with the album color, identifying the widget. */
+/** App-icon badge pinned to the top-right corner, coloured from the album, identifying the widget. */
 @Composable
-private fun AppIconOverlay(iconColor: Color) {
+private fun AppIconOverlay(iconColors: IconColors) {
     Box(
         modifier = GlanceModifier.fillMaxSize().padding(10.dp),
         contentAlignment = Alignment.TopEnd,
     ) {
-        AppIcon(iconColor, 24.dp)
+        AppIcon(iconColors, 24.dp)
     }
 }
 
+/** The launcher music-note glyph on a circular album-coloured disc: disc = background, note = glyph. */
 @Composable
-private fun AppIcon(iconColor: Color, size: Dp) {
-    Image(
-        provider = ImageProvider(R.drawable.ic_launcher_foreground),
-        contentDescription = "JellyMusic",
-        colorFilter = ColorFilter.tint(ColorProvider(iconColor)),
-        modifier = GlanceModifier.size(size),
-    )
+private fun AppIcon(iconColors: IconColors, size: Dp) {
+    Box(
+        modifier = GlanceModifier
+            .size(size)
+            .cornerRadius(size / 2)
+            .background(iconColors.background),
+        contentAlignment = Alignment.Center,
+    ) {
+        Image(
+            provider = ImageProvider(R.drawable.ic_launcher_foreground),
+            contentDescription = "JellyMusic",
+            colorFilter = ColorFilter.tint(ColorProvider(iconColors.glyph)),
+            modifier = GlanceModifier.size(size),
+        )
+    }
 }
 
 /** Tall layout: title/artist stacked at the bottom with the transport row beneath. */
@@ -245,7 +261,7 @@ private fun CompactContent(
     data: NowPlayingWidgetData,
     showToggles: Boolean,
     showIcon: Boolean,
-    iconColor: Color,
+    iconColors: IconColors,
     openPlayer: Action,
 ) {
     Row(
@@ -270,7 +286,7 @@ private fun CompactContent(
         // enough — a 4x1; a 3x1 omits it entirely).
         if (showIcon) {
             Spacer(GlanceModifier.width(8.dp))
-            AppIcon(iconColor, 22.dp)
+            AppIcon(iconColors, 22.dp)
         }
     }
 }
