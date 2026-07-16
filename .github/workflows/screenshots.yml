@@ -64,6 +64,13 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
+      # Pin the AVD location so avdmanager (which creates it) and the emulator (which
+      # reads it) agree. Without this they can disagree — avdmanager writing under the
+      # newer ANDROID_USER_HOME while the emulator still looks in $HOME/.android/avd —
+      # so the emulator reports "Unknown AVD name [ci]".
+      - name: Configure AVD location
+        run: echo "ANDROID_AVD_HOME=$HOME/.android/avd" >> "$GITHUB_ENV"
+
       - name: Install Android 37 SDK, emulator and system image
         run: |
           set -euo pipefail
@@ -86,8 +93,17 @@ jobs:
       - name: Create AVD
         run: |
           set -euo pipefail
+          mkdir -p "$ANDROID_AVD_HOME"
           echo "no" | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd \
             --force --name ci --package "$SYSTEM_IMAGE" --device "$DEVICE"
+          # Verify the emulator can actually see it before we try to boot.
+          echo "ANDROID_AVD_HOME=$ANDROID_AVD_HOME"
+          ls -la "$ANDROID_AVD_HOME" || true
+          if ! "$ANDROID_HOME/emulator/emulator" -list-avds | grep -qx ci; then
+            echo "::error::AVD 'ci' not visible to the emulator after creation"
+            "$ANDROID_HOME/emulator/emulator" -list-avds || true
+            exit 1
+          fi
 
       - name: Boot emulator
         run: |
