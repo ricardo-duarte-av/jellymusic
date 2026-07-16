@@ -1,12 +1,15 @@
 package pt.aguiarvieira.jellymusic.ui.feature.player
 
+import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
@@ -20,18 +23,36 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
+import kotlin.math.abs
+import kotlin.math.roundToInt
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.StateFlow
 import pt.aguiarvieira.jellymusic.playback.PlaybackProgress
 import pt.aguiarvieira.jellymusic.ui.components.ArtworkImage
 import pt.aguiarvieira.jellymusic.ui.theme.AlbumTheme
+
+/** Fraction of the bar's width a swipe must pass to dismiss (stop) instead of springing back. */
+private const val DISMISS_THRESHOLD_FRACTION = 0.33f
+
+/** How far along the swipe-to-dismiss the bar is, 0..1 — drives the fade-out. */
+private fun dismissFraction(offset: Float, widthPx: Int): Float =
+    if (widthPx <= 0) 0f else (abs(offset) / widthPx).coerceIn(0f, 1f)
 
 /** Persistent mini player docked above the navigation bar. Hidden when nothing is loaded. */
 @Composable
@@ -43,9 +64,41 @@ fun MiniPlayer(
     val state by viewModel.state.collectAsStateWithLifecycle()
     if (!state.hasMedia) return
 
+    // Swipe the bar left or right to stop playback and clear the queue (there's no stop button).
+    val offsetX = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    var widthPx by remember { mutableIntStateOf(0) }
+
     // Retint to the now-playing album's cover.
     AlbumTheme(artworkUrl = state.artworkUri) {
-        Column(modifier.fillMaxWidth()) {
+        Column(
+            modifier
+                .fillMaxWidth()
+                .onSizeChanged { widthPx = it.width }
+                .offset { IntOffset(offsetX.value.roundToInt(), 0) }
+                // Fade out as it slides so the swipe reads as a dismissal.
+                .alpha(1f - dismissFraction(offsetX.value, widthPx))
+                .pointerInput(Unit) {
+                    detectHorizontalDragGestures(
+                        onDragEnd = {
+                            val past = widthPx > 0 && abs(offsetX.value) > widthPx * DISMISS_THRESHOLD_FRACTION
+                            if (past) {
+                                val target = if (offsetX.value > 0) widthPx.toFloat() else -widthPx.toFloat()
+                                scope.launch {
+                                    offsetX.animateTo(target)
+                                    viewModel.stop()
+                                }
+                            } else {
+                                scope.launch { offsetX.animateTo(0f) }
+                            }
+                        },
+                        onHorizontalDrag = { change, delta ->
+                            change.consume()
+                            scope.launch { offsetX.snapTo(offsetX.value + delta) }
+                        },
+                    )
+                },
+        ) {
         // Soft top shade (album-tinted) so the bar separates from the list above it.
         Box(
             Modifier

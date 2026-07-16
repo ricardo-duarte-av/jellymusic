@@ -206,6 +206,21 @@ class PlaybackConnection @Inject constructor(
         if (c.isPlaying) c.pause() else c.play()
     }
 
+    /**
+     * Fully stops playback and clears the queue, so the now-playing bar disappears and nothing is
+     * restored on the next launch. This is the app's "stop" — there is no stop button; it's reached
+     * by swiping the mini-player away.
+     */
+    fun stop() {
+        val c = controller ?: return
+        c.stop()
+        c.clearMediaItems()
+        lastQueueCount = -1
+        lastQueueCurrent = -1
+        wasPlaying = false
+        scope.launch { queueStore.clear() }
+    }
+
     fun next() {
         controller?.seekToNextMediaItem()
     }

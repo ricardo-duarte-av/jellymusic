@@ -56,6 +56,7 @@ class PlaybackViewModel @Inject constructor(
 
     fun play(tracks: List<Track>, startIndex: Int) = connection.playTracks(tracks, startIndex)
     fun togglePlayPause() = connection.togglePlayPause()
+    fun stop() = connection.stop()
     fun next() = connection.next()
     fun previous() = connection.previous()
     fun seekTo(positionMs: Long) = connection.seekTo(positionMs)
