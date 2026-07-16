@@ -10,8 +10,13 @@ on:
 permissions:
   contents: read
 
+# Keyed by commit SHA (not ref) so the branch-push run and the tag-push run for the
+# same release commit share one group. Releases push `main` first, then the `vX.Y.Z`
+# tag on the same commit; the tag run then cancels the now-redundant `main` run, so a
+# release builds once (via the tag) instead of twice. Normal main/branch pushes each
+# have a unique SHA and are unaffected.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.sha }}
   cancel-in-progress: true
 
 env:
