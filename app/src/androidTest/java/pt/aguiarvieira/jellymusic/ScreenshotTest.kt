@@ -11,6 +11,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.test.espresso.Espresso
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -57,9 +58,9 @@ class ScreenshotTest {
 
     private val outputDir: File by lazy {
         val ctx = InstrumentationRegistry.getInstrumentation().targetContext
-        (ctx.getExternalFilesDir("screenshots") ?: File(ctx.filesDir, "screenshots")).apply {
-            mkdirs()
-        }
+        // Internal storage: the workflow pulls these via `run-as`. adb can't read another
+        // app's /sdcard/Android/data/<pkg> dir under scoped storage on API 30+.
+        File(ctx.filesDir, "screenshots").apply { mkdirs() }
     }
 
     @Test
@@ -118,7 +119,13 @@ class ScreenshotTest {
             composeRule.onNode(hasSetTextAction()).performTextInput("a")
             composeRule.waitForIdle()
         }
-        runCatching { pressBack() }
+        // Close the IME first — otherwise the first Back only dismisses the keyboard and
+        // leaves us on Search instead of returning Home.
+        runCatching {
+            Espresso.closeSoftKeyboard()
+            pressBack()
+            waitForText("Albums")
+        }
 
         // --- Settings → Changelog → About ------------------------------------------
         capture("07-settings") {
@@ -126,12 +133,12 @@ class ScreenshotTest {
             composeRule.waitForIdle()
         }
         capture("08-changelog") {
-            composeRule.onNodeWithText("Changelog").performClick()
+            composeRule.onNodeWithText("Changelog").performScrollTo().performClick()
             composeRule.waitForIdle()
         }
         runCatching { pressBack() }
         capture("09-about") {
-            composeRule.onNodeWithText("About").performClick()
+            composeRule.onNodeWithText("About").performScrollTo().performClick()
             composeRule.waitForIdle()
         }
 

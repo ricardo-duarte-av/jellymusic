@@ -173,9 +173,16 @@ jobs:
 
       - name: Pull screenshots off device
         run: |
-          set -euo pipefail
+          set -uo pipefail
           rm -rf pulled && mkdir -p pulled
-          adb pull "/sdcard/Android/data/${APP_ID}/files/screenshots/." pulled/ || true
+          # The test writes to the app's internal files dir; reach it via run-as (the debug
+          # build is debuggable). exec-out keeps the PNG bytes intact (no newline mangling).
+          files=$(adb exec-out run-as "$APP_ID" ls files/screenshots 2>/dev/null | tr -d '\r')
+          echo "on-device screenshots: $files"
+          for f in $files; do
+            adb exec-out run-as "$APP_ID" cat "files/screenshots/$f" > "pulled/$f"
+          done
+          ls -la pulled || true
 
       - name: Stage screenshots
         run: |
