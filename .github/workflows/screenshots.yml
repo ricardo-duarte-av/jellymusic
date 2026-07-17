@@ -21,7 +21,7 @@ on:
       album:
         description: "Album shown in the detail + now-playing shots (search term; first album hit is used)"
         required: false
-        default: "Zelda & Chill"
+        default: "skyrim - atmospheres"
 
 permissions:
   contents: write
@@ -34,7 +34,7 @@ env:
   JAVA_VERSION: "21"
   SYSTEM_IMAGE: ${{ github.event.inputs.system-image || 'system-images;android-37.0;google_apis_ps16k;x86_64' }}
   DEVICE: ${{ github.event.inputs.device || 'pixel_6' }}
-  ALBUM: ${{ github.event.inputs.album || 'Zelda & Chill' }}
+  ALBUM: ${{ github.event.inputs.album || 'skyrim - atmospheres' }}
   # Jellyfin server + login for the screenshot run. Supplied entirely via repo secrets
   # (Settings → Secrets and variables → Actions) so no server address or credentials live
   # in the repo. All three are required — the job fails fast below if any is unset.

@@ -61,7 +61,7 @@ class ScreenshotTest {
     // Album used for the album-detail (04) and now-playing (05) shots. Opened via search so the
     // chosen album is deterministic regardless of the library's sort order. The first album result
     // for this query is used; pick a term whose top album hit is the one you want on show.
-    private val albumQuery = args.getString("album") ?: "Zelda & Chill"
+    private val albumQuery = args.getString("album") ?: "skyrim - atmospheres"
 
     private val outputDir: File by lazy {
         val ctx = InstrumentationRegistry.getInstrumentation().targetContext
