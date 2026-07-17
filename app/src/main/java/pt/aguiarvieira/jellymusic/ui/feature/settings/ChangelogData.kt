@@ -16,6 +16,14 @@ data class ChangelogVersion(
 /** Newest first. Unreleased (version = null) always on top. */
 val CHANGELOG: List<ChangelogVersion> = listOf(
     ChangelogVersion(
+        version = "0.1.46",
+        date = "17/07/2026",
+        changes = listOf(
+            "Tidied the browse header: the Favourites filter is now a compact heart button, and the " +
+                "search and settings buttons line up with the library and sort controls.",
+        ),
+    ),
+    ChangelogVersion(
         version = "0.1.45",
         date = "17/07/2026",
         changes = listOf(
