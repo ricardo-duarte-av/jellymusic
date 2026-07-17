@@ -106,7 +106,13 @@ class ScreenshotTest {
             composeRule.onNode(hasSetTextAction()).performTextInput("zelda")
             // Drop the keyboard so the results (not a half-screen of keys) fill the shot.
             Espresso.closeSoftKeyboard()
-            settle(4_000)
+            // Wait for results to actually render (playlist rows carry an "N tracks"
+            // subtitle) — this absorbs the search API round-trip — THEN give the row
+            // thumbnails time to finish. The rows appear a beat before their artwork loads,
+            // and the previous blind sleep expired ~0.2s before the images completed
+            // (verified in logcat: RealImageLoader "Successful" landed just after capture).
+            waitForText("tracks")
+            settle(6_000)
         }
         // Close the IME first — otherwise the first Back only dismisses the keyboard and
         // leaves us on Search instead of returning to the browse shell.
