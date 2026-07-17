@@ -32,6 +32,8 @@ data class BrowseUiState(
     val albumSortDescending: Boolean = false,
     val artists: ContentState<List<Artist>> = ContentState.Loading,
     val playlists: ContentState<List<Playlist>> = ContentState.Loading,
+    /** True while a pull-to-refresh re-fetch of the current tab is in flight. */
+    val refreshing: Boolean = false,
 )
 
 private data class AlbumQuery(
@@ -131,6 +133,33 @@ class BrowseViewModel @Inject constructor(
             _state.update {
                 it.copy(playlists = musicRepository.getPlaylists(_state.value.selectedLibrary.id).toContentState())
             }
+        }
+    }
+
+    /**
+     * Force a re-fetch of Artists from the server (pull-to-refresh). Unlike [ensureArtists] this
+     * runs even when data is already loaded, and keeps the current list visible while refreshing —
+     * the repository re-queries the server and only falls back to the cache if the server is
+     * unreachable, so a refresh never blanks the screen on a transient failure.
+     */
+    fun refreshArtists() {
+        if (_state.value.refreshing) return
+        val libraryId = _state.value.selectedLibrary.id
+        viewModelScope.launch {
+            _state.update { it.copy(refreshing = true) }
+            val artists = musicRepository.getArtists(libraryId).toContentState()
+            _state.update { it.copy(artists = artists, refreshing = false) }
+        }
+    }
+
+    /** Force a re-fetch of Playlists from the server (pull-to-refresh). See [refreshArtists]. */
+    fun refreshPlaylists() {
+        if (_state.value.refreshing) return
+        val libraryId = _state.value.selectedLibrary.id
+        viewModelScope.launch {
+            _state.update { it.copy(refreshing = true) }
+            val playlists = musicRepository.getPlaylists(libraryId).toContentState()
+            _state.update { it.copy(playlists = playlists, refreshing = false) }
         }
     }
 }

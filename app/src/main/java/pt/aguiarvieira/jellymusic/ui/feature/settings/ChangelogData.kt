@@ -19,6 +19,7 @@ val CHANGELOG: List<ChangelogVersion> = listOf(
         version = null,
         date = null,
         changes = listOf(
+            "Pull down on the Artists or Playlists list to refresh it from the server.",
             "Artists and other items without cover art now show a placeholder icon instead of an " +
                 "empty grey square.",
         ),

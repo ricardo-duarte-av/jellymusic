@@ -177,17 +177,29 @@ fun BrowseShell(
                     )
 
                     BrowseTab.ARTISTS -> ContentSection(state.artists, "No artists found") { artists ->
-                        Grid(columns = columns, onZoom = onZoom) {
-                            items(artists, key = { it.id }) { artist ->
-                                ArtistCard(artist, onClick = { onArtistClick(artist.id, artist.name) })
+                        PullToRefreshBox(
+                            isRefreshing = state.refreshing,
+                            onRefresh = viewModel::refreshArtists,
+                            modifier = Modifier.fillMaxSize(),
+                        ) {
+                            Grid(columns = columns, onZoom = onZoom) {
+                                items(artists, key = { it.id }) { artist ->
+                                    ArtistCard(artist, onClick = { onArtistClick(artist.id, artist.name) })
+                                }
                             }
                         }
                     }
 
                     BrowseTab.PLAYLISTS -> ContentSection(state.playlists, "No playlists found") { playlists ->
-                        Grid(columns = columns, onZoom = onZoom) {
-                            items(playlists, key = { it.id }) { playlist ->
-                                PlaylistCard(playlist, onClick = { onPlaylistClick(playlist.id, playlist.name) })
+                        PullToRefreshBox(
+                            isRefreshing = state.refreshing,
+                            onRefresh = viewModel::refreshPlaylists,
+                            modifier = Modifier.fillMaxSize(),
+                        ) {
+                            Grid(columns = columns, onZoom = onZoom) {
+                                items(playlists, key = { it.id }) { playlist ->
+                                    PlaylistCard(playlist, onClick = { onPlaylistClick(playlist.id, playlist.name) })
+                                }
                             }
                         }
                     }
