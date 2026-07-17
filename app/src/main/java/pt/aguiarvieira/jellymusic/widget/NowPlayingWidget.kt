@@ -227,25 +227,25 @@ private fun WidgetBody(
 }
 
 /**
- * Top-right corner overlay for the tall (4x2) layout: the sharp, square album-art thumbnail (a crisp
- * focal point against the frosted background) with the album-coloured app-icon badge sitting on its
- * top-left corner, identifying the widget. The thumbnail is pinned to the corner with equal top and
- * right padding. Falls back to just the badge when there's no artwork.
+ * Top-corner overlays for the tall (4x2) layout: the album-coloured app-icon badge in the widget's
+ * top-left corner (identifying the widget), and the sharp, square album-art thumbnail pinned to the
+ * top-right corner (a crisp focal point against the frosted background). The thumbnail is omitted
+ * when there's no artwork; the icon always shows.
  */
 @Composable
 private fun CornerArtwork(artwork: Bitmap?, iconColors: IconColors) {
+    // App icon in the widget's top-left corner.
     Box(
         modifier = GlanceModifier.fillMaxSize().padding(10.dp),
-        contentAlignment = Alignment.TopEnd,
+        contentAlignment = Alignment.TopStart,
     ) {
-        if (artwork == null) {
-            // No cover: just the identifying badge in the corner.
-            AppIcon(iconColors, 24.dp)
-            return@Box
-        }
+        AppIcon(iconColors, 44.dp)
+    }
+    // Album-art thumbnail in the widget's top-right corner.
+    if (artwork != null) {
         Box(
-            modifier = GlanceModifier.size(CORNER_THUMB),
-            contentAlignment = Alignment.TopStart,
+            modifier = GlanceModifier.fillMaxSize().padding(10.dp),
+            contentAlignment = Alignment.TopEnd,
         ) {
             Image(
                 provider = ImageProvider(artwork),
@@ -253,7 +253,6 @@ private fun CornerArtwork(artwork: Bitmap?, iconColors: IconColors) {
                 contentScale = ContentScale.Crop,
                 modifier = GlanceModifier.size(CORNER_THUMB),
             )
-            AppIcon(iconColors, 22.dp)
         }
     }
 }
