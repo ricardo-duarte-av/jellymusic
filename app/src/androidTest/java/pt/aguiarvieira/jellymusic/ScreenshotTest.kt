@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.util.Log
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onLast
@@ -12,6 +13,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import androidx.test.espresso.Espresso
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -55,6 +57,11 @@ class ScreenshotTest {
     private val serverUrl = args.getString("serverUrl") ?: "https://jellyfin.aguiarvieira.pt"
     private val username = args.getString("username") ?: "jelly"
     private val password = args.getString("password") ?: "jelly1234jelly"
+
+    // Album used for the album-detail (04) and now-playing (05) shots. Opened via search so the
+    // chosen album is deterministic regardless of the library's sort order. The first album result
+    // for this query is used; pick a term whose top album hit is the one you want on show.
+    private val albumQuery = args.getString("album") ?: "Zelda & Chill"
 
     private val outputDir: File by lazy {
         val ctx = InstrumentationRegistry.getInstrumentation().targetContext
@@ -114,24 +121,22 @@ class ScreenshotTest {
             waitForText("tracks")
             settle(6_000)
         }
-        // Close the IME first — otherwise the first Back only dismisses the keyboard and
-        // leaves us on Search instead of returning to the browse shell.
-        runCatching {
-            Espresso.closeSoftKeyboard()
-            pressBack()
-            waitForText("Albums")
-        }
-
-        // Back to the Albums grid for the content-dependent captures below.
-        runCatching {
-            composeRule.onNodeWithText("Albums").performClick()
-            waitForTag("albumCard")
-        }
-
-        // --- Album detail + now-playing (starts playback; content-dependent) -------
-        // If any step misses (no album/track, tap lands wrong), capture() logs and skips.
+        // --- Album detail + now-playing via a specific album (content-dependent) ---
+        // Reuse the open Search screen: swap the query for [albumQuery] and open the album from
+        // its tagged result row, so these two shots always feature the same album regardless of
+        // the library's sort order. Narrow to the Albums chip first so the album rows sit at the
+        // top (playlists/songs with the same name would otherwise push them off-screen).
         capture("04-album-detail") {
-            composeRule.onAllNodesWithTag("albumCard").onFirst().performClick()
+            val field = composeRule.onNode(hasSetTextAction())
+            field.performTextClearance()
+            field.performTextInput(albumQuery)
+            waitForTag("searchAlbumRow")
+            // Two "Albums" nodes exist — the filter chip (topmost) and the section header; the
+            // chip is first. Tapping it hides other kinds so the target album is the first row.
+            composeRule.onAllNodesWithText("Albums").onFirst().performClick()
+            Espresso.closeSoftKeyboard()
+            waitForTag("searchAlbumRow")
+            composeRule.onAllNodesWithTag("searchAlbumRow").onFirst().performClick()
             waitForText("Play")
             settle()
         }
@@ -141,18 +146,16 @@ class ScreenshotTest {
             composeRule.waitForIdle()
             composeRule.onAllNodesWithTag("miniPlayer").onFirst().performClick()
             composeRule.waitForIdle()
+            settle()
         }
-        // Return to Home deterministically: collapse the full player if it opened, then a
-        // single Back off album detail. (A fixed number of Backs is fragile — if the player
-        // didn't expand, one Back too many exits the app entirely.)
+        // Return to the browse shell for Settings/Changelog/About: collapse the full player if it
+        // expanded, then press Back until the browse top bar shows (Settings present, no Back
+        // arrow) — bounded so a wrong turn can't walk out of the app.
         runCatching {
             composeRule.onNodeWithContentDescription("Collapse").performClick()
             composeRule.waitForIdle()
         }
-        runCatching {
-            pressBack()
-            waitForText("Albums")
-        }
+        returnToBrowse()
 
         // --- Settings → Changelog → About ------------------------------------------
         capture("07-settings") {
@@ -204,6 +207,23 @@ class ScreenshotTest {
     private fun pressBack() {
         Espresso.pressBack()
         composeRule.waitForIdle()
+    }
+
+    /**
+     * Presses Back until the browse shell is showing — identified by its top bar having a Settings
+     * action and no Back arrow (album detail and search both carry a Back arrow). Bounded so a
+     * missed screen can't keep pressing Back and walk out of the app.
+     */
+    private fun returnToBrowse(maxBacks: Int = 5) {
+        repeat(maxBacks) {
+            val hasSettings = composeRule.onAllNodesWithContentDescription("Settings")
+                .fetchSemanticsNodes().isNotEmpty()
+            val hasBack = composeRule.onAllNodesWithContentDescription("Back")
+                .fetchSemanticsNodes().isNotEmpty()
+            if (hasSettings && !hasBack) return
+            runCatching { Espresso.closeSoftKeyboard() }
+            runCatching { pressBack() }
+        }
     }
 
     private fun screenshot(name: String) {

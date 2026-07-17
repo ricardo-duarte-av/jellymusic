@@ -42,6 +42,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -286,6 +287,9 @@ private fun ResultsContent(
                 item { SectionHeader("Albums") }
                 items(results.albums, key = { "al-${it.id}" }) { album ->
                     ResultRow(
+                        // Stable handle for the screenshot instrumentation test to open a
+                        // specific album deterministically (see ScreenshotTest).
+                        modifier = Modifier.testTag("searchAlbumRow"),
                         title = album.name,
                         subtitle = album.artist,
                         artworkUrl = album.artworkUrl,
@@ -344,6 +348,7 @@ private fun ResultRow(
     subtitle: String?,
     artworkUrl: String?,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
     fallback: ImageVector = Icons.Filled.MusicNote,
     downloadStatus: AlbumDownloadStatus? = null,
     onDownload: (() -> Unit)? = null,
@@ -353,7 +358,7 @@ private fun ResultRow(
     val hasMenu = onDownload != null || onRemoveLocal != null
     val canRemove = downloadStatus?.isComplete == true || downloadStatus?.inProgress == true
 
-    Box {
+    Box(modifier) {
         Column {
             ListItem(
                 modifier = Modifier.fillMaxWidth().combinedClickable(
