@@ -16,6 +16,15 @@ data class ChangelogVersion(
 /** Newest first. Unreleased (version = null) always on top. */
 val CHANGELOG: List<ChangelogVersion> = listOf(
     ChangelogVersion(
+        version = "0.1.49",
+        date = "17/07/2026",
+        changes = listOf(
+            "Shuffling an album (or playlist) now turns on real shuffle mode instead of building a " +
+                "one-off scrambled queue — toggling shuffle off in the player restores the original " +
+                "order.",
+        ),
+    ),
+    ChangelogVersion(
         version = "0.1.48",
         date = "17/07/2026",
         changes = listOf(

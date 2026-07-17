@@ -162,7 +162,23 @@ class PlaybackConnection @Inject constructor(
         val c = controller ?: return
         val items = tracks.map { mediaItemTree.trackMediaItem(it, streamSettings) }
         if (items.isEmpty()) return
+        c.shuffleModeEnabled = false
         c.setMediaItems(items, startIndex.coerceIn(0, items.lastIndex), 0L)
+        c.prepare()
+        c.play()
+    }
+
+    /**
+     * Enqueues [tracks] in their natural order but with Media3 shuffle mode enabled, starting on a
+     * random track. Unlike pre-shuffling the list, toggling shuffle off afterwards restores the
+     * original order.
+     */
+    fun playTracksShuffled(tracks: List<Track>) {
+        val c = controller ?: return
+        val items = tracks.map { mediaItemTree.trackMediaItem(it, streamSettings) }
+        if (items.isEmpty()) return
+        c.shuffleModeEnabled = true
+        c.setMediaItems(items, items.indices.random(), 0L)
         c.prepare()
         c.play()
     }

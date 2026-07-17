@@ -156,6 +156,7 @@ fun AlbumDetailScreen(
                     title = viewModel.title,
                     tracks = state.value,
                     onPlay = playbackViewModel::play,
+                    onShufflePlay = playbackViewModel::playShuffled,
                     trackStatuses = trackStatuses,
                     onRequestDownload = { pendingDownload = DownloadTarget.TrackItem(it) },
                     onRemoveTrack = downloadsViewModel::removeTrack,
@@ -173,6 +174,7 @@ private fun AlbumTrackList(
     title: String,
     tracks: List<Track>,
     onPlay: (List<Track>, Int) -> Unit,
+    onShufflePlay: (List<Track>) -> Unit,
     trackStatuses: Map<String, TrackDownloadStatus>,
     onRequestDownload: (Track) -> Unit,
     onRemoveTrack: (String) -> Unit,
@@ -239,7 +241,7 @@ private fun AlbumTrackList(
                 artist = tracks.firstOrNull()?.artist,
                 trackCount = tracks.size,
                 onPlay = { onPlay(tracks, 0) },
-                onShuffle = { onPlay(tracks.shuffled(), 0) },
+                onShuffle = { onShufflePlay(tracks) },
             )
         }
         val multiDisc = tracks.mapNotNull { it.discNumber }.distinct().size > 1
@@ -354,7 +356,7 @@ private fun AlbumHeader(
             )
         }
         Spacer(Modifier.height(16.dp))
-        // (5) Play (enqueue + play) and Shuffle (enqueue shuffled + play).
+        // (5) Play (enqueue + play) and Shuffle (enqueue in order with shuffle mode on).
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Button(onClick = onPlay) {
                 Icon(Icons.Filled.PlayArrow, contentDescription = null)
@@ -562,6 +564,7 @@ fun PlaylistDetailScreen(
         onExpandPlayer = onExpandPlayer,
         onOpenSettings = onOpenSettings,
         onPlay = playbackViewModel::play,
+        onShufflePlay = playbackViewModel::playShuffled,
         showTrackArtwork = true,
         trackStatuses = trackStatuses,
         onRequestDownload = { pendingDownload = DownloadTarget.TrackItem(it) },
@@ -581,6 +584,7 @@ private fun TrackListDetail(
     onExpandPlayer: () -> Unit,
     onOpenSettings: () -> Unit,
     onPlay: (List<Track>, Int) -> Unit,
+    onShufflePlay: (List<Track>) -> Unit,
     showTrackArtwork: Boolean = false,
     trackStatuses: Map<String, TrackDownloadStatus> = emptyMap(),
     onRequestDownload: (Track) -> Unit = {},
@@ -637,15 +641,15 @@ private fun TrackListDetail(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                                 Spacer(Modifier.height(16.dp))
-                                // Play (enqueue + play) and Shuffle (enqueue shuffled + play),
-                                // matching the album viewer.
+                                // Play (enqueue + play) and Shuffle (enqueue in order with shuffle
+                                // mode on), matching the album viewer.
                                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                     Button(onClick = { onPlay(tracks, 0) }) {
                                         Icon(Icons.Filled.PlayArrow, contentDescription = null)
                                         Spacer(Modifier.width(8.dp))
                                         Text("Play")
                                     }
-                                    FilledTonalButton(onClick = { onPlay(tracks.shuffled(), 0) }) {
+                                    FilledTonalButton(onClick = { onShufflePlay(tracks) }) {
                                         Icon(Icons.Filled.Shuffle, contentDescription = null)
                                         Spacer(Modifier.width(8.dp))
                                         Text("Shuffle")

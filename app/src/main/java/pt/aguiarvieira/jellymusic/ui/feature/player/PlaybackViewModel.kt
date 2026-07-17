@@ -81,6 +81,7 @@ class PlaybackViewModel @Inject constructor(
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     fun play(tracks: List<Track>, startIndex: Int) = connection.playTracks(tracks, startIndex)
+    fun playShuffled(tracks: List<Track>) = connection.playTracksShuffled(tracks)
     fun togglePlayPause() = connection.togglePlayPause()
     fun stop() = connection.stop()
     fun next() = connection.next()
