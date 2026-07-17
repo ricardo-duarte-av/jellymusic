@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -32,10 +33,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -129,13 +127,17 @@ fun BrowseShell(
         Column(modifier = Modifier.fillMaxSize()) {
             TopAppBar(
                 modifier = Modifier.statusBarsPadding(),
+                // Search/Settings live on the same row as the library/sort controls (not in the
+                // TopAppBar actions slot) so they line up with them instead of centring against the
+                // taller two-line title.
                 title = {
-                    Column {
+                    Column(modifier = Modifier.fillMaxWidth()) {
                         Text(
                             text = selectedTab.label,
                             style = MaterialTheme.typography.titleLargeEmphasized,
                         )
                         Row(
+                            modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
@@ -154,19 +156,30 @@ fun BrowseShell(
                                 )
                             }
                             // Favourites filter — narrows the current tab to favourites (all tabs).
-                            FavoritesFilterChip(
+                            FavoritesFilterIcon(
                                 selected = state.favoritesOnly,
                                 onClick = viewModel::toggleFavoritesOnly,
                             )
+                            Spacer(Modifier.weight(1f))
+                            Icon(
+                                imageVector = Icons.Filled.Search,
+                                contentDescription = "Search",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier
+                                    .clickable(onClick = onOpenSearch)
+                                    .padding(4.dp)
+                                    .size(24.dp),
+                            )
+                            Icon(
+                                imageVector = Icons.Filled.Settings,
+                                contentDescription = "Settings",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier
+                                    .clickable(onClick = onOpenSettings)
+                                    .padding(4.dp)
+                                    .size(24.dp),
+                            )
                         }
-                    }
-                },
-                actions = {
-                    IconButton(onClick = onOpenSearch) {
-                        Icon(Icons.Filled.Search, contentDescription = "Search")
-                    }
-                    IconButton(onClick = onOpenSettings) {
-                        Icon(Icons.Filled.Settings, contentDescription = "Settings")
                     }
                 },
             )
@@ -233,21 +246,20 @@ fun BrowseShell(
     )
 }
 
-/** Heart filter chip that narrows the active tab to the user's favourites. */
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * Icon-only heart toggle that narrows the active tab to the user's favourites. Sized to match the
+ * sort/order icons it sits beside; tinted primary when active.
+ */
 @Composable
-private fun FavoritesFilterChip(selected: Boolean, onClick: () -> Unit) {
-    FilterChip(
-        selected = selected,
-        onClick = onClick,
-        label = { Text("Favourites") },
-        leadingIcon = {
-            Icon(
-                imageVector = if (selected) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-                contentDescription = null,
-                modifier = Modifier.size(FilterChipDefaults.IconSize),
-            )
-        },
+private fun FavoritesFilterIcon(selected: Boolean, onClick: () -> Unit) {
+    Icon(
+        imageVector = if (selected) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+        contentDescription = if (selected) "Showing favourites only" else "Show favourites only",
+        tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier
+            .clickable(onClick = onClick)
+            .padding(4.dp)
+            .size(24.dp),
     )
 }
 
