@@ -93,15 +93,37 @@ class ScreenshotTest {
             waitForTag("playlistCard")
             settle()
         }
-        // Back to Albums for the content-dependent captures below.
+        // --- Search (captured BEFORE playback) -------------------------------------
+        // Run search before starting any playback. The album grid loaded fresh artwork
+        // fine with nothing playing, but once a FLAC stream is running the emulator's
+        // limited CPU starves the burst of fresh thumbnail decodes and the rows stay grey
+        // (a real device has the headroom, so it loads there). The Search icon is in the
+        // top bar on every browse tab, so we can open it straight from the Playlists tab.
+        capture("06-search") {
+            composeRule.onNodeWithContentDescription("Search").performClick()
+            waitForText("Search music")
+            // A term the test library actually contains, so results render.
+            composeRule.onNode(hasSetTextAction()).performTextInput("zelda")
+            // Drop the keyboard so the results (not a half-screen of keys) fill the shot.
+            Espresso.closeSoftKeyboard()
+            settle(4_000)
+        }
+        // Close the IME first — otherwise the first Back only dismisses the keyboard and
+        // leaves us on Search instead of returning to the browse shell.
+        runCatching {
+            Espresso.closeSoftKeyboard()
+            pressBack()
+            waitForText("Albums")
+        }
+
+        // Back to the Albums grid for the content-dependent captures below.
         runCatching {
             composeRule.onNodeWithText("Albums").performClick()
             waitForTag("albumCard")
         }
 
-        // --- Album detail + now-playing (content-dependent, best-effort) -----------
-        // These depend on the library actually having an album/track and on tapping the
-        // right grid cell; if any step misses, capture() logs and skips it.
+        // --- Album detail + now-playing (starts playback; content-dependent) -------
+        // If any step misses (no album/track, tap lands wrong), capture() logs and skips.
         capture("04-album-detail") {
             composeRule.onAllNodesWithTag("albumCard").onFirst().performClick()
             waitForText("Play")
@@ -122,28 +144,6 @@ class ScreenshotTest {
             composeRule.waitForIdle()
         }
         runCatching {
-            pressBack()
-            waitForText("Albums")
-        }
-
-        // --- Search ----------------------------------------------------------------
-        capture("06-search") {
-            composeRule.onNodeWithContentDescription("Search").performClick()
-            waitForText("Search music")
-            // A term the test library actually contains, so results render.
-            composeRule.onNode(hasSetTextAction()).performTextInput("zelda")
-            // Drop the keyboard so the results (not a half-screen of keys) fill the shot.
-            Espresso.closeSoftKeyboard()
-            // Let results render. Some rows stay as grey placeholders — those items have
-            // no server artwork, and ArtworkImage only shows its fallback icon for a null
-            // URL, not for a failed load; extra waiting doesn't change them (verified
-            // identical at 2s/6s/15s).
-            settle(3_000)
-        }
-        // Close the IME first — otherwise the first Back only dismisses the keyboard and
-        // leaves us on Search instead of returning Home.
-        runCatching {
-            Espresso.closeSoftKeyboard()
             pressBack()
             waitForText("Albums")
         }
