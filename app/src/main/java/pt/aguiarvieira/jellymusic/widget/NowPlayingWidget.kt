@@ -229,7 +229,7 @@ private fun WidgetBody(
 /**
  * Top-right corner overlay for the tall (4x2) layout: the sharp, square album-art thumbnail (a crisp
  * focal point against the frosted background) with the album-coloured app-icon badge sitting on its
- * top-right corner, identifying the widget. The thumbnail is pinned to the corner with equal top and
+ * top-left corner, identifying the widget. The thumbnail is pinned to the corner with equal top and
  * right padding. Falls back to just the badge when there's no artwork.
  */
 @Composable
@@ -245,7 +245,7 @@ private fun CornerArtwork(artwork: Bitmap?, iconColors: IconColors) {
         }
         Box(
             modifier = GlanceModifier.size(CORNER_THUMB),
-            contentAlignment = Alignment.TopEnd,
+            contentAlignment = Alignment.TopStart,
         ) {
             Image(
                 provider = ImageProvider(artwork),
