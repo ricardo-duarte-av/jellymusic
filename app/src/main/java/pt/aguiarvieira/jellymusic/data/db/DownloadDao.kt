@@ -17,6 +17,9 @@ interface DownloadDao {
     @Query("SELECT * FROM album_downloads")
     fun observeAlbums(): Flow<List<AlbumDownloadEntity>>
 
+    @Query("SELECT * FROM playlist_downloads")
+    fun observePlaylists(): Flow<List<PlaylistDownloadEntity>>
+
     @Query("SELECT * FROM track_downloads WHERE state = 'COMPLETED' ORDER BY updatedAt DESC")
     fun observeCompletedTracks(): Flow<List<TrackDownloadEntity>>
 
@@ -70,4 +73,21 @@ interface DownloadDao {
 
     @Query("DELETE FROM album_downloads WHERE albumId = :albumId")
     suspend fun deleteAlbum(albumId: String)
+
+    @Query("SELECT albumId FROM album_downloads")
+    suspend fun downloadedAlbumIds(): List<String>
+
+    // --- Playlist rows ---
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertPlaylist(entity: PlaylistDownloadEntity)
+
+    @Query("SELECT * FROM playlist_downloads WHERE playlistId = :playlistId")
+    suspend fun getPlaylist(playlistId: String): PlaylistDownloadEntity?
+
+    @Query("SELECT * FROM playlist_downloads")
+    suspend fun playlists(): List<PlaylistDownloadEntity>
+
+    @Query("DELETE FROM playlist_downloads WHERE playlistId = :playlistId")
+    suspend fun deletePlaylist(playlistId: String)
 }

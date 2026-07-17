@@ -51,6 +51,25 @@ data class AlbumDownloadEntity(
     val requestedAt: Long,
 )
 
+/**
+ * A requested playlist download. Unlike an album, a playlist's membership is arbitrary and shared, so
+ * the member [trackIds] are stored here (captured at request time) to compute the group's progress
+ * and to know which tracks to clean up on removal.
+ */
+@Entity(tableName = "playlist_downloads")
+data class PlaylistDownloadEntity(
+    @PrimaryKey val playlistId: String,
+    val name: String,
+    val artworkUrl: String?,
+    /** Absolute path to the cached cover on disk, once fetched (for offline display). */
+    val artworkPath: String? = null,
+    val totalTracks: Int,
+    /** IDs of the tracks that made up the playlist when it was queued. */
+    val trackIds: List<String>,
+    val transcoded: Boolean,
+    val requestedAt: Long,
+)
+
 /** Reconstructs a domain [Track] from a stored download, for offline browsing/playback. */
 fun TrackDownloadEntity.toDomainTrack(): Track = Track(
     id = trackId,

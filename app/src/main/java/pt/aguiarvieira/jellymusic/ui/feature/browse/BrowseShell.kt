@@ -95,6 +95,7 @@ fun BrowseShell(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val albumItems = viewModel.albumsPaging.collectAsLazyPagingItems()
     val albumStatuses by downloadsViewModel.albumStatuses.collectAsStateWithLifecycle()
+    val playlistStatuses by downloadsViewModel.playlistStatuses.collectAsStateWithLifecycle()
     val transcodeDefault by downloadsViewModel.transcodeDefault.collectAsStateWithLifecycle()
     var pendingDownload by remember { mutableStateOf<DownloadTarget?>(null) }
     var selectedTab by rememberSaveable { mutableStateOf(BrowseTab.ALBUMS) }
@@ -220,7 +221,17 @@ fun BrowseShell(
                         ) {
                             Grid(columns = columns, onZoom = onZoom) {
                                 items(playlists, key = { it.id }) { playlist ->
-                                    PlaylistCard(playlist, onClick = { onPlaylistClick(playlist.id, playlist.name) })
+                                    PlaylistCard(
+                                        playlist,
+                                        onClick = { onPlaylistClick(playlist.id, playlist.name) },
+                                        downloadStatus = playlistStatuses[playlist.id],
+                                        onDownload = {
+                                            pendingDownload = DownloadTarget.Playlist(
+                                                playlist.id, playlist.name, playlist.artworkUrl,
+                                            )
+                                        },
+                                        onRemoveLocal = { downloadsViewModel.removePlaylist(playlist.id) },
+                                    )
                                 }
                             }
                         }
@@ -237,8 +248,12 @@ fun BrowseShell(
         transcodeDefault = transcodeDefault,
         isMetered = downloadsViewModel::isMetered,
         onConfirm = { target, transcode ->
-            if (target is DownloadTarget.Album) {
-                downloadsViewModel.downloadAlbum(target.id, target.name, target.artist, target.artworkUrl, transcode)
+            when (target) {
+                is DownloadTarget.Album ->
+                    downloadsViewModel.downloadAlbum(target.id, target.name, target.artist, target.artworkUrl, transcode)
+                is DownloadTarget.Playlist ->
+                    downloadsViewModel.downloadPlaylist(target.id, target.name, target.artworkUrl, transcode)
+                is DownloadTarget.TrackItem -> Unit // browse has no standalone tracks
             }
             pendingDownload = null
         },

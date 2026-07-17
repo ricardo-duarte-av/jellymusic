@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.stateIn
 import pt.aguiarvieira.jellymusic.core.network.NetworkMonitor
 import pt.aguiarvieira.jellymusic.data.db.AlbumDownloadEntity
 import pt.aguiarvieira.jellymusic.data.db.DownloadDao
+import pt.aguiarvieira.jellymusic.data.db.PlaylistDownloadEntity
 import pt.aguiarvieira.jellymusic.data.db.TrackDownloadEntity
 import pt.aguiarvieira.jellymusic.data.download.MusicDownloadManager
 import pt.aguiarvieira.jellymusic.data.settings.SettingsStore
@@ -55,9 +56,28 @@ class DownloadsViewModel @Inject constructor(
             }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
-    /** Downloaded/queued albums and tracks, for the Downloads manager screen. */
+    val playlistStatuses: StateFlow<Map<String, AlbumDownloadStatus>> =
+        combine(dao.observePlaylists(), dao.observeTracks()) { playlists, tracks ->
+            val stateByTrack = tracks.associate { it.trackId to it.state }
+            playlists.associate { playlist ->
+                val members = playlist.trackIds
+                playlist.playlistId to AlbumDownloadStatus(
+                    total = playlist.totalTracks,
+                    completed = members.count { stateByTrack[it] == DownloadState.COMPLETED.name },
+                    downloading = members.any {
+                        stateByTrack[it] == DownloadState.QUEUED.name || stateByTrack[it] == DownloadState.DOWNLOADING.name
+                    },
+                    failed = members.any { stateByTrack[it] == DownloadState.FAILED.name },
+                )
+            }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    /** Downloaded/queued albums, playlists and tracks, for the Downloads manager screen. */
     val downloadedAlbums: StateFlow<List<AlbumDownloadEntity>> =
         dao.observeAlbums().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val downloadedPlaylists: StateFlow<List<PlaylistDownloadEntity>> =
+        dao.observePlaylists().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val downloadedTracks: StateFlow<List<TrackDownloadEntity>> =
         dao.observeTracks().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -80,8 +100,12 @@ class DownloadsViewModel @Inject constructor(
         transcode: Boolean,
     ) = downloadManager.downloadAlbum(albumId, albumName, albumArtist, artworkUrl, transcode)
 
+    fun downloadPlaylist(playlistId: String, playlistName: String, artworkUrl: String?, transcode: Boolean) =
+        downloadManager.downloadPlaylist(playlistId, playlistName, artworkUrl, transcode)
+
     fun removeTrack(trackId: String) = downloadManager.removeTrack(trackId)
     fun removeAlbum(albumId: String) = downloadManager.removeAlbum(albumId)
+    fun removePlaylist(playlistId: String) = downloadManager.removePlaylist(playlistId)
 
     private fun TrackDownloadEntity.toStatus(): TrackDownloadStatus {
         val downloadState = runCatching { DownloadState.valueOf(state) }.getOrDefault(DownloadState.FAILED)

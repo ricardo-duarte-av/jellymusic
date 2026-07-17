@@ -43,6 +43,12 @@ sealed interface DownloadTarget {
     ) : DownloadTarget
 
     data class TrackItem(val track: Track) : DownloadTarget
+
+    data class Playlist(
+        val id: String,
+        val name: String,
+        val artworkUrl: String?,
+    ) : DownloadTarget
 }
 
 /**
@@ -111,6 +117,7 @@ fun DownloadDialogs(
 private fun targetLabel(target: DownloadTarget): String = when (target) {
     is DownloadTarget.Album -> "Download the album \"${target.name}\" for offline playback."
     is DownloadTarget.TrackItem -> "Download \"${target.track.name}\" for offline playback."
+    is DownloadTarget.Playlist -> "Download all tracks in \"${target.name}\" for offline playback."
 }
 
 /**

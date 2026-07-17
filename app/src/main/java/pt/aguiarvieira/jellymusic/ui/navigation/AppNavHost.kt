@@ -125,6 +125,7 @@ fun AppNavHost(
             DownloadsScreen(
                 onBack = { navController.popBackStack() },
                 onAlbumClick = { id, name -> navController.navigateSingleTop(Routes.AlbumDetail(id, name)) },
+                onPlaylistClick = { id, name -> navController.navigateSingleTop(Routes.PlaylistDetail(id, name)) },
                 onExpandPlayer = { navController.navigateSingleTop(Routes.Player) },
             )
         }

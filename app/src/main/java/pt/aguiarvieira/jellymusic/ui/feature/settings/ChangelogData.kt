@@ -16,6 +16,18 @@ data class ChangelogVersion(
 /** Newest first. Unreleased (version = null) always on top. */
 val CHANGELOG: List<ChangelogVersion> = listOf(
     ChangelogVersion(
+        version = "0.1.47",
+        date = "17/07/2026",
+        changes = listOf(
+            "Search results: long-press a song or album to download it for offline playback (or " +
+                "remove the local copy), just like on the browse and detail screens.",
+            "Download a whole playlist at once: long-press a playlist (on the Playlists tab or in " +
+                "search) to queue all its tracks for offline playback. Playlists show a download " +
+                "badge and progress like albums, appear as their own group in Downloads, and can be " +
+                "removed in one tap.",
+        ),
+    ),
+    ChangelogVersion(
         version = "0.1.46",
         date = "17/07/2026",
         changes = listOf(

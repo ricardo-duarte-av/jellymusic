@@ -1,6 +1,7 @@
 package pt.aguiarvieira.jellymusic.ui.feature.search
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,11 +18,15 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -50,9 +55,18 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import pt.aguiarvieira.jellymusic.domain.model.Album
+import pt.aguiarvieira.jellymusic.domain.model.AlbumDownloadStatus
+import pt.aguiarvieira.jellymusic.domain.model.Playlist
 import pt.aguiarvieira.jellymusic.domain.model.SearchResults
+import pt.aguiarvieira.jellymusic.domain.model.TrackDownloadStatus
 import pt.aguiarvieira.jellymusic.ui.components.ArtworkImage
 import pt.aguiarvieira.jellymusic.ui.components.TrackRow
+import pt.aguiarvieira.jellymusic.ui.feature.downloads.AlbumArtDownloadBadge
+import pt.aguiarvieira.jellymusic.ui.feature.downloads.AlbumDownloadBar
+import pt.aguiarvieira.jellymusic.ui.feature.downloads.DownloadDialogs
+import pt.aguiarvieira.jellymusic.ui.feature.downloads.DownloadTarget
+import pt.aguiarvieira.jellymusic.ui.feature.downloads.DownloadsViewModel
 import pt.aguiarvieira.jellymusic.ui.feature.player.MiniPlayer
 import pt.aguiarvieira.jellymusic.ui.feature.player.PlaybackViewModel
 
@@ -66,9 +80,15 @@ fun SearchScreen(
     onExpandPlayer: () -> Unit,
     viewModel: SearchViewModel = hiltViewModel(),
     playbackViewModel: PlaybackViewModel = hiltViewModel(),
+    downloadsViewModel: DownloadsViewModel = hiltViewModel(),
 ) {
     val query by viewModel.query.collectAsStateWithLifecycle()
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val trackStatuses by downloadsViewModel.trackStatuses.collectAsStateWithLifecycle()
+    val albumStatuses by downloadsViewModel.albumStatuses.collectAsStateWithLifecycle()
+    val playlistStatuses by downloadsViewModel.playlistStatuses.collectAsStateWithLifecycle()
+    val transcodeDefault by downloadsViewModel.transcodeDefault.collectAsStateWithLifecycle()
+    var pendingDownload by remember { mutableStateOf<DownloadTarget?>(null) }
     val focusRequester = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
 
@@ -143,11 +163,46 @@ fun SearchScreen(
                         onAlbumClick = onAlbumClick,
                         onArtistClick = onArtistClick,
                         onPlaylistClick = onPlaylistClick,
+                        trackStatuses = trackStatuses,
+                        albumStatuses = albumStatuses,
+                        playlistStatuses = playlistStatuses,
+                        onDownloadTrack = { pendingDownload = DownloadTarget.TrackItem(it) },
+                        onRemoveTrack = downloadsViewModel::removeTrack,
+                        onDownloadAlbum = { album ->
+                            pendingDownload =
+                                DownloadTarget.Album(album.id, album.name, album.artist, album.artworkUrl)
+                        },
+                        onRemoveAlbum = downloadsViewModel::removeAlbum,
+                        onDownloadPlaylist = { playlist ->
+                            pendingDownload =
+                                DownloadTarget.Playlist(playlist.id, playlist.name, playlist.artworkUrl)
+                        },
+                        onRemovePlaylist = downloadsViewModel::removePlaylist,
                     )
                 }
             }
         }
     }
+
+    DownloadDialogs(
+        target = pendingDownload,
+        transcodeDefault = transcodeDefault,
+        isMetered = downloadsViewModel::isMetered,
+        onConfirm = { target, transcode ->
+            when (target) {
+                is DownloadTarget.Album ->
+                    downloadsViewModel.downloadAlbum(
+                        target.id, target.name, target.artist, target.artworkUrl, transcode,
+                    )
+                is DownloadTarget.TrackItem ->
+                    downloadsViewModel.downloadTrack(target.track, transcode)
+                is DownloadTarget.Playlist ->
+                    downloadsViewModel.downloadPlaylist(target.id, target.name, target.artworkUrl, transcode)
+            }
+            pendingDownload = null
+        },
+        onDismiss = { pendingDownload = null },
+    )
 }
 
 /** The four result kinds, in the display order requested by the user. */
@@ -165,6 +220,15 @@ private fun ResultsContent(
     onAlbumClick: (String, String) -> Unit,
     onArtistClick: (String, String) -> Unit,
     onPlaylistClick: (String, String) -> Unit,
+    trackStatuses: Map<String, TrackDownloadStatus>,
+    albumStatuses: Map<String, AlbumDownloadStatus>,
+    playlistStatuses: Map<String, AlbumDownloadStatus>,
+    onDownloadTrack: (pt.aguiarvieira.jellymusic.domain.model.Track) -> Unit,
+    onRemoveTrack: (String) -> Unit,
+    onDownloadAlbum: (Album) -> Unit,
+    onRemoveAlbum: (String) -> Unit,
+    onDownloadPlaylist: (Playlist) -> Unit,
+    onRemovePlaylist: (String) -> Unit,
 ) {
     // Which kinds are present in the current results (drives chip enabled state).
     val present = remember(results) {
@@ -200,6 +264,9 @@ private fun ResultsContent(
                         artworkUrl = playlist.artworkUrl,
                         fallback = Icons.AutoMirrored.Filled.QueueMusic,
                         onClick = { onPlaylistClick(playlist.id, playlist.name) },
+                        downloadStatus = playlistStatuses[playlist.id],
+                        onDownload = { onDownloadPlaylist(playlist) },
+                        onRemoveLocal = { onRemovePlaylist(playlist.id) },
                     )
                 }
             }
@@ -223,13 +290,23 @@ private fun ResultsContent(
                         subtitle = album.artist,
                         artworkUrl = album.artworkUrl,
                         onClick = { onAlbumClick(album.id, album.name) },
+                        downloadStatus = albumStatuses[album.id],
+                        onDownload = { onDownloadAlbum(album) },
+                        onRemoveLocal = { onRemoveAlbum(album.id) },
                     )
                 }
             }
             if (visible(SearchKind.Songs)) {
                 item { SectionHeader("Songs") }
                 items(results.tracks, key = { "t-${it.id}" }) { track ->
-                    TrackRow(track = track, onClick = { onPlayTrack(track) }, showArtwork = true)
+                    TrackRow(
+                        track = track,
+                        onClick = { onPlayTrack(track) },
+                        showArtwork = true,
+                        downloadStatus = trackStatuses[track.id],
+                        onDownload = { onDownloadTrack(track) },
+                        onRemoveLocal = { onRemoveTrack(track.id) },
+                    )
                 }
             }
         }
@@ -260,6 +337,7 @@ private fun FilterChipsRow(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ResultRow(
     title: String,
@@ -267,22 +345,68 @@ private fun ResultRow(
     artworkUrl: String?,
     onClick: () -> Unit,
     fallback: ImageVector = Icons.Filled.MusicNote,
+    downloadStatus: AlbumDownloadStatus? = null,
+    onDownload: (() -> Unit)? = null,
+    onRemoveLocal: (() -> Unit)? = null,
 ) {
-    ListItem(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
-        headlineContent = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-        supportingContent = subtitle?.let {
-            { Text(it, maxLines = 1, overflow = TextOverflow.Ellipsis) }
-        },
-        leadingContent = {
-            ArtworkImage(
-                url = artworkUrl,
-                contentDescription = null,
-                modifier = Modifier.size(48.dp),
-                fallbackIcon = fallback,
+    var menuOpen by remember { mutableStateOf(false) }
+    val hasMenu = onDownload != null || onRemoveLocal != null
+    val canRemove = downloadStatus?.isComplete == true || downloadStatus?.inProgress == true
+
+    Box {
+        Column {
+            ListItem(
+                modifier = Modifier.fillMaxWidth().combinedClickable(
+                    onClick = onClick,
+                    onLongClick = if (hasMenu) ({ menuOpen = true }) else null,
+                ),
+                headlineContent = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                supportingContent = subtitle?.let {
+                    { Text(it, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                },
+                leadingContent = {
+                    ArtworkImage(
+                        url = artworkUrl,
+                        contentDescription = null,
+                        modifier = Modifier.size(48.dp),
+                        fallbackIcon = fallback,
+                    )
+                },
+                trailingContent = {
+                    AlbumArtDownloadBadge(status = downloadStatus)
+                },
             )
-        },
-    )
+            AlbumDownloadBar(
+                status = downloadStatus,
+                modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 6.dp),
+            )
+        }
+
+        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+            onDownload?.let { download ->
+                DropdownMenuItem(
+                    text = { Text("Download") },
+                    leadingIcon = { Icon(Icons.Filled.Save, contentDescription = null) },
+                    onClick = {
+                        menuOpen = false
+                        download()
+                    },
+                )
+            }
+            if (canRemove) {
+                onRemoveLocal?.let { remove ->
+                    DropdownMenuItem(
+                        text = { Text("Remove local") },
+                        leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) },
+                        onClick = {
+                            menuOpen = false
+                            remove()
+                        },
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable

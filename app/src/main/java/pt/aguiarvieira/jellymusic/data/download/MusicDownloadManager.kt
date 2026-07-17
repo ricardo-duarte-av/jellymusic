@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import pt.aguiarvieira.jellymusic.data.db.AlbumDownloadEntity
 import pt.aguiarvieira.jellymusic.data.db.DownloadDao
+import pt.aguiarvieira.jellymusic.data.db.PlaylistDownloadEntity
 import pt.aguiarvieira.jellymusic.data.db.TrackDownloadEntity
 import pt.aguiarvieira.jellymusic.data.settings.SettingsStore
 import pt.aguiarvieira.jellymusic.domain.model.AudioCodec
@@ -109,6 +110,32 @@ class MusicDownloadManager @Inject constructor(
         }
     }
 
+    /**
+     * Download a whole playlist as a group. Writes a [PlaylistDownloadEntity] holding the member track
+     * IDs (so progress can be computed and the group cleanly removed) and enqueues each track, keeping
+     * its original album association so it still resolves for playback and album grouping.
+     */
+    fun downloadPlaylist(playlistId: String, playlistName: String, artworkUrl: String?, transcode: Boolean) {
+        scope.launch {
+            val tracks = musicRepository.getPlaylistTracks(playlistId).getOrNull().orEmpty()
+            if (tracks.isEmpty()) return@launch
+            dao.upsertPlaylist(
+                PlaylistDownloadEntity(
+                    playlistId = playlistId,
+                    name = playlistName,
+                    artworkUrl = artworkUrl,
+                    artworkPath = artworkCache.cache(playlistId, artworkUrl),
+                    totalTracks = tracks.size,
+                    trackIds = tracks.map { it.id },
+                    transcoded = transcode,
+                    requestedAt = System.currentTimeMillis(),
+                ),
+            )
+            tracks.forEach { upsertQueued(it, it.albumId, transcode) }
+            scheduleWork()
+        }
+    }
+
     // --- Remove ---
 
     fun removeTrack(trackId: String) {
@@ -125,6 +152,30 @@ class MusicDownloadManager @Inject constructor(
             dao.completedTracks().filter { it.albumId == albumId }.forEach { deleteFilesFor(it.trackId) }
             dao.deleteTracksForAlbum(albumId)
             artworkCache.delete(albumId)
+        }
+    }
+
+    /**
+     * Drop a playlist download group. A track is only physically removed if nothing else still needs
+     * it — i.e. it isn't part of a downloaded album and isn't a member of any other downloaded
+     * playlist. Shared tracks stay on disk so the other group keeps working.
+     */
+    fun removePlaylist(playlistId: String) {
+        scope.launch {
+            val entity = dao.getPlaylist(playlistId) ?: return@launch
+            dao.deletePlaylist(playlistId)
+            artworkCache.delete(playlistId)
+            val albumIds = dao.downloadedAlbumIds().toSet()
+            // Tracks still claimed by another remaining playlist group.
+            val stillReferenced = dao.playlists().flatMap { it.trackIds }.toSet()
+            entity.trackIds.forEach { trackId ->
+                val track = dao.getTrack(trackId) ?: return@forEach
+                val inDownloadedAlbum = track.albumId != null && track.albumId in albumIds
+                if (!inDownloadedAlbum && trackId !in stillReferenced) {
+                    deleteFilesFor(trackId)
+                    dao.deleteTrack(trackId)
+                }
+            }
         }
     }
 

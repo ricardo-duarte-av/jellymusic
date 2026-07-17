@@ -65,11 +65,24 @@ object DatabaseModule {
         }
     }
 
+    // v8 adds the playlist_downloads grouping table (mirrors album_downloads).
+    private val MIGRATION_7_8 = object : Migration(7, 8) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS `playlist_downloads` (`playlistId` TEXT NOT NULL, " +
+                    "`name` TEXT NOT NULL, `artworkUrl` TEXT, `artworkPath` TEXT, " +
+                    "`totalTracks` INTEGER NOT NULL, `trackIds` TEXT NOT NULL, " +
+                    "`transcoded` INTEGER NOT NULL, `requestedAt` INTEGER NOT NULL, " +
+                    "PRIMARY KEY(`playlistId`))",
+            )
+        }
+    }
+
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): JellyMusicDatabase =
         Room.databaseBuilder(context, JellyMusicDatabase::class.java, "jellymusic.db")
-            .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+            .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
             .fallbackToDestructiveMigration(dropAllTables = true)
             .build()
 

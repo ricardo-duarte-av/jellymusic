@@ -178,46 +178,96 @@ fun ArtistCard(artist: Artist, onClick: () -> Unit, modifier: Modifier = Modifie
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun PlaylistCard(playlist: Playlist, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Card(
-        onClick = onClick,
-        modifier = modifier
-            .testTag("playlistCard")
-            .padding(6.dp),
-    ) {
-        Box {
-            Card(modifier = Modifier.padding(8.dp)) {
-                ArtworkImage(
-                    url = playlist.artworkUrl,
-                    contentDescription = playlist.name,
+fun PlaylistCard(
+    playlist: Playlist,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    downloadStatus: AlbumDownloadStatus? = null,
+    onDownload: (() -> Unit)? = null,
+    onRemoveLocal: (() -> Unit)? = null,
+) {
+    var menuOpen by remember { mutableStateOf(false) }
+    val hasMenu = onDownload != null || onRemoveLocal != null
+    val canRemove = downloadStatus?.isComplete == true || downloadStatus?.inProgress == true
+
+    Box {
+        Card(
+            modifier = modifier
+                .testTag("playlistCard")
+                .padding(6.dp)
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = if (hasMenu) ({ menuOpen = true }) else null,
+                ),
+        ) {
+            Box {
+                Card(modifier = Modifier.padding(8.dp)) {
+                    ArtworkImage(
+                        url = playlist.artworkUrl,
+                        contentDescription = playlist.name,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(1f),
+                        shape = RectangleShape,
+                        fallbackIcon = Icons.AutoMirrored.Filled.QueueMusic,
+                    )
+                }
+                AlbumArtDownloadBadge(
+                    status = downloadStatus,
+                    modifier = Modifier.align(Alignment.TopEnd),
+                )
+                FavoriteArtworkMarker(
+                    favorite = playlist.isFavorite,
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(1f),
-                    shape = RectangleShape,
-                    fallbackIcon = Icons.AutoMirrored.Filled.QueueMusic,
+                        .align(Alignment.TopStart)
+                        .padding(12.dp),
                 )
             }
-            FavoriteArtworkMarker(
-                favorite = playlist.isFavorite,
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(12.dp),
-            )
-        }
-        Column(modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 10.dp)) {
-            Text(
-                text = playlist.name,
-                style = MaterialTheme.typography.titleSmall,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            playlist.trackCount?.let {
+            Column(modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 10.dp)) {
                 Text(
-                    text = "$it tracks",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    text = playlist.name,
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
+                playlist.trackCount?.let {
+                    Text(
+                        text = "$it tracks",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                AlbumDownloadBar(
+                    status = downloadStatus,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
+        }
+
+        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+            onDownload?.let { download ->
+                DropdownMenuItem(
+                    text = { Text("Download") },
+                    leadingIcon = { Icon(Icons.Filled.Save, contentDescription = null) },
+                    onClick = {
+                        menuOpen = false
+                        download()
+                    },
+                )
+            }
+            if (canRemove) {
+                onRemoveLocal?.let { remove ->
+                    DropdownMenuItem(
+                        text = { Text("Remove local") },
+                        leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) },
+                        onClick = {
+                            menuOpen = false
+                            remove()
+                        },
+                    )
+                }
             }
         }
     }

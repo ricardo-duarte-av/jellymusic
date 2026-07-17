@@ -9,6 +9,7 @@ import kotlinx.coroutines.test.runTest
 import pt.aguiarvieira.jellymusic.core.network.NetworkMonitor
 import pt.aguiarvieira.jellymusic.data.db.AlbumDownloadEntity
 import pt.aguiarvieira.jellymusic.data.db.DownloadDao
+import pt.aguiarvieira.jellymusic.data.db.PlaylistDownloadEntity
 import pt.aguiarvieira.jellymusic.data.db.TrackDownloadEntity
 import pt.aguiarvieira.jellymusic.data.download.MusicDownloadManager
 import pt.aguiarvieira.jellymusic.data.settings.SettingsStore
@@ -32,10 +33,12 @@ class DownloadsViewModelTest {
     private fun viewModel(
         tracks: List<TrackDownloadEntity>,
         albums: List<AlbumDownloadEntity> = emptyList(),
+        playlists: List<PlaylistDownloadEntity> = emptyList(),
     ): DownloadsViewModel {
         val dao = mockk<DownloadDao>()
         every { dao.observeTracks() } returns flowOf(tracks)
         every { dao.observeAlbums() } returns flowOf(albums)
+        every { dao.observePlaylists() } returns flowOf(playlists)
         every { settingsStore.streamSettings } returns flowOf(StreamSettings())
         return DownloadsViewModel(downloadManager, networkMonitor, dao, settingsStore)
     }
@@ -78,6 +81,32 @@ class DownloadsViewModelTest {
             var map = awaitItem()
             while (map.isEmpty()) map = awaitItem()
             val status = map.getValue("a1")
+            assertEquals(2, status.total)
+            assertEquals(1, status.completed)
+            assertTrue(status.downloading)
+            assertTrue(!status.isComplete)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `playlist status aggregates its member tracks by id`() = runTest {
+        val playlist = PlaylistDownloadEntity(
+            playlistId = "p1",
+            name = "Mix",
+            artworkUrl = null,
+            totalTracks = 2,
+            trackIds = listOf("t1", "t2"),
+            transcoded = false,
+            requestedAt = 0,
+        )
+        // t1 belongs to a downloaded album too, but the playlist still counts it via its id.
+        val done = trackEntity(trackId = "t1", albumId = "a1", state = "COMPLETED")
+        val queued = trackEntity(trackId = "t2", albumId = null, state = "QUEUED")
+        viewModel(listOf(done, queued), playlists = listOf(playlist)).playlistStatuses.test {
+            var map = awaitItem()
+            while (map.isEmpty()) map = awaitItem()
+            val status = map.getValue("p1")
             assertEquals(2, status.total)
             assertEquals(1, status.completed)
             assertTrue(status.downloading)
