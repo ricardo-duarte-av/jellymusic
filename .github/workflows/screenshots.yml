@@ -231,6 +231,29 @@ jobs:
           cp pulled/*.png screenshots/generated/
           ls -la screenshots/generated
 
+      - name: Refresh README screenshots
+        run: |
+          set -euo pipefail
+          # Promote the generated PNGs onto the curated JPGs the README embeds, so the README
+          # stays in sync automatically. The widget shot (widget.jpg) has no generated source
+          # and is left untouched. Only maps captures that were actually produced this run.
+          declare -A MAP=(
+            [01-albums]=albumlist
+            [04-album-detail]=albumview
+            [05-now-playing]=nowplaying
+            [06-search]=search_screen
+          )
+          for src in "${!MAP[@]}"; do
+            png="screenshots/generated/${src}.png"
+            jpg="screenshots/${MAP[$src]}.jpg"
+            if [ -f "$png" ]; then
+              convert "$png" -quality 92 "$jpg"
+              echo "Updated $jpg from $png"
+            else
+              echo "Skipping $jpg — $png was not produced this run"
+            fi
+          done
+
       - name: Upload screenshots artifact
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
@@ -255,7 +278,8 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add screenshots/generated
+          # Both the generated PNGs and the curated README JPGs refreshed from them.
+          git add screenshots
           if git diff --cached --quiet; then
             echo "No screenshot changes to commit."
             exit 0
