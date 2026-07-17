@@ -61,6 +61,10 @@ import pt.aguiarvieira.jellymusic.R
 /** Circle background + glyph tint for the app-icon badge, both pulled from the album scheme. */
 private data class IconColors(val background: Color, val glyph: Color)
 
+/** The two cover renders the widget needs: [sharp] for the compact background + corner thumbnail,
+ *  [blurred] for the tall layout's frosted background. Both null when there's no artwork. */
+private data class WidgetArtwork(val sharp: Bitmap? = null, val blurred: Bitmap? = null)
+
 /** Below this width the widget shows transport only; at or above it, shuffle + repeat are added. */
 private val WIDE_BREAKPOINT = 260.dp
 
@@ -93,12 +97,23 @@ class NowPlayingWidget : GlanceAppWidget() {
         val initial = context.readNowPlayingWidgetData()
         provideContent {
             val data by remember { context.nowPlayingWidgetDataFlow() }.collectAsState(initial)
-            // Artwork is a suspend load; re-run it only when the cover actually changes.
-            val artwork by produceState<Bitmap?>(initialValue = null, key1 = data.artworkUri) {
-                value = data.artworkUri?.let { loadArtwork(context, it) }
+            // Artwork is a suspend load; re-run it only when the cover actually changes. The tall
+            // layout also needs a blurred copy for its frosted background, so build both here (once)
+            // rather than blurring inside composition.
+            val artwork by produceState(initialValue = WidgetArtwork(), key1 = data.artworkUri) {
+                val sharp = data.artworkUri?.let { loadArtwork(context, it) }
+                value = WidgetArtwork(sharp = sharp, blurred = sharp?.let(::blurArtwork))
             }
-            WidgetBody(data, artwork, albumIconColors(artwork))
+            WidgetBody(data, artwork.sharp, artwork.blurred, albumIconColors(artwork.sharp))
         }
+    }
+
+    /** Cheap frosted blur for the tall-widget background: collapse the cover to a tiny bitmap so
+     * detail is destroyed, then upscale with bilinear filtering for a smooth wash of the album's
+     * colours. API-agnostic (no RenderScript / RenderEffect), and the result stays small. */
+    private fun blurArtwork(bitmap: Bitmap): Bitmap {
+        val tiny = Bitmap.createScaledBitmap(bitmap, 24, 24, true)
+        return Bitmap.createScaledBitmap(tiny, 256, 256, true)
     }
 
     /**
@@ -140,11 +155,19 @@ class NowPlayingWidget : GlanceAppWidget() {
 
 @Composable
 @UnstableApi
-private fun WidgetBody(data: NowPlayingWidgetData, artwork: Bitmap?, iconColors: IconColors) {
+private fun WidgetBody(
+    data: NowPlayingWidgetData,
+    artwork: Bitmap?,
+    blurredArtwork: Bitmap?,
+    iconColors: IconColors,
+) {
     val context = LocalContext.current
     val size = LocalSize.current
     val wide = size.width >= WIDE_BREAKPOINT
     val compact = size.height < COMPACT_HEIGHT
+    // Compact (3x1 / 4x1) keeps the sharp cover as a darkened background; tall layouts (4x2+) use
+    // the blurred cover instead and surface the sharp art as a corner thumbnail.
+    val background = if (compact) artwork else (blurredArtwork ?: artwork)
     // Shuffle/repeat need a wide cell; in the single-row compact form the app icon takes that room
     // instead, so toggles only show in the tall wide layout. The icon identifies the widget and is
     // shown everywhere except the tightest 3x1 (compact + narrow).
@@ -170,9 +193,9 @@ private fun WidgetBody(data: NowPlayingWidgetData, artwork: Bitmap?, iconColors:
             .cornerRadius(if (compact) 16.dp else 24.dp)
             .background(Color(0xFF1C1B1F)),
     ) {
-        if (artwork != null) {
+        if (background != null) {
             Image(
-                provider = ImageProvider(artwork),
+                provider = ImageProvider(background),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = GlanceModifier.fillMaxSize(),
@@ -193,20 +216,35 @@ private fun WidgetBody(data: NowPlayingWidgetData, artwork: Bitmap?, iconColors:
             else -> FullContent(data, showToggles, openPlayer)
         }
 
-        // Tall layouts show the app icon as a top-right overlay (the compact form places it inline
-        // at the end of the row instead — see CompactContent).
-        if (!compact) AppIconOverlay(iconColors)
+        // Tall layouts pin the sharp cover thumbnail to the top-right, with the app icon badged on
+        // top of it (the compact form places the icon inline at the end of the row instead — see
+        // CompactContent).
+        if (!compact) CornerArtwork(artwork, iconColors)
     }
 }
 
-/** App-icon badge pinned to the top-right corner, coloured from the album, identifying the widget. */
+/**
+ * Top-right corner overlay for the tall layout: the sharp album-art thumbnail (a crisp focal point
+ * against the frosted background) with the album-coloured app-icon badge sitting on its corner,
+ * identifying the widget. Falls back to just the badge when there's no artwork.
+ */
 @Composable
-private fun AppIconOverlay(iconColors: IconColors) {
+private fun CornerArtwork(artwork: Bitmap?, iconColors: IconColors) {
     Box(
         modifier = GlanceModifier.fillMaxSize().padding(10.dp),
         contentAlignment = Alignment.TopEnd,
     ) {
-        AppIcon(iconColors, 24.dp)
+        Box(contentAlignment = Alignment.TopEnd) {
+            if (artwork != null) {
+                Image(
+                    provider = ImageProvider(artwork),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = GlanceModifier.size(56.dp).cornerRadius(12.dp),
+                )
+            }
+            AppIcon(iconColors, 22.dp)
+        }
     }
 }
 

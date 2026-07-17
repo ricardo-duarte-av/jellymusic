@@ -16,6 +16,15 @@ data class ChangelogVersion(
 /** Newest first. Unreleased (version = null) always on top. */
 val CHANGELOG: List<ChangelogVersion> = listOf(
     ChangelogVersion(
+        version = null,
+        date = null,
+        changes = listOf(
+            "Larger home-screen widgets (4x2 and taller) now show a frosted, blurred cover as the " +
+                "background with the sharp album art as a thumbnail in the top-right corner. Smaller " +
+                "widgets keep the darkened full-cover look.",
+        ),
+    ),
+    ChangelogVersion(
         version = "0.1.47",
         date = "17/07/2026",
         changes = listOf(
