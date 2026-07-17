@@ -134,7 +134,9 @@ class ScreenshotTest {
             composeRule.onNode(hasSetTextAction()).performTextInput("zelda")
             // Drop the keyboard so the results (not a half-screen of keys) fill the shot.
             Espresso.closeSoftKeyboard()
-            settle()
+            // Result rows load their artwork lazily — give Coil longer to decode the
+            // visible thumbnails so the shot isn't full of grey placeholders.
+            settle(6_000)
         }
         // Close the IME first — otherwise the first Back only dismisses the keyboard and
         // leaves us on Search instead of returning Home.
