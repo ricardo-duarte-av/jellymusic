@@ -30,11 +30,12 @@ env:
   JAVA_VERSION: "21"
   SYSTEM_IMAGE: ${{ github.event.inputs.system-image || 'system-images;android-37.0;google_apis_ps16k;x86_64' }}
   DEVICE: ${{ github.event.inputs.device || 'pixel_6' }}
-  # Real server + throwaway test creds (overridable via repo secrets). Public library,
-  # so nothing sensitive here — the same values live in CLAUDE.md.
-  SERVER_URL: ${{ secrets.SCREENSHOT_SERVER_URL || 'https://jellyfin.aguiarvieira.pt' }}
-  USERNAME: ${{ secrets.SCREENSHOT_USERNAME || 'jelly' }}
-  PASSWORD: ${{ secrets.SCREENSHOT_PASSWORD || 'jelly1234jelly' }}
+  # Jellyfin server + login for the screenshot run. Supplied entirely via repo secrets
+  # (Settings → Secrets and variables → Actions) so no server address or credentials live
+  # in the repo. All three are required — the job fails fast below if any is unset.
+  SERVER_URL: ${{ secrets.SCREENSHOT_SERVER_URL }}
+  USERNAME: ${{ secrets.SCREENSHOT_USERNAME }}
+  PASSWORD: ${{ secrets.SCREENSHOT_PASSWORD }}
   # Debug build carries the .debug applicationId suffix — its external files dir is
   # where the test writes the PNGs.
   APP_ID: pt.aguiarvieira.jellymusic.debug
@@ -46,6 +47,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Check required secrets
+        run: |
+          : "${SERVER_URL:?SCREENSHOT_SERVER_URL secret is not set}"
+          : "${USERNAME:?SCREENSHOT_USERNAME secret is not set}"
+          : "${PASSWORD:?SCREENSHOT_PASSWORD secret is not set}"
+          echo "Credentials present."
 
       # KVM is required for a hardware-accelerated (fast, non-flaky) emulator on Linux.
       - name: Enable KVM
@@ -169,10 +177,7 @@ jobs:
           adb install -r -g app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
 
           adb logcat -c || true
-          adb logcat '*:S' ScreenshotTest:I > "$RUNNER_TEMP/screenshot-test.log" &
-          # Full logcat so we catch Coil's per-image logs (whatever tag) + OkHttp/network
-          # errors + crashes to diagnose why some artwork doesn't load.
-          adb logcat -v time > "$RUNNER_TEMP/coil.log" &
+          adb logcat '*:S' ScreenshotTest:I RealImageLoader:E AndroidRuntime:E > "$RUNNER_TEMP/screenshot-test.log" &
 
           adb shell am instrument -w -r \
             -e class pt.aguiarvieira.jellymusic.ScreenshotTest \
@@ -234,7 +239,6 @@ jobs:
           path: |
             ${{ runner.temp }}/emulator.log
             ${{ runner.temp }}/screenshot-test.log
-            ${{ runner.temp }}/coil.log
             app/build/reports/androidTests/
           if-no-files-found: ignore
 
