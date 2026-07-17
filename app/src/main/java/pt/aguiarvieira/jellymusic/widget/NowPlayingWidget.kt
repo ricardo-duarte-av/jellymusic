@@ -251,7 +251,7 @@ private fun CornerArtwork(artwork: Bitmap?, iconColors: IconColors) {
                 provider = ImageProvider(artwork),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
-                modifier = GlanceModifier.size(CORNER_THUMB),
+                modifier = GlanceModifier.size(CORNER_THUMB).cornerRadius(12.dp),
             )
         }
     }
