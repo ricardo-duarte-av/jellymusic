@@ -17,6 +17,7 @@ data class CachedAlbumEntity(
     val artist: String?,
     val year: Int?,
     val artworkUrl: String?,
+    val isFavorite: Boolean = false,
 )
 
 fun CachedAlbumEntity.toAlbum(): Album = Album(
@@ -25,4 +26,5 @@ fun CachedAlbumEntity.toAlbum(): Album = Album(
     artist = artist,
     year = year,
     artworkUrl = artworkUrl,
+    isFavorite = isFavorite,
 )

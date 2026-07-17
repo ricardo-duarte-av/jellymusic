@@ -4,12 +4,16 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import pt.aguiarvieira.jellymusic.domain.model.StreamSettings
 import pt.aguiarvieira.jellymusic.domain.model.Track
 import pt.aguiarvieira.jellymusic.domain.model.TrackAudioInfo
@@ -27,6 +31,28 @@ class PlaybackViewModel @Inject constructor(
     val state = connection.state
     val progress = connection.progress
     val queue = connection.queue
+
+    // Favourite state of the currently-playing track. Re-fetched whenever the track changes and
+    // flipped optimistically on toggle.
+    private val _isFavorite = MutableStateFlow(false)
+    val isFavorite: StateFlow<Boolean> = _isFavorite.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            connection.state.map { it.trackId }.distinctUntilChanged().collectLatest { trackId ->
+                _isFavorite.value = trackId?.let { musicRepository.getFavorite(it).getOrDefault(false) } ?: false
+            }
+        }
+    }
+
+    fun toggleFavorite() {
+        val trackId = state.value.trackId ?: return
+        val target = !_isFavorite.value
+        _isFavorite.value = target
+        viewModelScope.launch {
+            musicRepository.setFavorite(trackId, target).onFailure { _isFavorite.value = !target }
+        }
+    }
 
     /**
      * Human-readable quality of the current track: the original file's codec/rate/depth/bitrate, or

@@ -34,12 +34,15 @@ data class BrowseUiState(
     val playlists: ContentState<List<Playlist>> = ContentState.Loading,
     /** True while a pull-to-refresh re-fetch of the current tab is in flight. */
     val refreshing: Boolean = false,
+    /** When on, every tab narrows to the user's favourites (sort still applies within). */
+    val favoritesOnly: Boolean = false,
 )
 
 private data class AlbumQuery(
     val libraryId: String,
     val sort: AlbumSort,
     val descending: Boolean,
+    val favoritesOnly: Boolean = false,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -59,7 +62,7 @@ class BrowseViewModel @Inject constructor(
 
     /** Paged albums for the current library + sort; the grid collects this. */
     val albumsPaging: Flow<PagingData<Album>> = albumQuery
-        .flatMapLatest { q -> musicRepository.albumsPager(q.libraryId, q.sort, q.descending) }
+        .flatMapLatest { q -> musicRepository.albumsPager(q.libraryId, q.sort, q.descending, q.favoritesOnly) }
         .cachedIn(viewModelScope)
 
     init {
@@ -117,21 +120,43 @@ class BrowseViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Toggles the "Favourites only" filter across all tabs. Resets Artists/Playlists to Loading so
+     * the [ensureArtists]/[ensurePlaylists] re-fetch (driven by the tab's LaunchedEffect) reruns with
+     * the new filter, and re-points the album pager.
+     */
+    fun toggleFavoritesOnly() {
+        val favoritesOnly = !_state.value.favoritesOnly
+        _state.update {
+            it.copy(
+                favoritesOnly = favoritesOnly,
+                artists = ContentState.Loading,
+                playlists = ContentState.Loading,
+            )
+        }
+        albumQuery.update { it.copy(favoritesOnly = favoritesOnly) }
+    }
+
     /** Loads Artists only if not already loaded (called when the Artists tab is viewed). */
     fun ensureArtists() {
         if (_state.value.artists !is ContentState.Loading) return
         val libraryId = _state.value.selectedLibrary.id
+        val favoritesOnly = _state.value.favoritesOnly
         viewModelScope.launch {
-            _state.update { it.copy(artists = musicRepository.getArtists(libraryId).toContentState()) }
+            _state.update {
+                it.copy(artists = musicRepository.getArtists(libraryId, favoritesOnly).toContentState())
+            }
         }
     }
 
     /** Loads Playlists only if not already loaded (called when the Playlists tab is viewed). */
     fun ensurePlaylists() {
         if (_state.value.playlists !is ContentState.Loading) return
+        val libraryId = _state.value.selectedLibrary.id
+        val favoritesOnly = _state.value.favoritesOnly
         viewModelScope.launch {
             _state.update {
-                it.copy(playlists = musicRepository.getPlaylists(_state.value.selectedLibrary.id).toContentState())
+                it.copy(playlists = musicRepository.getPlaylists(libraryId, favoritesOnly).toContentState())
             }
         }
     }
@@ -145,9 +170,10 @@ class BrowseViewModel @Inject constructor(
     fun refreshArtists() {
         if (_state.value.refreshing) return
         val libraryId = _state.value.selectedLibrary.id
+        val favoritesOnly = _state.value.favoritesOnly
         viewModelScope.launch {
             _state.update { it.copy(refreshing = true) }
-            val artists = musicRepository.getArtists(libraryId).toContentState()
+            val artists = musicRepository.getArtists(libraryId, favoritesOnly).toContentState()
             _state.update { it.copy(artists = artists, refreshing = false) }
         }
     }
@@ -156,9 +182,10 @@ class BrowseViewModel @Inject constructor(
     fun refreshPlaylists() {
         if (_state.value.refreshing) return
         val libraryId = _state.value.selectedLibrary.id
+        val favoritesOnly = _state.value.favoritesOnly
         viewModelScope.launch {
             _state.update { it.copy(refreshing = true) }
-            val playlists = musicRepository.getPlaylists(libraryId).toContentState()
+            val playlists = musicRepository.getPlaylists(libraryId, favoritesOnly).toContentState()
             _state.update { it.copy(playlists = playlists, refreshing = false) }
         }
     }

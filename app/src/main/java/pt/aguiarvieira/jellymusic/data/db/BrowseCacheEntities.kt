@@ -11,6 +11,7 @@ data class CachedArtistEntity(
     val id: String,
     val name: String,
     val artworkUrl: String?,
+    val isFavorite: Boolean = false,
 )
 
 /** Cached playlist row. Playlists are server-global, so no library key. */
@@ -20,10 +21,12 @@ data class CachedPlaylistEntity(
     val name: String,
     val trackCount: Int?,
     val artworkUrl: String?,
+    val isFavorite: Boolean = false,
 )
 
-fun Artist.toCached(libraryKey: String) = CachedArtistEntity(libraryKey, id, name, artworkUrl)
-fun CachedArtistEntity.toArtist() = Artist(id = id, name = name, artworkUrl = artworkUrl)
+fun Artist.toCached(libraryKey: String) = CachedArtistEntity(libraryKey, id, name, artworkUrl, isFavorite)
+fun CachedArtistEntity.toArtist() = Artist(id = id, name = name, artworkUrl = artworkUrl, isFavorite = isFavorite)
 
-fun Playlist.toCached() = CachedPlaylistEntity(id, name, trackCount, artworkUrl)
-fun CachedPlaylistEntity.toPlaylist() = Playlist(id = id, name = name, trackCount = trackCount, artworkUrl = artworkUrl)
+fun Playlist.toCached() = CachedPlaylistEntity(id, name, trackCount, artworkUrl, isFavorite)
+fun CachedPlaylistEntity.toPlaylist() =
+    Playlist(id = id, name = name, trackCount = trackCount, artworkUrl = artworkUrl, isFavorite = isFavorite)

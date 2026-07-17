@@ -21,6 +21,8 @@ import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -30,6 +32,8 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -102,7 +106,7 @@ fun BrowseShell(
 
     // Lazily load Artists/Playlists the first time their tab is shown (Albums loads eagerly).
     // Re-keyed on the library so a library switch reloads the currently-visible tab.
-    LaunchedEffect(selectedTab, state.selectedLibrary.id) {
+    LaunchedEffect(selectedTab, state.selectedLibrary.id, state.favoritesOnly) {
         when (selectedTab) {
             BrowseTab.ARTISTS -> viewModel.ensureArtists()
             BrowseTab.PLAYLISTS -> viewModel.ensurePlaylists()
@@ -149,6 +153,11 @@ fun BrowseShell(
                                     onToggleOrder = viewModel::toggleAlbumSortOrder,
                                 )
                             }
+                            // Favourites filter — narrows the current tab to favourites (all tabs).
+                            FavoritesFilterChip(
+                                selected = state.favoritesOnly,
+                                onClick = viewModel::toggleFavoritesOnly,
+                            )
                         }
                     }
                 },
@@ -221,6 +230,24 @@ fun BrowseShell(
             pendingDownload = null
         },
         onDismiss = { pendingDownload = null },
+    )
+}
+
+/** Heart filter chip that narrows the active tab to the user's favourites. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun FavoritesFilterChip(selected: Boolean, onClick: () -> Unit) {
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = { Text("Favourites") },
+        leadingIcon = {
+            Icon(
+                imageVector = if (selected) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                contentDescription = null,
+                modifier = Modifier.size(FilterChipDefaults.IconSize),
+            )
+        },
     )
 }
 

@@ -11,7 +11,7 @@ import androidx.room.RoomDatabase
         CachedArtistEntity::class,
         CachedPlaylistEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 abstract class JellyMusicDatabase : RoomDatabase() {

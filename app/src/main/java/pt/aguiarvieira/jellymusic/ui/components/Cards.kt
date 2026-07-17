@@ -83,6 +83,12 @@ fun AlbumCard(
                     status = downloadStatus,
                     modifier = Modifier.align(Alignment.TopEnd),
                 )
+                FavoriteArtworkMarker(
+                    favorite = album.isFavorite,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(12.dp),
+                )
             }
             Column(modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 10.dp)) {
                 Text(
@@ -144,15 +150,23 @@ fun ArtistCard(artist: Artist, onClick: () -> Unit, modifier: Modifier = Modifie
             .padding(6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        ArtworkImage(
-            url = artist.artworkUrl,
-            contentDescription = artist.name,
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(1f),
-            shape = CircleShape,
-            fallbackIcon = Icons.Filled.Person,
-        )
+        Box {
+            ArtworkImage(
+                url = artist.artworkUrl,
+                contentDescription = artist.name,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f),
+                shape = CircleShape,
+                fallbackIcon = Icons.Filled.Person,
+            )
+            FavoriteArtworkMarker(
+                favorite = artist.isFavorite,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(8.dp),
+            )
+        }
         Spacer(Modifier.height(8.dp))
         Text(
             text = artist.name,
@@ -172,15 +186,23 @@ fun PlaylistCard(playlist: Playlist, onClick: () -> Unit, modifier: Modifier = M
             .testTag("playlistCard")
             .padding(6.dp),
     ) {
-        Card(modifier = Modifier.padding(8.dp)) {
-            ArtworkImage(
-                url = playlist.artworkUrl,
-                contentDescription = playlist.name,
+        Box {
+            Card(modifier = Modifier.padding(8.dp)) {
+                ArtworkImage(
+                    url = playlist.artworkUrl,
+                    contentDescription = playlist.name,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(1f),
+                    shape = RectangleShape,
+                    fallbackIcon = Icons.AutoMirrored.Filled.QueueMusic,
+                )
+            }
+            FavoriteArtworkMarker(
+                favorite = playlist.isFavorite,
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(1f),
-                shape = RectangleShape,
-                fallbackIcon = Icons.AutoMirrored.Filled.QueueMusic,
+                    .align(Alignment.TopStart)
+                    .padding(12.dp),
             )
         }
         Column(modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 10.dp)) {

@@ -38,6 +38,7 @@ class AlbumRemoteMediator(
     private val libraryId: String?,
     private val sort: AlbumSort,
     private val descending: Boolean,
+    private val favoritesOnly: Boolean,
     private val queryKey: String,
 ) : RemoteMediator<Int, CachedAlbumEntity>() {
 
@@ -66,7 +67,8 @@ class AlbumRemoteMediator(
                     sortOrder = listOf(if (descending) SortOrder.DESCENDING else SortOrder.ASCENDING),
                     startIndex = startIndex,
                     limit = state.config.pageSize,
-                    enableUserData = false,
+                    // UserData carries the favourite flag; also filters to favourites when requested.
+                    isFavorite = if (favoritesOnly) true else null,
                     imageTypeLimit = 1,
                     enableImageTypes = listOf(ImageType.PRIMARY),
                 ),
@@ -81,6 +83,7 @@ class AlbumRemoteMediator(
                     artist = dto.albumArtist ?: dto.artists?.firstOrNull(),
                     year = dto.productionYear,
                     artworkUrl = urlBuilder.imageUrl(dto.id.toString()),
+                    isFavorite = dto.userData?.isFavorite == true,
                 )
             }
 

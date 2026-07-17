@@ -6,12 +6,14 @@ data class Album(
     val artist: String?,
     val year: Int?,
     val artworkUrl: String?,
+    val isFavorite: Boolean = false,
 )
 
 data class Artist(
     val id: String,
     val name: String,
     val artworkUrl: String?,
+    val isFavorite: Boolean = false,
 )
 
 data class Playlist(
@@ -19,6 +21,7 @@ data class Playlist(
     val name: String,
     val trackCount: Int?,
     val artworkUrl: String?,
+    val isFavorite: Boolean = false,
 )
 
 data class Track(
@@ -39,6 +42,8 @@ data class Track(
     val normalizationGainDb: Float? = null,
     /** Original audio-stream details, populated only when the query requested MediaSources. */
     val audioInfo: TrackAudioInfo? = null,
+    /** Whether this item is in the user's Jellyfin favourites (needs a query with UserData). */
+    val isFavorite: Boolean = false,
 )
 
 /** Combined results of a library search, grouped by content type. */

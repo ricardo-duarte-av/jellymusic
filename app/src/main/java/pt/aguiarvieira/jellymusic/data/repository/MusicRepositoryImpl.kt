@@ -33,6 +33,7 @@ import org.jellyfin.sdk.api.client.exception.InvalidStatusException
 import org.jellyfin.sdk.api.operations.ArtistsApi
 import org.jellyfin.sdk.api.operations.ItemsApi
 import org.jellyfin.sdk.api.operations.PlaylistsApi
+import org.jellyfin.sdk.api.operations.UserLibraryApi
 import org.jellyfin.sdk.model.api.BaseItemKind
 import org.jellyfin.sdk.model.api.ImageType
 import org.jellyfin.sdk.model.api.ItemFields
@@ -61,6 +62,7 @@ class MusicRepositoryImpl @Inject constructor(
         libraryId: String?,
         sort: AlbumSort,
         descending: Boolean,
+        favoritesOnly: Boolean,
     ): Result<List<Album>> = query { api ->
         ItemsApi(api).getItems(
             GetItemsRequest(
@@ -69,8 +71,8 @@ class MusicRepositoryImpl @Inject constructor(
                 recursive = true,
                 sortBy = listOf(sort.toItemSortBy()),
                 sortOrder = listOf(if (descending) SortOrder.DESCENDING else SortOrder.ASCENDING),
-                // Trim the payload to what the grid shows (drops user-data + extra image tags).
-                enableUserData = false,
+                // UserData carries the favourite flag shown as a heart on the grid.
+                isFavorite = favoritesOnly.orNull(),
                 imageTypeLimit = 1,
                 enableImageTypes = listOf(ImageType.PRIMARY),
             ),
@@ -82,18 +84,19 @@ class MusicRepositoryImpl @Inject constructor(
         libraryId: String?,
         sort: AlbumSort,
         descending: Boolean,
+        favoritesOnly: Boolean,
     ): Flow<PagingData<Album>> {
-        val queryKey = "${libraryId ?: MusicLibrary.ALL_ID}|${sort.name}|$descending"
+        val queryKey = "${libraryId ?: MusicLibrary.ALL_ID}|${sort.name}|$descending|fav=$favoritesOnly"
         return Pager(
             config = PagingConfig(pageSize = ALBUM_PAGE_SIZE, enablePlaceholders = false),
             remoteMediator = AlbumRemoteMediator(
-                clientProvider, urlBuilder, database, libraryId, sort, descending, queryKey,
+                clientProvider, urlBuilder, database, libraryId, sort, descending, favoritesOnly, queryKey,
             ),
             pagingSourceFactory = { database.albumDao().pagingSource(queryKey) },
         ).flow.map { pagingData -> pagingData.map { it.toAlbum() } }
     }
 
-    override suspend fun getArtists(libraryId: String?): Result<List<Artist>> {
+    override suspend fun getArtists(libraryId: String?, favoritesOnly: Boolean): Result<List<Artist>> {
         val key = libraryId ?: MusicLibrary.ALL_ID
         val remote = query { api ->
             ArtistsApi(api).getAlbumArtists(
@@ -101,12 +104,14 @@ class MusicRepositoryImpl @Inject constructor(
                     parentId = libraryId.toParentUuid(),
                     sortBy = listOf(ItemSortBy.SORT_NAME),
                     sortOrder = listOf(SortOrder.ASCENDING),
-                    enableUserData = false,
+                    isFavorite = favoritesOnly.orNull(),
                     imageTypeLimit = 1,
                     enableImageTypes = listOf(ImageType.PRIMARY),
                 ),
             ).content.items.map { it.toArtist(urlBuilder) }
         }
+        // The favourites view is a transient filter, not the canonical list — don't overwrite the cache.
+        if (favoritesOnly) return remote
         remote.getOrNull()?.let { artists ->
             database.browseCacheDao().replaceArtists(key, artists.map { it.toCached(key) })
             return remote
@@ -116,7 +121,7 @@ class MusicRepositoryImpl @Inject constructor(
         return if (cached.isNotEmpty()) Result.success(cached) else remote
     }
 
-    override suspend fun getPlaylists(libraryId: String?): Result<List<Playlist>> {
+    override suspend fun getPlaylists(libraryId: String?, favoritesOnly: Boolean): Result<List<Playlist>> {
         val remote = query { api ->
             // Playlists live in their own view, so we query the whole server rather than a library.
             ItemsApi(api).getItems(
@@ -125,12 +130,13 @@ class MusicRepositoryImpl @Inject constructor(
                     recursive = true,
                     sortBy = listOf(ItemSortBy.SORT_NAME),
                     sortOrder = listOf(SortOrder.ASCENDING),
-                    enableUserData = false,
+                    isFavorite = favoritesOnly.orNull(),
                     imageTypeLimit = 1,
                     enableImageTypes = listOf(ImageType.PRIMARY),
                 ),
             ).content.items.map { it.toPlaylist(urlBuilder) }
         }
+        if (favoritesOnly) return remote
         remote.getOrNull()?.let { playlists ->
             database.browseCacheDao().replacePlaylists(playlists.map { it.toCached() })
             return remote
@@ -167,6 +173,7 @@ class MusicRepositoryImpl @Inject constructor(
                     includeItemTypes = listOf(BaseItemKind.AUDIO),
                     // MediaSources carries the audio stream's codec/rate/depth, shown on track rows.
                     fields = listOf(ItemFields.MEDIA_SOURCES),
+                    enableUserData = true,
                 ),
             ).content.items
                 .map { it.toTrack(urlBuilder) }
@@ -193,6 +200,7 @@ class MusicRepositoryImpl @Inject constructor(
                 recursive = true,
                 sortBy = listOf(ItemSortBy.PRODUCTION_YEAR, ItemSortBy.SORT_NAME),
                 sortOrder = listOf(SortOrder.DESCENDING),
+                enableUserData = true,
             ),
         ).content.items.map { it.toAlbum(urlBuilder) }
     }
@@ -202,6 +210,7 @@ class MusicRepositoryImpl @Inject constructor(
             GetPlaylistItemsRequest(
                 playlistId = UUID.fromString(playlistId),
                 fields = listOf(ItemFields.MEDIA_SOURCES),
+                enableUserData = true,
             ),
         ).content.items.map { it.toTrack(urlBuilder) }
     }
@@ -218,7 +227,7 @@ class MusicRepositoryImpl @Inject constructor(
                         recursive = true,
                         searchTerm = query,
                         limit = SEARCH_LIMIT,
-                        enableUserData = false,
+                        enableUserData = true,
                         imageTypeLimit = 1,
                         enableImageTypes = listOf(ImageType.PRIMARY),
                         fields = listOf(ItemFields.MEDIA_SOURCES),
@@ -233,7 +242,7 @@ class MusicRepositoryImpl @Inject constructor(
                         recursive = true,
                         searchTerm = query,
                         limit = SEARCH_LIMIT,
-                        enableUserData = false,
+                        enableUserData = true,
                         imageTypeLimit = 1,
                         enableImageTypes = listOf(ImageType.PRIMARY),
                     ),
@@ -246,7 +255,7 @@ class MusicRepositoryImpl @Inject constructor(
                         recursive = true,
                         searchTerm = query,
                         limit = SEARCH_LIMIT,
-                        enableUserData = false,
+                        enableUserData = true,
                         imageTypeLimit = 1,
                         enableImageTypes = listOf(ImageType.PRIMARY),
                     ),
@@ -258,7 +267,7 @@ class MusicRepositoryImpl @Inject constructor(
                         parentId = parent,
                         searchTerm = query,
                         limit = SEARCH_LIMIT,
-                        enableUserData = false,
+                        enableUserData = true,
                         imageTypeLimit = 1,
                         enableImageTypes = listOf(ImageType.PRIMARY),
                     ),
@@ -271,6 +280,22 @@ class MusicRepositoryImpl @Inject constructor(
                 playlists = playlists.await(),
             )
         }
+    }
+
+    override suspend fun getFavorite(itemId: String): Result<Boolean> = query { api ->
+        ItemsApi(api).getItems(
+            GetItemsRequest(
+                ids = listOf(UUID.fromString(itemId)),
+                enableUserData = true,
+            ),
+        ).content.items.firstOrNull()?.userData?.isFavorite == true
+    }
+
+    override suspend fun setFavorite(itemId: String, favorite: Boolean): Result<Unit> = query { api ->
+        val userLibrary = UserLibraryApi(api)
+        val uuid = UUID.fromString(itemId)
+        if (favorite) userLibrary.markFavoriteItem(uuid) else userLibrary.unmarkFavoriteItem(uuid)
+        Unit
     }
 
     private suspend fun <T> query(block: suspend (ApiClient) -> T): Result<T> =
@@ -287,4 +312,7 @@ class MusicRepositoryImpl @Inject constructor(
 
     private fun String?.toParentUuid(): UUID? =
         if (this == null || this == MusicLibrary.ALL_ID) null else UUID.fromString(this)
+
+    // Jellyfin's isFavorite filter is tri-state: true = favourites only, null = no filter.
+    private fun Boolean.orNull(): Boolean? = if (this) true else null
 }

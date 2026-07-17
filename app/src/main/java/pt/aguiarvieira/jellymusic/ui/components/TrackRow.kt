@@ -4,11 +4,14 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -40,9 +43,10 @@ fun TrackRow(
     downloadStatus: TrackDownloadStatus? = null,
     onDownload: (() -> Unit)? = null,
     onRemoveLocal: (() -> Unit)? = null,
+    onToggleFavorite: (() -> Unit)? = null,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
-    val hasMenu = onDownload != null || onRemoveLocal != null
+    val hasMenu = onDownload != null || onRemoveLocal != null || onToggleFavorite != null
     val canRemove = downloadStatus?.isComplete == true || downloadStatus?.isActive == true
 
     Box {
@@ -76,8 +80,15 @@ fun TrackRow(
             trailingContent = {
                 Column(horizontalAlignment = Alignment.End) {
                     TrackDownloadIndicator(downloadStatus)
-                    track.durationMs?.let { ms ->
-                        Text(formatDuration(ms), style = MaterialTheme.typography.labelMedium)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        FavoriteMarker(favorite = track.isFavorite, size = 16.dp)
+                        track.durationMs?.let { ms ->
+                            Text(
+                                formatDuration(ms),
+                                style = MaterialTheme.typography.labelMedium,
+                                modifier = Modifier.padding(start = 6.dp),
+                            )
+                        }
                     }
                 }
             },
@@ -89,6 +100,21 @@ fun TrackRow(
       }
 
         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+            onToggleFavorite?.let { toggle ->
+                DropdownMenuItem(
+                    text = { Text(if (track.isFavorite) "Remove from favourites" else "Add to favourites") },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = if (track.isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                            contentDescription = null,
+                        )
+                    },
+                    onClick = {
+                        menuOpen = false
+                        toggle()
+                    },
+                )
+            }
             onDownload?.let { download ->
                 DropdownMenuItem(
                     text = { Text("Download") },

@@ -16,6 +16,17 @@ data class ChangelogVersion(
 /** Newest first. Unreleased (version = null) always on top. */
 val CHANGELOG: List<ChangelogVersion> = listOf(
     ChangelogVersion(
+        version = "0.1.45",
+        date = "17/07/2026",
+        changes = listOf(
+            "Favourites: albums, artists, playlists and tracks you've favourited on Jellyfin now " +
+                "show a heart, and you can favourite items from the album, artist, playlist and " +
+                "now-playing screens.",
+            "New \"Favourites\" filter on the Albums, Artists and Playlists tabs to show only your " +
+                "favourites.",
+        ),
+    ),
+    ChangelogVersion(
         version = "0.1.44",
         date = "17/07/2026",
         changes = listOf(

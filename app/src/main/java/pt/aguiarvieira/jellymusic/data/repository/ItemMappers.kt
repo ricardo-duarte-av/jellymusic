@@ -20,12 +20,14 @@ internal fun BaseItemDto.toAlbum(urlBuilder: StreamUrlBuilder) = Album(
     artist = albumArtist ?: artists?.firstOrNull(),
     year = productionYear,
     artworkUrl = urlBuilder.imageUrl(id.toString()),
+    isFavorite = userData?.isFavorite == true,
 )
 
 internal fun BaseItemDto.toArtist(urlBuilder: StreamUrlBuilder) = Artist(
     id = id.toString(),
     name = name.orEmpty(),
     artworkUrl = urlBuilder.imageUrl(id.toString()),
+    isFavorite = userData?.isFavorite == true,
 )
 
 internal fun BaseItemDto.toPlaylist(urlBuilder: StreamUrlBuilder) = Playlist(
@@ -33,6 +35,7 @@ internal fun BaseItemDto.toPlaylist(urlBuilder: StreamUrlBuilder) = Playlist(
     name = name.orEmpty(),
     trackCount = childCount,
     artworkUrl = urlBuilder.imageUrl(id.toString()),
+    isFavorite = userData?.isFavorite == true,
 )
 
 internal fun BaseItemDto.toTrack(urlBuilder: StreamUrlBuilder) = Track(
@@ -47,6 +50,7 @@ internal fun BaseItemDto.toTrack(urlBuilder: StreamUrlBuilder) = Track(
     durationMs = runTimeTicks?.let { it / TICKS_PER_MS },
     artworkUrl = urlBuilder.imageUrl(albumId?.toString() ?: id.toString()),
     normalizationGainDb = normalizationGain,
+    isFavorite = userData?.isFavorite == true,
     // Populated only when the query requested MediaSources (e.g. album/playlist/search track lists).
     audioInfo = mediaSources?.firstOrNull()?.mediaStreams
         ?.firstOrNull { it.type == MediaStreamType.AUDIO }

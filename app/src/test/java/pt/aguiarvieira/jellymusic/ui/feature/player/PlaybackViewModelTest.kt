@@ -36,6 +36,8 @@ class PlaybackViewModelTest {
         every { connection.state } returns MutableStateFlow(state)
         every { connection.progress } returns MutableStateFlow(PlaybackProgress())
         every { connection.queue } returns MutableStateFlow(emptyList<QueueItem>())
+        // The VM reads the current track's favourite state on init.
+        coEvery { repository.getFavorite(any()) } returns Result.success(false)
         return PlaybackViewModel(connection, repository)
     }
 

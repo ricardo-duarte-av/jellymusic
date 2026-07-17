@@ -7,6 +7,7 @@ import androidx.navigation.toRoute
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import pt.aguiarvieira.jellymusic.domain.model.Album
 import pt.aguiarvieira.jellymusic.domain.model.Track
@@ -27,11 +28,23 @@ class AlbumDetailViewModel @Inject constructor(
     private val _tracks = MutableStateFlow<ContentState<List<Track>>>(ContentState.Loading)
     val tracks = _tracks.asStateFlow()
 
+    private val _isFavorite = MutableStateFlow(false)
+    val isFavorite = _isFavorite.asStateFlow()
+
     init {
         viewModelScope.launch {
             _tracks.value = musicRepository.getAlbumTracks(args.albumId).toContentState()
         }
+        viewModelScope.launch {
+            musicRepository.getFavorite(args.albumId).onSuccess { _isFavorite.value = it }
+        }
     }
+
+    fun toggleFavorite() =
+        toggleFavoriteIn(_isFavorite, musicRepository, args.albumId)
+
+    fun toggleTrackFavorite(track: Track) =
+        toggleTrackFavoriteIn(_tracks, musicRepository, track)
 }
 
 @HiltViewModel
@@ -45,11 +58,23 @@ class PlaylistDetailViewModel @Inject constructor(
     private val _tracks = MutableStateFlow<ContentState<List<Track>>>(ContentState.Loading)
     val tracks = _tracks.asStateFlow()
 
+    private val _isFavorite = MutableStateFlow(false)
+    val isFavorite = _isFavorite.asStateFlow()
+
     init {
         viewModelScope.launch {
             _tracks.value = musicRepository.getPlaylistTracks(args.playlistId).toContentState()
         }
+        viewModelScope.launch {
+            musicRepository.getFavorite(args.playlistId).onSuccess { _isFavorite.value = it }
+        }
     }
+
+    fun toggleFavorite() =
+        toggleFavoriteIn(_isFavorite, musicRepository, args.playlistId)
+
+    fun toggleTrackFavorite(track: Track) =
+        toggleTrackFavoriteIn(_tracks, musicRepository, track)
 }
 
 @HiltViewModel
@@ -63,9 +88,54 @@ class ArtistDetailViewModel @Inject constructor(
     private val _albums = MutableStateFlow<ContentState<List<Album>>>(ContentState.Loading)
     val albums = _albums.asStateFlow()
 
+    private val _isFavorite = MutableStateFlow(false)
+    val isFavorite = _isFavorite.asStateFlow()
+
     init {
         viewModelScope.launch {
             _albums.value = musicRepository.getArtistAlbums(args.artistId).toContentState()
         }
+        viewModelScope.launch {
+            musicRepository.getFavorite(args.artistId).onSuccess { _isFavorite.value = it }
+        }
+    }
+
+    fun toggleFavorite() =
+        toggleFavoriteIn(_isFavorite, musicRepository, args.artistId)
+}
+
+/**
+ * Optimistically flips [itemId]'s favourite state in [flow] and pushes it to the server, reverting
+ * on failure. Shared by the detail viewmodels' top-bar heart toggle.
+ */
+private fun ViewModel.toggleFavoriteIn(
+    flow: MutableStateFlow<Boolean>,
+    repository: MusicRepository,
+    itemId: String,
+) {
+    val target = !flow.value
+    flow.value = target
+    viewModelScope.launch {
+        repository.setFavorite(itemId, target).onFailure { flow.value = !target }
+    }
+}
+
+/** Optimistically flips one track's favourite state within a track-list state flow. */
+private fun ViewModel.toggleTrackFavoriteIn(
+    flow: MutableStateFlow<ContentState<List<Track>>>,
+    repository: MusicRepository,
+    track: Track,
+) {
+    val target = !track.isFavorite
+    fun setInList(value: Boolean) = flow.update { state ->
+        if (state is ContentState.Data) {
+            ContentState.Data(state.value.map { if (it.id == track.id) it.copy(isFavorite = value) else it })
+        } else {
+            state
+        }
+    }
+    setInList(target)
+    viewModelScope.launch {
+        repository.setFavorite(track.id, target).onFailure { setInList(!target) }
     }
 }

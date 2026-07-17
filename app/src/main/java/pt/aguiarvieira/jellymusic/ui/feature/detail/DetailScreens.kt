@@ -24,6 +24,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Settings
@@ -70,6 +72,8 @@ import pt.aguiarvieira.jellymusic.domain.model.TrackDownloadStatus
 import pt.aguiarvieira.jellymusic.ui.common.ContentState
 import pt.aguiarvieira.jellymusic.ui.components.AlbumCard
 import pt.aguiarvieira.jellymusic.ui.components.ArtworkImage
+import pt.aguiarvieira.jellymusic.ui.components.FavoriteMarker
+import pt.aguiarvieira.jellymusic.ui.components.FavoriteToggleButton
 import pt.aguiarvieira.jellymusic.ui.components.TrackRow
 import pt.aguiarvieira.jellymusic.ui.components.trackMetaLine
 import pt.aguiarvieira.jellymusic.ui.feature.downloads.DownloadDialogs
@@ -95,6 +99,7 @@ fun AlbumDetailScreen(
     downloadsViewModel: DownloadsViewModel = hiltViewModel(),
 ) {
     val tracksState by viewModel.tracks.collectAsStateWithLifecycle()
+    val isFavorite by viewModel.isFavorite.collectAsStateWithLifecycle()
     val trackStatuses by downloadsViewModel.trackStatuses.collectAsStateWithLifecycle()
     val transcodeDefault by downloadsViewModel.transcodeDefault.collectAsStateWithLifecycle()
     var pendingDownload by remember { mutableStateOf<DownloadTarget?>(null) }
@@ -126,6 +131,7 @@ fun AlbumDetailScreen(
                     }
                 },
                 actions = {
+                    FavoriteToggleButton(favorite = isFavorite, onToggle = { viewModel.toggleFavorite() })
                     IconButton(onClick = onOpenSettings) {
                         Icon(Icons.Filled.Settings, contentDescription = "Settings")
                     }
@@ -153,6 +159,7 @@ fun AlbumDetailScreen(
                     trackStatuses = trackStatuses,
                     onRequestDownload = { pendingDownload = DownloadTarget.TrackItem(it) },
                     onRemoveTrack = downloadsViewModel::removeTrack,
+                    onToggleTrackFavorite = viewModel::toggleTrackFavorite,
                 )
             }
         }
@@ -169,6 +176,7 @@ private fun AlbumTrackList(
     trackStatuses: Map<String, TrackDownloadStatus>,
     onRequestDownload: (Track) -> Unit,
     onRemoveTrack: (String) -> Unit,
+    onToggleTrackFavorite: (Track) -> Unit,
 ) {
     val density = LocalDensity.current
     val maxArtPx = with(density) { MAX_ART_HEIGHT.toPx() }
@@ -249,6 +257,7 @@ private fun AlbumTrackList(
                     onPlay = onPlay,
                     onRequestDownload = onRequestDownload,
                     onRemoveTrack = onRemoveTrack,
+                    onToggleTrackFavorite = onToggleTrackFavorite,
                 )
             }
         } else {
@@ -259,6 +268,7 @@ private fun AlbumTrackList(
                     downloadStatus = trackStatuses[track.id],
                     onDownload = { onRequestDownload(track) },
                     onRemoveLocal = { onRemoveTrack(track.id) },
+                    onToggleFavorite = { onToggleTrackFavorite(track) },
                 )
             }
         }
@@ -276,6 +286,7 @@ private fun DiscCard(
     onPlay: (List<Track>, Int) -> Unit,
     onRequestDownload: (Track) -> Unit,
     onRemoveTrack: (String) -> Unit,
+    onToggleTrackFavorite: (Track) -> Unit,
 ) {
     // Neutral tonal ladder: surface (page) < surfaceContainerLow (disc) < surfaceContainerHigh
     // (track). The disc reads as a distinct surface beneath its raised track cards.
@@ -300,6 +311,7 @@ private fun DiscCard(
                 downloadStatus = trackStatuses[track.id],
                 onDownload = { onRequestDownload(track) },
                 onRemoveLocal = { onRemoveTrack(track.id) },
+                onToggleFavorite = { onToggleTrackFavorite(track) },
                 containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             )
         }
@@ -385,10 +397,11 @@ private fun TrackCard(
     downloadStatus: TrackDownloadStatus? = null,
     onDownload: (() -> Unit)? = null,
     onRemoveLocal: (() -> Unit)? = null,
+    onToggleFavorite: (() -> Unit)? = null,
     containerColor: Color = MaterialTheme.colorScheme.surfaceContainer,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
-    val hasMenu = onDownload != null || onRemoveLocal != null
+    val hasMenu = onDownload != null || onRemoveLocal != null || onToggleFavorite != null
     val canRemove = downloadStatus?.isComplete == true || downloadStatus?.isActive == true
 
     Box {
@@ -448,12 +461,16 @@ private fun TrackCard(
                     // Download state sits above the duration.
                     Column(horizontalAlignment = Alignment.End) {
                         TrackDownloadIndicator(downloadStatus)
-                        track.durationMs?.let { ms ->
-                            Text(
-                                text = formatDuration(ms),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            FavoriteMarker(favorite = track.isFavorite, size = 16.dp)
+                            track.durationMs?.let { ms ->
+                                Text(
+                                    text = formatDuration(ms),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(start = 6.dp),
+                                )
+                            }
                         }
                     }
                 }
@@ -465,6 +482,21 @@ private fun TrackCard(
         }
 
         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+            onToggleFavorite?.let { toggle ->
+                DropdownMenuItem(
+                    text = { Text(if (track.isFavorite) "Remove from favourites" else "Add to favourites") },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = if (track.isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                            contentDescription = null,
+                        )
+                    },
+                    onClick = {
+                        menuOpen = false
+                        toggle()
+                    },
+                )
+            }
             onDownload?.let { download ->
                 DropdownMenuItem(
                     text = { Text("Download") },
@@ -506,6 +538,7 @@ fun PlaylistDetailScreen(
     downloadsViewModel: DownloadsViewModel = hiltViewModel(),
 ) {
     val tracks by viewModel.tracks.collectAsStateWithLifecycle()
+    val isFavorite by viewModel.isFavorite.collectAsStateWithLifecycle()
     val trackStatuses by downloadsViewModel.trackStatuses.collectAsStateWithLifecycle()
     val transcodeDefault by downloadsViewModel.transcodeDefault.collectAsStateWithLifecycle()
     var pendingDownload by remember { mutableStateOf<DownloadTarget?>(null) }
@@ -533,6 +566,9 @@ fun PlaylistDetailScreen(
         trackStatuses = trackStatuses,
         onRequestDownload = { pendingDownload = DownloadTarget.TrackItem(it) },
         onRemoveTrack = downloadsViewModel::removeTrack,
+        favorite = isFavorite,
+        onToggleFavorite = { viewModel.toggleFavorite() },
+        onToggleTrackFavorite = viewModel::toggleTrackFavorite,
     )
 }
 
@@ -549,9 +585,20 @@ private fun TrackListDetail(
     trackStatuses: Map<String, TrackDownloadStatus> = emptyMap(),
     onRequestDownload: (Track) -> Unit = {},
     onRemoveTrack: (String) -> Unit = {},
+    favorite: Boolean? = null,
+    onToggleFavorite: (Boolean) -> Unit = {},
+    onToggleTrackFavorite: (Track) -> Unit = {},
 ) {
     Scaffold(
-        topBar = { DetailTopBar(title = title, onBack = onBack, onOpenSettings = onOpenSettings) },
+        topBar = {
+            DetailTopBar(
+                title = title,
+                onBack = onBack,
+                onOpenSettings = onOpenSettings,
+                favorite = favorite,
+                onToggleFavorite = onToggleFavorite,
+            )
+        },
         bottomBar = { MiniPlayer(onExpand = onExpandPlayer) },
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
@@ -614,6 +661,7 @@ private fun TrackListDetail(
                                 downloadStatus = trackStatuses[track.id],
                                 onDownload = { onRequestDownload(track) },
                                 onRemoveLocal = { onRemoveTrack(track.id) },
+                                onToggleFavorite = { onToggleTrackFavorite(track) },
                             )
                         }
                     }
@@ -632,6 +680,7 @@ fun ArtistDetailScreen(
     viewModel: ArtistDetailViewModel = hiltViewModel(),
 ) {
     val albums by viewModel.albums.collectAsStateWithLifecycle()
+    val isFavorite by viewModel.isFavorite.collectAsStateWithLifecycle()
     ArtistDetailContent(
         title = viewModel.title,
         albumsState = albums,
@@ -639,6 +688,8 @@ fun ArtistDetailScreen(
         onAlbumClick = onAlbumClick,
         onExpandPlayer = onExpandPlayer,
         onOpenSettings = onOpenSettings,
+        favorite = isFavorite,
+        onToggleFavorite = { viewModel.toggleFavorite() },
     )
 }
 
@@ -651,9 +702,19 @@ private fun ArtistDetailContent(
     onAlbumClick: (String, String) -> Unit,
     onExpandPlayer: () -> Unit,
     onOpenSettings: () -> Unit,
+    favorite: Boolean? = null,
+    onToggleFavorite: (Boolean) -> Unit = {},
 ) {
     Scaffold(
-        topBar = { DetailTopBar(title = title, onBack = onBack, onOpenSettings = onOpenSettings) },
+        topBar = {
+            DetailTopBar(
+                title = title,
+                onBack = onBack,
+                onOpenSettings = onOpenSettings,
+                favorite = favorite,
+                onToggleFavorite = onToggleFavorite,
+            )
+        },
         bottomBar = { MiniPlayer(onExpand = onExpandPlayer) },
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
@@ -684,7 +745,13 @@ private fun ArtistDetailContent(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DetailTopBar(title: String, onBack: () -> Unit, onOpenSettings: () -> Unit) {
+private fun DetailTopBar(
+    title: String,
+    onBack: () -> Unit,
+    onOpenSettings: () -> Unit,
+    favorite: Boolean? = null,
+    onToggleFavorite: (Boolean) -> Unit = {},
+) {
     TopAppBar(
         title = { Text(title, style = MaterialTheme.typography.titleLarge) },
         navigationIcon = {
@@ -693,6 +760,7 @@ private fun DetailTopBar(title: String, onBack: () -> Unit, onOpenSettings: () -
             }
         },
         actions = {
+            favorite?.let { FavoriteToggleButton(favorite = it, onToggle = onToggleFavorite) }
             IconButton(onClick = onOpenSettings) {
                 Icon(Icons.Filled.Settings, contentDescription = "Settings")
             }

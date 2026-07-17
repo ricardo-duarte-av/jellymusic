@@ -19,6 +19,7 @@ interface MusicRepository {
         libraryId: String?,
         sort: AlbumSort = AlbumSort.DEFAULT,
         descending: Boolean = false,
+        favoritesOnly: Boolean = false,
     ): Result<List<Album>>
 
     /** Paged album stream (first page renders fast); reflects [libraryId]/[sort]/[descending]. */
@@ -26,9 +27,16 @@ interface MusicRepository {
         libraryId: String?,
         sort: AlbumSort,
         descending: Boolean,
+        favoritesOnly: Boolean = false,
     ): Flow<PagingData<Album>>
-    suspend fun getArtists(libraryId: String?): Result<List<Artist>>
-    suspend fun getPlaylists(libraryId: String?): Result<List<Playlist>>
+    suspend fun getArtists(libraryId: String?, favoritesOnly: Boolean = false): Result<List<Artist>>
+    suspend fun getPlaylists(libraryId: String?, favoritesOnly: Boolean = false): Result<List<Playlist>>
+
+    /** Reads the current favourite state of a single item (album/artist/playlist/track). */
+    suspend fun getFavorite(itemId: String): Result<Boolean>
+
+    /** Adds or removes [itemId] from the user's Jellyfin favourites. */
+    suspend fun setFavorite(itemId: String, favorite: Boolean): Result<Unit>
 
     /** Original audio-stream details (codec/sample rate/bit depth/bitrate) for a track. */
     suspend fun getTrackAudioInfo(trackId: String): Result<TrackAudioInfo?>

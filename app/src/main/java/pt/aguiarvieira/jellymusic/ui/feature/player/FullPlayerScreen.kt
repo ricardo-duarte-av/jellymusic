@@ -67,6 +67,7 @@ import pt.aguiarvieira.jellymusic.playback.PlaybackProgress
 import pt.aguiarvieira.jellymusic.playback.QueueItem
 import pt.aguiarvieira.jellymusic.playback.RepeatMode
 import pt.aguiarvieira.jellymusic.ui.components.ArtworkImage
+import pt.aguiarvieira.jellymusic.ui.components.FavoriteToggleButton
 import pt.aguiarvieira.jellymusic.ui.theme.AlbumTheme
 import pt.aguiarvieira.jellymusic.ui.theme.LocalDynamicColorEnabled
 import kotlin.math.abs
@@ -81,6 +82,7 @@ fun FullPlayerScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val qualityLabel by viewModel.qualityLabel.collectAsStateWithLifecycle()
     val queue by viewModel.queue.collectAsStateWithLifecycle()
+    val isFavorite by viewModel.isFavorite.collectAsStateWithLifecycle()
 
     var showQueue by remember { mutableStateOf(false) }
 
@@ -95,6 +97,9 @@ fun FullPlayerScreen(
                     }
                 },
                 actions = {
+                    if (state.hasMedia) {
+                        FavoriteToggleButton(favorite = isFavorite, onToggle = { viewModel.toggleFavorite() })
+                    }
                     IconButton(onClick = { showQueue = true }) {
                         Icon(Icons.AutoMirrored.Filled.PlaylistPlay, contentDescription = "Queue")
                     }
