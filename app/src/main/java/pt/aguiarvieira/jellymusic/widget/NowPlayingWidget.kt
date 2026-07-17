@@ -3,6 +3,8 @@ package pt.aguiarvieira.jellymusic.widget
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -55,15 +57,33 @@ import coil3.request.ImageRequest
 import coil3.request.SuccessResult
 import coil3.request.allowHardware
 import coil3.toBitmap
+import kotlinx.coroutines.delay
 import pt.aguiarvieira.jellymusic.MainActivity
 import pt.aguiarvieira.jellymusic.R
 
 /** Circle background + glyph tint for the app-icon badge, both pulled from the album scheme. */
 private data class IconColors(val background: Color, val glyph: Color)
 
-/** The two cover renders the widget needs: [sharp] for the compact background + corner thumbnail,
- *  [blurred] for the tall layout's frosted background. Both null when there's no artwork. */
-private data class WidgetArtwork(val sharp: Bitmap? = null, val blurred: Bitmap? = null)
+/** Neutral disc + white note, used when there's no art or no seed can be extracted. */
+private val FALLBACK_ICON_COLORS = IconColors(background = Color(0x33FFFFFF), glyph = Color.White)
+
+/** Everything the widget renders for one cover: [sharp] for the compact background + corner
+ *  thumbnail, [blurred] for the tall layout's frosted background, and the [iconColors] derived from
+ *  it. During a track change these hold pre-blended crossfade frames. Nulls when there's no artwork. */
+private data class WidgetArtwork(
+    val sharp: Bitmap? = null,
+    val blurred: Bitmap? = null,
+    val iconColors: IconColors = FALLBACK_ICON_COLORS,
+)
+
+/** Cover crossfade on track change: this many frames, this far apart (~270ms total). Glance has no
+ *  animation API, so we push pre-blended frames instead. */
+private const val FADE_STEPS = 6
+private const val FADE_STEP_MS = 45L
+
+/** Last cover the widget settled on, kept module-level so the next track's [produceState] — which
+ *  relaunches when the artwork URI changes — can crossfade from it. */
+@Volatile private var lastSettledArtwork = WidgetArtwork()
 
 /** Below this width the widget shows transport only; at or above it, shuffle + repeat are added. */
 private val WIDE_BREAKPOINT = 260.dp
@@ -100,14 +120,32 @@ class NowPlayingWidget : GlanceAppWidget() {
         val initial = context.readNowPlayingWidgetData()
         provideContent {
             val data by remember { context.nowPlayingWidgetDataFlow() }.collectAsState(initial)
-            // Artwork is a suspend load; re-run it only when the cover actually changes. The tall
-            // layout also needs a blurred copy for its frosted background, so build both here (once)
-            // rather than blurring inside composition.
-            val artwork by produceState(initialValue = WidgetArtwork(), key1 = data.artworkUri) {
+            // Artwork is a suspend load; re-run it only when the cover actually changes. We build the
+            // sharp cover, its blurred copy (tall background) and the derived icon colours here — once
+            // per track — then crossfade from the previously shown cover to the new one by emitting a
+            // short run of pre-blended frames (Glance has no animation API).
+            val artwork by produceState(initialValue = lastSettledArtwork, key1 = data.artworkUri) {
                 val sharp = data.artworkUri?.let { loadArtwork(context, it) }
-                value = WidgetArtwork(sharp = sharp, blurred = sharp?.let(::blurArtwork))
+                val target = WidgetArtwork(
+                    sharp = sharp,
+                    blurred = sharp?.let(::blurArtwork),
+                    iconColors = albumIconColors(sharp),
+                )
+                val from = lastSettledArtwork
+                if (sharp != null && target.blurred != null) {
+                    for (i in 1 until FADE_STEPS) {
+                        val t = i / FADE_STEPS.toFloat()
+                        value = target.copy(
+                            sharp = crossfade(from.sharp, sharp, t),
+                            blurred = crossfade(from.blurred, target.blurred, t),
+                        )
+                        delay(FADE_STEP_MS)
+                    }
+                }
+                value = target
+                lastSettledArtwork = target
             }
-            WidgetBody(data, artwork.sharp, artwork.blurred, albumIconColors(artwork.sharp))
+            WidgetBody(data, artwork.sharp, artwork.blurred, artwork.iconColors)
         }
     }
 
@@ -128,13 +166,12 @@ class NowPlayingWidget : GlanceAppWidget() {
      * art or no seed can be extracted.
      */
     private fun albumIconColors(bitmap: Bitmap?): IconColors {
-        val fallback = IconColors(background = Color(0x33FFFFFF), glyph = Color.White)
-        bitmap ?: return fallback
+        bitmap ?: return FALLBACK_ICON_COLORS
         val palette = Palette.from(bitmap).generate()
         val rgb = palette.vibrantSwatch?.rgb
             ?: palette.dominantSwatch?.rgb
             ?: palette.mutedSwatch?.rgb
-            ?: return fallback
+            ?: return FALLBACK_ICON_COLORS
         val scheme = dynamicColorScheme(
             seedColor = Color(rgb),
             isDark = true,
@@ -154,6 +191,34 @@ class NowPlayingWidget : GlanceAppWidget() {
         val result = context.imageLoader.execute(request)
         return (result as? SuccessResult)?.image?.toBitmap()
     }
+
+    /**
+     * One crossfade frame at progress [t] (0→1): the new cover [to] drawn opaque, with the previous
+     * cover [from] fading out on top of it. With no previous cover, the new one fades in from the
+     * scrim instead. [from] is rescaled if its dimensions differ (non-square covers).
+     */
+    private fun crossfade(from: Bitmap?, to: Bitmap, t: Float): Bitmap {
+        if (from == null) return withAlpha(to, t)
+        val out = Bitmap.createBitmap(to.width, to.height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(out)
+        canvas.drawBitmap(to, 0f, 0f, null)
+        val scaled = if (from.width == to.width && from.height == to.height) {
+            from
+        } else {
+            Bitmap.createScaledBitmap(from, to.width, to.height, true)
+        }
+        canvas.drawBitmap(scaled, 0f, 0f, Paint().apply { alpha = alpha255(1f - t) })
+        return out
+    }
+
+    /** [bmp] drawn at alpha [t] over transparency — a fade-in over whatever sits behind the widget. */
+    private fun withAlpha(bmp: Bitmap, t: Float): Bitmap {
+        val out = Bitmap.createBitmap(bmp.width, bmp.height, Bitmap.Config.ARGB_8888)
+        Canvas(out).drawBitmap(bmp, 0f, 0f, Paint().apply { alpha = alpha255(t) })
+        return out
+    }
+
+    private fun alpha255(f: Float): Int = (f * 255f).toInt().coerceIn(0, 255)
 }
 
 @Composable
