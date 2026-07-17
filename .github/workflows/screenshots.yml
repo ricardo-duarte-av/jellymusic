@@ -170,6 +170,9 @@ jobs:
 
           adb logcat -c || true
           adb logcat '*:S' ScreenshotTest:I > "$RUNNER_TEMP/screenshot-test.log" &
+          # Capture Coil's per-image logs (debug DebugLogger) + any crashes to diagnose
+          # why some artwork doesn't load.
+          adb logcat -v time '*:S' coil3:V ScreenshotTest:I AndroidRuntime:E > "$RUNNER_TEMP/coil.log" &
 
           adb shell am instrument -w -r \
             -e class pt.aguiarvieira.jellymusic.ScreenshotTest \
@@ -231,6 +234,7 @@ jobs:
           path: |
             ${{ runner.temp }}/emulator.log
             ${{ runner.temp }}/screenshot-test.log
+            ${{ runner.temp }}/coil.log
             app/build/reports/androidTests/
           if-no-files-found: ignore
 
