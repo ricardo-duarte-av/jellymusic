@@ -3,12 +3,16 @@ package pt.aguiarvieira.jellymusic.widget
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.BlurMaskFilter
+import android.graphics.Canvas
+import android.graphics.Paint
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
@@ -70,6 +74,9 @@ private val WIDE_BREAKPOINT = 260.dp
 
 /** Below this height the widget uses the single-row compact layout (e.g. a 3x1 / 4x1 cell). */
 private val COMPACT_HEIGHT = 90.dp
+
+/** Cap for the tall-layout corner thumbnail; smaller cells scale below this so it never overflows. */
+private val MAX_THUMB = 112.dp
 
 /** Bounded artwork size keeps the widget under the RemoteViews memory limit. */
 private const val ARTWORK_PX = 512
@@ -224,28 +231,74 @@ private fun WidgetBody(
 }
 
 /**
- * Top-right corner overlay for the tall layout: the sharp album-art thumbnail (a crisp focal point
- * against the frosted background) with the album-coloured app-icon badge sitting on its corner,
- * identifying the widget. Falls back to just the badge when there's no artwork.
+ * Top-right corner overlay for the tall layout: the sharp, square album-art thumbnail (a crisp focal
+ * point against the frosted background) with the album-coloured app-icon badge sitting on its corner,
+ * identifying the widget. A soft glow in the icon's primary colour spills off the bottom and right
+ * edges. The thumbnail scales with the cell so it never overflows a short-tall (2x2) layout, capping
+ * at [MAX_THUMB]. Falls back to just the badge when there's no artwork.
  */
 @Composable
 private fun CornerArtwork(artwork: Bitmap?, iconColors: IconColors) {
+    val context = LocalContext.current
+    val size = LocalSize.current
+    // Scale with the cell (so a short 2x2 doesn't overflow), capped at MAX_THUMB for big widgets.
+    val thumb = minOf(MAX_THUMB, (size.height.value * 0.55f).dp)
+    val glow = thumb * 0.28f
     Box(
-        modifier = GlanceModifier.fillMaxSize().padding(10.dp),
+        modifier = GlanceModifier.fillMaxSize().padding(8.dp),
         contentAlignment = Alignment.TopEnd,
     ) {
-        Box(contentAlignment = Alignment.TopEnd) {
-            if (artwork != null) {
+        if (artwork == null) {
+            // No cover: just the identifying badge in the corner.
+            AppIcon(iconColors, 24.dp)
+            return@Box
+        }
+        val density = context.resources.displayMetrics.density
+        val thumbPx = (thumb.value * density).toInt()
+        val glowPx = (glow.value * density).toInt()
+        val glowBmp = remember(iconColors.background, thumbPx, glowPx) {
+            glowBitmap(iconColors.background, thumbPx, glowPx)
+        }
+        // Box is thumbnail + glow margin; the thumbnail sits top-left so the glow spills bottom-right.
+        Box(
+            modifier = GlanceModifier.size(thumb + glow),
+            contentAlignment = Alignment.TopStart,
+        ) {
+            Image(
+                provider = ImageProvider(glowBmp),
+                contentDescription = null,
+                modifier = GlanceModifier.size(thumb + glow),
+            )
+            Box(
+                modifier = GlanceModifier.size(thumb),
+                contentAlignment = Alignment.TopEnd,
+            ) {
                 Image(
                     provider = ImageProvider(artwork),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
-                    modifier = GlanceModifier.size(56.dp).cornerRadius(12.dp),
+                    modifier = GlanceModifier.size(thumb),
                 )
+                AppIcon(iconColors, 22.dp)
             }
-            AppIcon(iconColors, 22.dp)
         }
     }
+}
+
+/**
+ * A soft glow in [color] that bleeds [glowPx] past the bottom and right of a [thumbPx] square: draw a
+ * filled square at the top-left and blur it. The corner thumbnail covers the opaque core, so only the
+ * fading bottom-right spill shows. Built as a bitmap because Glance/RemoteViews has no shadow API.
+ */
+private fun glowBitmap(color: Color, thumbPx: Int, glowPx: Int): Bitmap {
+    val size = thumbPx + glowPx
+    val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        this.color = color.toArgb()
+        maskFilter = BlurMaskFilter(glowPx.toFloat(), BlurMaskFilter.Blur.NORMAL)
+    }
+    Canvas(bmp).drawRect(0f, 0f, thumbPx.toFloat(), thumbPx.toFloat(), paint)
+    return bmp
 }
 
 /** The launcher music-note glyph on a circular album-coloured disc: disc = background, note = glyph. */

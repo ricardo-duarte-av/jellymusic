@@ -20,8 +20,9 @@ val CHANGELOG: List<ChangelogVersion> = listOf(
         date = null,
         changes = listOf(
             "Larger home-screen widgets (4x2 and taller) now show a frosted, blurred cover as the " +
-                "background with the sharp album art as a thumbnail in the top-right corner. Smaller " +
-                "widgets keep the darkened full-cover look.",
+                "background, with the sharp album art as a bold square thumbnail in the top-right " +
+                "corner — glowing in the album's colour. Smaller widgets keep the darkened " +
+                "full-cover look.",
         ),
     ),
     ChangelogVersion(
