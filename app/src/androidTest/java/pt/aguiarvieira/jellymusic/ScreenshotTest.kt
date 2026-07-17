@@ -134,9 +134,11 @@ class ScreenshotTest {
             composeRule.onNode(hasSetTextAction()).performTextInput("zelda")
             // Drop the keyboard so the results (not a half-screen of keys) fill the shot.
             Espresso.closeSoftKeyboard()
-            // Result rows load their artwork lazily — give Coil (and slow first-request
-            // server-side thumbnail generation) time to fill the visible thumbnails.
-            settle(15_000)
+            // Let results render. Some rows stay as grey placeholders — those items have
+            // no server artwork, and ArtworkImage only shows its fallback icon for a null
+            // URL, not for a failed load; extra waiting doesn't change them (verified
+            // identical at 2s/6s/15s).
+            settle(3_000)
         }
         // Close the IME first — otherwise the first Back only dismisses the keyboard and
         // leaves us on Search instead of returning Home.
