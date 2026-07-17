@@ -130,7 +130,10 @@ class ScreenshotTest {
         capture("06-search") {
             composeRule.onNodeWithContentDescription("Search").performClick()
             waitForText("Search music")
-            composeRule.onNode(hasSetTextAction()).performTextInput("a")
+            // A term the test library actually contains, so results render.
+            composeRule.onNode(hasSetTextAction()).performTextInput("zelda")
+            // Drop the keyboard so the results (not a half-screen of keys) fill the shot.
+            Espresso.closeSoftKeyboard()
             settle()
         }
         // Close the IME first — otherwise the first Back only dismisses the keyboard and
