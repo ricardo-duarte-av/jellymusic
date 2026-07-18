@@ -375,6 +375,30 @@ class PlaybackService : MediaLibraryService() {
                 .build()
         }
 
+        /**
+         * Diagnostic: log which nodes Android Auto subscribes to and when. Tells us whether AA keeps a
+         * live subscription to the top-level tabs (so notifyChildrenChanged could refresh them) or only
+         * subscribes to the currently-focused node. Behaviour is otherwise the framework default.
+         */
+        override fun onSubscribe(
+            session: MediaLibrarySession,
+            browser: MediaSession.ControllerInfo,
+            parentId: String,
+            params: LibraryParams?,
+        ): ListenableFuture<LibraryResult<Void>> {
+            android.util.Log.d(TAG, "onSubscribe($parentId) by ${browser.packageName}")
+            return Futures.immediateFuture(LibraryResult.ofVoid(params))
+        }
+
+        override fun onUnsubscribe(
+            session: MediaLibrarySession,
+            browser: MediaSession.ControllerInfo,
+            parentId: String,
+        ): ListenableFuture<LibraryResult<Void>> {
+            android.util.Log.d(TAG, "onUnsubscribe($parentId) by ${browser.packageName}")
+            return Futures.immediateFuture(LibraryResult.ofVoid())
+        }
+
         /** Toggle shuffle / cycle repeat when a button is tapped; [modeListener] refreshes the icons. */
         override fun onCustomCommand(
             session: MediaSession,
