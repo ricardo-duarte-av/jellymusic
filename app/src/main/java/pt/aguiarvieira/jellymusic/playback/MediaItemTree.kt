@@ -123,6 +123,51 @@ class MediaItemTree @Inject constructor(
         browsable(PLAYLISTS_ID, "Playlists", MediaMetadata.MEDIA_TYPE_FOLDER_PLAYLISTS),
     )
 
+    /**
+     * Resolves browse items into fully playable ones for Android Auto. When a controller in another
+     * process plays an item from the browse tree, Media3 delivers it back with only its [mediaId] and
+     * metadata — the stream URI (localConfiguration) is stripped crossing the process boundary — so the
+     * player has nothing to play. Re-attach it here:
+     *
+     * - `track/<id>`    → the same item with its stream/local URI restored.
+     * - `album/<id>`    → expanded into all the album's tracks (so tapping "play" on an album plays it).
+     * - `playlist/<id>` → expanded into all the playlist's tracks.
+     *
+     * Called from [PlaybackService]'s `onAddMediaItems`.
+     */
+    suspend fun resolveForPlayback(items: List<MediaItem>): List<MediaItem> {
+        val settings = settingsStore.streamSettings.first()
+        return items.flatMap { item ->
+            val id = item.mediaId
+            when {
+                id.startsWith(TRACK_PREFIX) ->
+                    listOf(resolveTrackUri(item, id.removePrefix(TRACK_PREFIX), settings))
+
+                id.startsWith(ALBUM_PREFIX) ->
+                    musicRepository.getAlbumTracks(id.removePrefix(ALBUM_PREFIX))
+                        .getOrDefault(emptyList()).map { trackMediaItem(it, settings) }
+
+                id.startsWith(PLAYLIST_PREFIX) ->
+                    musicRepository.getPlaylistTracks(id.removePrefix(PLAYLIST_PREFIX))
+                        .getOrDefault(emptyList()).map { trackMediaItem(it, settings) }
+
+                // Already playable / has a URI, or something we don't recognise — pass through.
+                else -> listOf(item)
+            }
+        }
+    }
+
+    /** Re-attaches the stream (or local) URI to a track item that lost it crossing the process boundary. */
+    private fun resolveTrackUri(item: MediaItem, trackId: String, settings: StreamSettings): MediaItem {
+        val localUri = downloadManager.localFileUri(trackId)
+        val isLocal = localUri != null
+        val transcodeStream = settings.transcode && !isLocal
+        return item.buildUpon()
+            .setUri(localUri ?: urlBuilder.playbackStreamUrl(trackId, settings))
+            .apply { if (transcodeStream) setMimeType(MimeTypes.APPLICATION_M3U8) }
+            .build()
+    }
+
     /** Public so the in-app player ([PlaybackConnection]) builds identical playable items. */
     fun trackMediaItem(track: Track, settings: StreamSettings): MediaItem {
         // Prefer a completed offline copy; fall back to streaming. When local, the item's real format
@@ -208,12 +253,15 @@ class MediaItemTree @Inject constructor(
             this.libraryId == libraryId && System.currentTimeMillis() - loadedAtMs < CACHE_TTL_MS
     }
 
+    // Albums and playlists are browsable (tap to see tracks) AND playable (Android Auto shows a play
+    // affordance that plays the whole thing — see MediaItemTree.resolveForPlayback).
     private fun Album.toMediaItem() = browsable(
         id = ALBUM_PREFIX + id,
         title = name,
         mediaType = MediaMetadata.MEDIA_TYPE_ALBUM,
         subtitle = artist,
         artworkUri = artworkUrl?.toUri(),
+        isPlayable = true,
     )
 
     private fun Artist.toMediaItem() = browsable(
@@ -228,6 +276,7 @@ class MediaItemTree @Inject constructor(
         title = name,
         mediaType = MediaMetadata.MEDIA_TYPE_PLAYLIST,
         artworkUri = artworkUrl?.toUri(),
+        isPlayable = true,
     )
 
     private fun browsable(
@@ -236,13 +285,14 @@ class MediaItemTree @Inject constructor(
         mediaType: Int,
         subtitle: String? = null,
         artworkUri: Uri? = null,
+        isPlayable: Boolean = false,
     ): MediaItem {
         val metadata = MediaMetadata.Builder()
             .setTitle(title)
             .setSubtitle(subtitle)
             .setArtworkUri(artworkUri)
             .setIsBrowsable(true)
-            .setIsPlayable(false)
+            .setIsPlayable(isPlayable)
             .setMediaType(mediaType)
             .build()
         return MediaItem.Builder().setMediaId(id).setMediaMetadata(metadata).build()

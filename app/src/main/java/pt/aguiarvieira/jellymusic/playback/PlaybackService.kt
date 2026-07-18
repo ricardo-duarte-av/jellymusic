@@ -418,6 +418,25 @@ class PlaybackService : MediaLibraryService() {
             return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
         }
 
+        /**
+         * Resolve items played from the Android Auto browse tree into playable ones. Media3 strips the
+         * stream URI from a MediaItem when it crosses the process boundary, so the raw items Auto sends
+         * back carry only their mediaId — [MediaItemTree.resolveForPlayback] re-attaches the URI (and
+         * expands an album/playlist mediaId into its tracks). Without this, tapping a track in Auto is
+         * a no-op.
+         */
+        override fun onAddMediaItems(
+            mediaSession: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            mediaItems: List<MediaItem>,
+        ): ListenableFuture<List<MediaItem>> = serviceScope.future {
+            ensureSession()
+            android.util.Log.d(TAG, "onAddMediaItems: ${mediaItems.map { it.mediaId }}")
+            val resolved = mediaItemTree.resolveForPlayback(mediaItems)
+            android.util.Log.d(TAG, "onAddMediaItems resolved ${resolved.size} items, uris=${resolved.map { it.localConfiguration?.uri != null }}")
+            resolved
+        }
+
         /** Resume from cold (Bluetooth/media button with no active session) using the saved queue. */
         override fun onPlaybackResumption(
             mediaSession: MediaSession,
