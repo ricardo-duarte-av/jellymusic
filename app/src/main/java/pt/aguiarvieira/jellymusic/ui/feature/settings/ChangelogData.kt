@@ -23,6 +23,8 @@ val CHANGELOG: List<ChangelogVersion> = listOf(
                 "been opened — the session is now restored by the player service itself.",
             "Android Auto's Recently Played and Most Played now work from your listening history " +
                 "(previously always empty).",
+            "Android Auto: tapping a library now switches the active library (the Recently Played / " +
+                "Most Played tabs re-scope to it) and shows that library's albums.",
         ),
     ),
     ChangelogVersion(

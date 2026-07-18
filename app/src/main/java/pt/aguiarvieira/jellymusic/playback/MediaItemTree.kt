@@ -28,7 +28,7 @@ import javax.inject.Singleton
  *   Albums    → A..Z,# → album/<id>    → track/<id> (playable)
  *   Artists   → A..Z,# → artist/<id>   → album/<id> → track/<id>
  *   Playlists → playlist/<id> → track/<id>
- *   Libraries → library/<id> (switches the active library, then shows its content)
+ *   Libraries → library/<id> (switches the active library, then shows that library's albums A–Z)
  * ```
  *
  * The four "smart" rows at the top exist because a flat, alphabetical album list is unusable in the
@@ -73,14 +73,16 @@ class MediaItemTree @Inject constructor(
             libraryRepository.getMusicLibraries().getOrDefault(emptyList()).map { it.toMediaItem() }
 
         parentId.startsWith(LIBRARY_PREFIX) -> {
-            // Opening a library in the car is how you switch the active library without the phone.
-            // Persist the selection (which the smart/browse rows below read via libraryId()) and then
-            // show that library's content menu.
+            // Tapping a library switches the active library everywhere (phone + car): persist the
+            // selection, which also triggers a refresh of the pinned home tabs (Recently Played, etc.)
+            // so they re-scope to it — see PlaybackService's selectedLibrary observer. Android Auto
+            // can't be navigated back to the home screen programmatically, so we show the just-picked
+            // library's own Albums A–Z here (scoped via the now-current libraryId) as a useful landing.
             val id = parentId.removePrefix(LIBRARY_PREFIX)
             libraryRepository.getMusicLibraries().getOrDefault(emptyList())
                 .firstOrNull { it.id == id }
                 ?.let { settingsStore.setSelectedLibrary(it) }
-            contentNodes()
+            letterNodes(albums().map { it.name }, ALBUM_LETTER_PREFIX, MediaMetadata.MEDIA_TYPE_FOLDER_ALBUMS)
         }
 
         parentId == ALBUMS_ID ->
