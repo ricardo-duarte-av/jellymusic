@@ -50,6 +50,7 @@ import pt.aguiarvieira.jellymusic.widget.writeNowPlayingWidgetData
 import javax.inject.Inject
 
 private const val PROGRESS_REPORT_INTERVAL_MS = 10_000L
+private const val TAG = "PlaybackService"
 
 // Custom session commands backing the notification / Android Auto shuffle & repeat buttons.
 private const val CMD_TOGGLE_SHUFFLE = "pt.aguiarvieira.jellymusic.TOGGLE_SHUFFLE"
@@ -298,7 +299,8 @@ class PlaybackService : MediaLibraryService() {
             settingsStore.selectedLibrary
                 .drop(1)
                 .distinctUntilChanged()
-                .collect {
+                .collect { lib ->
+                    android.util.Log.i(TAG, "selectedLibrary changed -> ${lib?.id} (${lib?.name}); notifying browse nodes")
                     LIBRARY_SCOPED_BROWSE_NODES.forEach {
                         mediaSession.notifyChildrenChanged(it, Int.MAX_VALUE, null)
                     }
@@ -436,6 +438,7 @@ class PlaybackService : MediaLibraryService() {
                 val children = mediaItemTree.getChildren(parentId).let {
                     if (it.size > MAX_CHILDREN_PER_NODE) it.subList(0, MAX_CHILDREN_PER_NODE) else it
                 }
+                android.util.Log.i(TAG, "onGetChildren($parentId) -> ${children.size} items")
                 LibraryResult.ofItemList(ImmutableList.copyOf(children), params)
             }
     }
