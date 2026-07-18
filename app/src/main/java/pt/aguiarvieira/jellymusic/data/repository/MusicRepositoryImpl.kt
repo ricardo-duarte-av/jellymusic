@@ -1,5 +1,6 @@
 package pt.aguiarvieira.jellymusic.data.repository
 
+import android.util.Log
 import pt.aguiarvieira.jellymusic.data.jellyfin.JellyfinClientProvider
 import pt.aguiarvieira.jellymusic.data.jellyfin.StreamUrlBuilder
 import pt.aguiarvieira.jellymusic.domain.model.Album
@@ -103,35 +104,65 @@ class MusicRepositoryImpl @Inject constructor(
     }
 
     override suspend fun getRecentlyPlayedAlbums(libraryId: String?): Result<List<Album>> =
-        smartAlbums(libraryId, ItemSortBy.DATE_PLAYED, listOf(ItemFilter.IS_PLAYED))
+        playedAlbums(libraryId, ItemSortBy.DATE_PLAYED)
 
     override suspend fun getMostPlayedAlbums(libraryId: String?): Result<List<Album>> =
-        smartAlbums(libraryId, ItemSortBy.PLAY_COUNT, listOf(ItemFilter.IS_PLAYED))
+        playedAlbums(libraryId, ItemSortBy.PLAY_COUNT)
 
-    override suspend fun getRecentlyAddedAlbums(libraryId: String?): Result<List<Album>> =
-        smartAlbums(libraryId, ItemSortBy.DATE_CREATED, filters = emptyList())
-
-    /** Shared query for the play-history/recently-added album rows: same shape, different sort/filter. */
-    private suspend fun smartAlbums(
-        libraryId: String?,
-        sortBy: ItemSortBy,
-        filters: List<ItemFilter>,
-    ): Result<List<Album>> = query { api ->
+    override suspend fun getRecentlyAddedAlbums(libraryId: String?): Result<List<Album>> = query { api ->
         ItemsApi(api).getItems(
             GetItemsRequest(
                 parentId = libraryId.toParentUuid(),
                 includeItemTypes = listOf(BaseItemKind.MUSIC_ALBUM),
                 recursive = true,
-                sortBy = listOf(sortBy),
+                sortBy = listOf(ItemSortBy.DATE_CREATED),
                 sortOrder = listOf(SortOrder.DESCENDING),
-                filters = filters.ifEmpty { null },
                 limit = SMART_NODE_LIMIT,
-                // Sorting by DatePlayed/PlayCount needs the server to hydrate UserData.
-                enableUserData = true,
                 imageTypeLimit = 1,
                 enableImageTypes = listOf(ImageType.PRIMARY),
             ),
         ).content.items.map { it.toAlbum(urlBuilder) }
+    }
+
+    /**
+     * Recently-/most-played *albums*, derived from track play history. Jellyfin only marks an *album*
+     * as played (and aggregates its PlayCount) once every track is played, so an album-level
+     * `IS_PLAYED` filter returns almost nothing. Instead we query the played tracks — where DatePlayed
+     * and PlayCount are accurate — and fold them down to their distinct albums, keeping the order the
+     * server returned (so the album whose track was played most recently/most often comes first).
+     */
+    private suspend fun playedAlbums(libraryId: String?, sortBy: ItemSortBy): Result<List<Album>> = query { api ->
+        val tracks = ItemsApi(api).getItems(
+            GetItemsRequest(
+                parentId = libraryId.toParentUuid(),
+                includeItemTypes = listOf(BaseItemKind.AUDIO),
+                recursive = true,
+                sortBy = listOf(sortBy),
+                sortOrder = listOf(SortOrder.DESCENDING),
+                filters = listOf(ItemFilter.IS_PLAYED),
+                // Over-fetch: many tracks collapse into the same album, so ask for well more than the
+                // number of distinct albums we want to show.
+                limit = SMART_NODE_LIMIT * 4,
+                enableUserData = true,
+                imageTypeLimit = 1,
+                enableImageTypes = listOf(ImageType.PRIMARY),
+            ),
+        ).content.items
+        val albumsById = LinkedHashMap<String, Album>()
+        for (item in tracks) {
+            val albumId = item.albumId?.toString() ?: continue
+            if (albumId in albumsById) continue
+            albumsById[albumId] = Album(
+                id = albumId,
+                name = item.album.orEmpty(),
+                artist = item.albumArtist ?: item.artists?.firstOrNull(),
+                year = null,
+                artworkUrl = urlBuilder.imageUrl(albumId),
+                isFavorite = false,
+            )
+            if (albumsById.size >= SMART_NODE_LIMIT) break
+        }
+        albumsById.values.toList()
     }
 
     override suspend fun getArtists(libraryId: String?, favoritesOnly: Boolean): Result<List<Artist>> {
@@ -338,15 +369,24 @@ class MusicRepositoryImpl @Inject constructor(
 
     private suspend fun <T> query(block: suspend (ApiClient) -> T): Result<T> =
         withContext(Dispatchers.IO) {
-            val api = clientProvider.api
-                ?: return@withContext Result.failure(IllegalStateException("Not signed in"))
+            val api = clientProvider.api ?: run {
+                // No active session — the usual cause of empty browse results when Android Auto starts
+                // the service before the app has restored the session.
+                Log.w(TAG, "query skipped: no active session (api == null)")
+                return@withContext Result.failure(IllegalStateException("Not signed in"))
+            }
             runCatching { block(api) }.onFailure {
+                Log.w(TAG, "query failed", it)
                 // A rejected token (401) means the session is dead — drop it so the app re-auths.
                 if (it is InvalidStatusException && it.status == HTTP_UNAUTHORIZED) {
                     clientProvider.invalidateSession()
                 }
             }
         }
+
+    private companion object {
+        const val TAG = "MusicRepository"
+    }
 
     private fun String?.toParentUuid(): UUID? =
         if (this == null || this == MusicLibrary.ALL_ID) null else UUID.fromString(this)

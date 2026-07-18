@@ -184,7 +184,9 @@ class MediaItemTree @Inject constructor(
         val libraryId = libraryId()
         albumCache?.takeIf { it.isFresh(libraryId) }?.let { return it.items }
         val items = musicRepository.getAlbums(libraryId).getOrDefault(emptyList())
-        albumCache = CatalogCache(libraryId, items)
+        // Only cache a real catalogue: caching an empty result (e.g. a transient failure or a
+        // not-yet-restored session) would wrongly show an empty Albums tab for the whole TTL.
+        if (items.isNotEmpty()) albumCache = CatalogCache(libraryId, items)
         return items
     }
 
@@ -192,7 +194,7 @@ class MediaItemTree @Inject constructor(
         val libraryId = libraryId()
         artistCache?.takeIf { it.isFresh(libraryId) }?.let { return it.items }
         val items = musicRepository.getArtists(libraryId).getOrDefault(emptyList())
-        artistCache = CatalogCache(libraryId, items)
+        if (items.isNotEmpty()) artistCache = CatalogCache(libraryId, items)
         return items
     }
 

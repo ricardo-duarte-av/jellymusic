@@ -95,6 +95,12 @@ class PlaybackService : MediaLibraryService() {
     @Inject
     lateinit var playbackReporter: PlaybackReporter
 
+    @Inject
+    lateinit var authRepository: pt.aguiarvieira.jellymusic.domain.repository.AuthRepository
+
+    @Inject
+    lateinit var clientProvider: pt.aguiarvieira.jellymusic.data.jellyfin.JellyfinClientProvider
+
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private lateinit var player: ExoPlayer
     private lateinit var mediaSession: MediaLibrarySession
@@ -330,6 +336,15 @@ class PlaybackService : MediaLibraryService() {
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession =
         mediaSession
 
+    /**
+     * Restores the persisted Jellyfin session if none is active. Idempotent and cheap when already
+     * signed in; needed because the browse/playback entry points can run before (or without) the app
+     * UI, which is otherwise the only thing that restores the session.
+     */
+    private suspend fun ensureSession() {
+        if (clientProvider.session.value == null) authRepository.restoreSession()
+    }
+
     override fun onDestroy() {
         reportedItemId?.let { playbackReporter.reportStop(it, player.currentPosition) }
         mediaSession.release()
@@ -380,6 +395,7 @@ class PlaybackService : MediaLibraryService() {
             mediaSession: MediaSession,
             controller: MediaSession.ControllerInfo,
         ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> = serviceScope.future {
+            ensureSession()
             val saved = queueStore.load()
             if (saved == null || saved.items.isEmpty()) {
                 throw UnsupportedOperationException("No saved queue to resume")
@@ -409,6 +425,10 @@ class PlaybackService : MediaLibraryService() {
             params: LibraryParams?,
         ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> =
             serviceScope.future {
+                // Android Auto can start this service cold (car connected, app never opened), in which
+                // case no Jellyfin session has been restored and every query returns empty. Restore it
+                // before serving any browse request so the tree is populated without opening the app.
+                ensureSession()
                 // Android Auto asks for every child in one call (page=0, pageSize=Int.MAX_VALUE), so the
                 // whole list crosses the Binder in a single transaction. A large node (typically Albums)
                 // exceeds the ~1MB transaction limit and throws TransactionTooLargeException, which surfaces
