@@ -16,8 +16,8 @@ data class ChangelogVersion(
 /** Newest first. Unreleased (version = null) always on top. */
 val CHANGELOG: List<ChangelogVersion> = listOf(
     ChangelogVersion(
-        version = null,
-        date = null,
+        version = "0.1.52",
+        date = "19/07/2026",
         changes = listOf(
             "Fixed Android Auto: tapping a track now actually plays it (it was previously a no-op).",
             "Android Auto: albums and playlists can now be played directly (tap play to queue the " +
