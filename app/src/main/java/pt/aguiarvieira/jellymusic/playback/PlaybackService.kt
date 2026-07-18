@@ -292,9 +292,11 @@ class PlaybackService : MediaLibraryService() {
             }
         }
 
-        // When the active library changes (e.g. picked from Android Auto's "Libraries" node, or in
-        // the app), the play-history/catalogue browse nodes now serve a different library — tell any
-        // subscribed browser (Android Auto) to re-query them. Skip the initial emission on startup.
+        // Library selection is a phone-only action (Android Auto is read-only for it). When it
+        // changes in the app, the browse nodes now serve a different library — tell any subscribed
+        // browser (Android Auto) to re-query. Note: Auto ignores this for tabs that aren't currently
+        // focused (verified in DHU) and only re-reads a node when navigated to, so this is best-effort;
+        // the reliable path is Auto re-querying on (re)connect / tab open. Skip the initial emission.
         serviceScope.launch {
             settingsStore.selectedLibrary
                 .drop(1)
