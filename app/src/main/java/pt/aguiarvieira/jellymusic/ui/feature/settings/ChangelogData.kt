@@ -16,15 +16,16 @@ data class ChangelogVersion(
 /** Newest first. Unreleased (version = null) always on top. */
 val CHANGELOG: List<ChangelogVersion> = listOf(
     ChangelogVersion(
-        version = null,
-        date = null,
+        version = "0.1.51",
+        date = "18/07/2026",
         changes = listOf(
             "Fixed Android Auto browsing coming up empty when the car connected before the app had " +
                 "been opened — the session is now restored by the player service itself.",
             "Android Auto's Recently Played and Most Played now work from your listening history " +
                 "(previously always empty).",
             "Android Auto now always uses the library you've selected in the app; the in-car library " +
-                "menu has been removed. Switch library on your phone and the car follows.",
+                "menu has been removed. Switch library on your phone and the tabs re-scope to it " +
+                "automatically.",
         ),
     ),
     ChangelogVersion(
