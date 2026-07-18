@@ -372,11 +372,11 @@ class MusicRepositoryImpl @Inject constructor(
             val api = clientProvider.api ?: run {
                 // No active session — the usual cause of empty browse results when Android Auto starts
                 // the service before the app has restored the session.
-                Log.w(TAG, "query skipped: no active session (api == null)")
+                Log.d(TAG, "query skipped: no active session (api == null)")
                 return@withContext Result.failure(IllegalStateException("Not signed in"))
             }
             runCatching { block(api) }.onFailure {
-                Log.w(TAG, "query failed", it)
+                Log.d(TAG, "query failed", it)
                 // A rejected token (401) means the session is dead — drop it so the app re-auths.
                 if (it is InvalidStatusException && it.status == HTTP_UNAUTHORIZED) {
                     clientProvider.invalidateSession()

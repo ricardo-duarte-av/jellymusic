@@ -302,7 +302,7 @@ class PlaybackService : MediaLibraryService() {
                 .drop(1)
                 .distinctUntilChanged()
                 .collect { lib ->
-                    android.util.Log.i(TAG, "selectedLibrary changed -> ${lib?.id} (${lib?.name}); notifying browse nodes")
+                    android.util.Log.d(TAG, "selectedLibrary changed -> ${lib?.id} (${lib?.name}); notifying browse nodes")
                     LIBRARY_SCOPED_BROWSE_NODES.forEach {
                         mediaSession.notifyChildrenChanged(it, Int.MAX_VALUE, null)
                     }
@@ -440,7 +440,7 @@ class PlaybackService : MediaLibraryService() {
                 val children = mediaItemTree.getChildren(parentId).let {
                     if (it.size > MAX_CHILDREN_PER_NODE) it.subList(0, MAX_CHILDREN_PER_NODE) else it
                 }
-                android.util.Log.i(TAG, "onGetChildren($parentId) -> ${children.size} items")
+                android.util.Log.d(TAG, "onGetChildren($parentId) -> ${children.size} items")
                 LibraryResult.ofItemList(ImmutableList.copyOf(children), params)
             }
     }

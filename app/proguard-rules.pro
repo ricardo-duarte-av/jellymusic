@@ -22,6 +22,15 @@
 # ---- Media3 ----
 -keep class androidx.media3.** { *; }
 
+# ---- Strip debug/verbose logging from release ----
+# Diagnostic Log.d/Log.v calls (e.g. the Android Auto browse tracing) have no side effects, so R8
+# can remove the calls entirely in release. Argument-building code (string templates) that only feeds
+# these calls then becomes dead and is dropped too. Log.i/w/e are kept.
+-assumenosideeffects class android.util.Log {
+    public static int d(...);
+    public static int v(...);
+}
+
 # ---- slf4j (optional backend resolved via ServiceLoader; silence missing-class notes) ----
 -dontwarn org.slf4j.**
 
