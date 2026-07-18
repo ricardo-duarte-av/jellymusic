@@ -29,6 +29,19 @@ interface MusicRepository {
         descending: Boolean,
         favoritesOnly: Boolean = false,
     ): Flow<PagingData<Album>>
+
+    /**
+     * Albums ordered by Jellyfin's server-side play history (most recently played first). Backed by
+     * each item's `UserData.LastPlayedDate`, which JellyMusic itself keeps current via
+     * [pt.aguiarvieira.jellymusic.playback.PlaybackReporter]. Used by the Android Auto home nodes.
+     */
+    suspend fun getRecentlyPlayedAlbums(libraryId: String?): Result<List<Album>>
+
+    /** Albums ordered by highest server-side play count (`UserData.PlayCount`). */
+    suspend fun getMostPlayedAlbums(libraryId: String?): Result<List<Album>>
+
+    /** Albums ordered by most recently added to the server (`DateCreated`). */
+    suspend fun getRecentlyAddedAlbums(libraryId: String?): Result<List<Album>>
     suspend fun getArtists(libraryId: String?, favoritesOnly: Boolean = false): Result<List<Artist>>
     suspend fun getPlaylists(libraryId: String?, favoritesOnly: Boolean = false): Result<List<Playlist>>
 

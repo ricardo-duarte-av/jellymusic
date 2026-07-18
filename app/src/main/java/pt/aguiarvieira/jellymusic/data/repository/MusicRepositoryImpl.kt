@@ -37,6 +37,7 @@ import org.jellyfin.sdk.api.operations.UserLibraryApi
 import org.jellyfin.sdk.model.api.BaseItemKind
 import org.jellyfin.sdk.model.api.ImageType
 import org.jellyfin.sdk.model.api.ItemFields
+import org.jellyfin.sdk.model.api.ItemFilter
 import org.jellyfin.sdk.model.api.ItemSortBy
 import org.jellyfin.sdk.model.api.MediaStreamType
 import org.jellyfin.sdk.model.api.SortOrder
@@ -50,6 +51,11 @@ import javax.inject.Singleton
 private const val ALBUM_PAGE_SIZE = 100
 private const val SEARCH_LIMIT = 40
 private const val HTTP_UNAUTHORIZED = 401
+
+// Cap for the Android Auto "smart" home rows (Recently Played / Most Played / Recently Added). A car
+// browse should surface a handful of quick picks, not the whole catalogue — and it keeps the node
+// well under the Binder transaction limit.
+private const val SMART_NODE_LIMIT = 100
 
 @Singleton
 class MusicRepositoryImpl @Inject constructor(
@@ -94,6 +100,38 @@ class MusicRepositoryImpl @Inject constructor(
             ),
             pagingSourceFactory = { database.albumDao().pagingSource(queryKey) },
         ).flow.map { pagingData -> pagingData.map { it.toAlbum() } }
+    }
+
+    override suspend fun getRecentlyPlayedAlbums(libraryId: String?): Result<List<Album>> =
+        smartAlbums(libraryId, ItemSortBy.DATE_PLAYED, listOf(ItemFilter.IS_PLAYED))
+
+    override suspend fun getMostPlayedAlbums(libraryId: String?): Result<List<Album>> =
+        smartAlbums(libraryId, ItemSortBy.PLAY_COUNT, listOf(ItemFilter.IS_PLAYED))
+
+    override suspend fun getRecentlyAddedAlbums(libraryId: String?): Result<List<Album>> =
+        smartAlbums(libraryId, ItemSortBy.DATE_CREATED, filters = emptyList())
+
+    /** Shared query for the play-history/recently-added album rows: same shape, different sort/filter. */
+    private suspend fun smartAlbums(
+        libraryId: String?,
+        sortBy: ItemSortBy,
+        filters: List<ItemFilter>,
+    ): Result<List<Album>> = query { api ->
+        ItemsApi(api).getItems(
+            GetItemsRequest(
+                parentId = libraryId.toParentUuid(),
+                includeItemTypes = listOf(BaseItemKind.MUSIC_ALBUM),
+                recursive = true,
+                sortBy = listOf(sortBy),
+                sortOrder = listOf(SortOrder.DESCENDING),
+                filters = filters.ifEmpty { null },
+                limit = SMART_NODE_LIMIT,
+                // Sorting by DatePlayed/PlayCount needs the server to hydrate UserData.
+                enableUserData = true,
+                imageTypeLimit = 1,
+                enableImageTypes = listOf(ImageType.PRIMARY),
+            ),
+        ).content.items.map { it.toAlbum(urlBuilder) }
     }
 
     override suspend fun getArtists(libraryId: String?, favoritesOnly: Boolean): Result<List<Artist>> {

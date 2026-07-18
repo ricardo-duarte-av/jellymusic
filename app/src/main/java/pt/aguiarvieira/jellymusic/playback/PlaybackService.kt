@@ -32,6 +32,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.guava.future
 import kotlinx.coroutines.isActive
@@ -59,6 +61,18 @@ private const val CMD_CYCLE_REPEAT = "pt.aguiarvieira.jellymusic.CYCLE_REPEAT"
  * node (Albums) safely under the ~1MB transaction limit.
  */
 private const val MAX_CHILDREN_PER_NODE = 500
+
+/** Browse nodes whose contents depend on the selected library; re-queried when it changes. */
+private val LIBRARY_SCOPED_BROWSE_NODES = listOf(
+    MediaItemTree.ROOT_ID,
+    MediaItemTree.RECENTLY_PLAYED_ID,
+    MediaItemTree.MOST_PLAYED_ID,
+    MediaItemTree.RECENTLY_ADDED_ID,
+    MediaItemTree.FAVORITES_ID,
+    MediaItemTree.ALBUMS_ID,
+    MediaItemTree.ARTISTS_ID,
+    MediaItemTree.PLAYLISTS_ID,
+)
 
 /**
  * The single [MediaLibraryService] that powers playback on the phone/tablet AND Android Auto. It
@@ -269,6 +283,20 @@ class PlaybackService : MediaLibraryService() {
                 replayGainPreampDb = rg.preampDb
                 applyGainForCurrentItem()
             }
+        }
+
+        // When the active library changes (e.g. picked from Android Auto's "Libraries" node, or in
+        // the app), the play-history/catalogue browse nodes now serve a different library — tell any
+        // subscribed browser (Android Auto) to re-query them. Skip the initial emission on startup.
+        serviceScope.launch {
+            settingsStore.selectedLibrary
+                .drop(1)
+                .distinctUntilChanged()
+                .collect {
+                    LIBRARY_SCOPED_BROWSE_NODES.forEach {
+                        mediaSession.notifyChildrenChanged(it, Int.MAX_VALUE, null)
+                    }
+                }
         }
 
         // Periodic progress reports so the server's resume point/now-playing stays fresh.

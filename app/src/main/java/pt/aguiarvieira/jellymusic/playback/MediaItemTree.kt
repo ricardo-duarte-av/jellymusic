@@ -10,6 +10,7 @@ import pt.aguiarvieira.jellymusic.data.jellyfin.StreamUrlBuilder
 import pt.aguiarvieira.jellymusic.data.settings.SettingsStore
 import pt.aguiarvieira.jellymusic.domain.model.Album
 import pt.aguiarvieira.jellymusic.domain.model.Artist
+import pt.aguiarvieira.jellymusic.domain.model.MusicLibrary
 import pt.aguiarvieira.jellymusic.domain.model.Playlist
 import pt.aguiarvieira.jellymusic.domain.model.StreamSettings
 import pt.aguiarvieira.jellymusic.domain.model.Track
@@ -21,11 +22,19 @@ import javax.inject.Singleton
  * domain models into Media3 [MediaItem]s. The tree mirrors the in-app IA:
  *
  * ```
- * root → { Albums, Artists, Playlists }
+ * root → { Recently Played, Most Played, Recently Added, Favourites,
+ *          Albums, Artists, Playlists, Libraries }
+ *   Recently Played / Most Played / Recently Added / Favourites → album/<id> → track/<id>
  *   Albums    → A..Z,# → album/<id>    → track/<id> (playable)
  *   Artists   → A..Z,# → artist/<id>   → album/<id> → track/<id>
  *   Playlists → playlist/<id> → track/<id>
+ *   Libraries → library/<id> (switches the active library, then shows its content)
  * ```
+ *
+ * The four "smart" rows at the top exist because a flat, alphabetical album list is unusable in the
+ * car: they surface quick, one-tap entry points backed by Jellyfin's server-side play statistics
+ * (see [pt.aguiarvieira.jellymusic.domain.repository.MusicRepository.getRecentlyPlayedAlbums]) so you
+ * can start something without reaching for the phone.
  *
  * Albums and Artists get an A–Z index level: Android Auto can't paginate a flat list (it requests
  * every child in one Binder transaction, and a large catalogue overflows the ~1MB transaction
@@ -36,6 +45,7 @@ import javax.inject.Singleton
 @Singleton
 class MediaItemTree @Inject constructor(
     private val musicRepository: pt.aguiarvieira.jellymusic.domain.repository.MusicRepository,
+    private val libraryRepository: pt.aguiarvieira.jellymusic.domain.repository.LibraryRepository,
     private val settingsStore: SettingsStore,
     private val urlBuilder: StreamUrlBuilder,
     private val downloadManager: MusicDownloadManager,
@@ -43,11 +53,35 @@ class MediaItemTree @Inject constructor(
     fun rootItem(): MediaItem = browsable(ROOT_ID, "JellyMusic", MediaMetadata.MEDIA_TYPE_FOLDER_MIXED)
 
     suspend fun getChildren(parentId: String): List<MediaItem> = when {
-        parentId == ROOT_ID -> listOf(
-            browsable(ALBUMS_ID, "Albums", MediaMetadata.MEDIA_TYPE_FOLDER_ALBUMS),
-            browsable(ARTISTS_ID, "Artists", MediaMetadata.MEDIA_TYPE_FOLDER_ARTISTS),
-            browsable(PLAYLISTS_ID, "Playlists", MediaMetadata.MEDIA_TYPE_FOLDER_PLAYLISTS),
-        )
+        parentId == ROOT_ID -> contentNodes() +
+            browsable(LIBRARIES_ID, "Libraries", MediaMetadata.MEDIA_TYPE_FOLDER_MIXED)
+
+        parentId == RECENTLY_PLAYED_ID ->
+            musicRepository.getRecentlyPlayedAlbums(libraryId()).getOrDefault(emptyList()).map { it.toMediaItem() }
+
+        parentId == MOST_PLAYED_ID ->
+            musicRepository.getMostPlayedAlbums(libraryId()).getOrDefault(emptyList()).map { it.toMediaItem() }
+
+        parentId == RECENTLY_ADDED_ID ->
+            musicRepository.getRecentlyAddedAlbums(libraryId()).getOrDefault(emptyList()).map { it.toMediaItem() }
+
+        parentId == FAVORITES_ID ->
+            musicRepository.getAlbums(libraryId(), favoritesOnly = true)
+                .getOrDefault(emptyList()).map { it.toMediaItem() }
+
+        parentId == LIBRARIES_ID ->
+            libraryRepository.getMusicLibraries().getOrDefault(emptyList()).map { it.toMediaItem() }
+
+        parentId.startsWith(LIBRARY_PREFIX) -> {
+            // Opening a library in the car is how you switch the active library without the phone.
+            // Persist the selection (which the smart/browse rows below read via libraryId()) and then
+            // show that library's content menu.
+            val id = parentId.removePrefix(LIBRARY_PREFIX)
+            libraryRepository.getMusicLibraries().getOrDefault(emptyList())
+                .firstOrNull { it.id == id }
+                ?.let { settingsStore.setSelectedLibrary(it) }
+            contentNodes()
+        }
 
         parentId == ALBUMS_ID ->
             letterNodes(albums().map { it.name }, ALBUM_LETTER_PREFIX, MediaMetadata.MEDIA_TYPE_FOLDER_ALBUMS)
@@ -86,6 +120,21 @@ class MediaItemTree @Inject constructor(
 
         else -> emptyList()
     }
+
+    /**
+     * The per-library content menu shown both at the root and after picking a library: the four
+     * play-history "smart" rows followed by the full A–Z catalogues. All entries read the currently
+     * selected library via [libraryId], so the same nodes re-serve the newly picked library's items.
+     */
+    private fun contentNodes(): List<MediaItem> = listOf(
+        browsable(RECENTLY_PLAYED_ID, "Recently Played", MediaMetadata.MEDIA_TYPE_FOLDER_ALBUMS),
+        browsable(MOST_PLAYED_ID, "Most Played", MediaMetadata.MEDIA_TYPE_FOLDER_ALBUMS),
+        browsable(RECENTLY_ADDED_ID, "Recently Added", MediaMetadata.MEDIA_TYPE_FOLDER_ALBUMS),
+        browsable(FAVORITES_ID, "Favourites", MediaMetadata.MEDIA_TYPE_FOLDER_ALBUMS),
+        browsable(ALBUMS_ID, "Albums", MediaMetadata.MEDIA_TYPE_FOLDER_ALBUMS),
+        browsable(ARTISTS_ID, "Artists", MediaMetadata.MEDIA_TYPE_FOLDER_ARTISTS),
+        browsable(PLAYLISTS_ID, "Playlists", MediaMetadata.MEDIA_TYPE_FOLDER_PLAYLISTS),
+    )
 
     /** Public so the in-app player ([PlaybackConnection]) builds identical playable items. */
     fun trackMediaItem(track: Track, settings: StreamSettings): MediaItem {
@@ -192,6 +241,12 @@ class MediaItemTree @Inject constructor(
         artworkUri = artworkUrl?.toUri(),
     )
 
+    private fun MusicLibrary.toMediaItem() = browsable(
+        id = LIBRARY_PREFIX + id,
+        title = name,
+        mediaType = MediaMetadata.MEDIA_TYPE_FOLDER_MIXED,
+    )
+
     private fun browsable(
         id: String,
         title: String,
@@ -217,10 +272,16 @@ class MediaItemTree @Inject constructor(
         const val ALBUMS_ID = "albums"
         const val ARTISTS_ID = "artists"
         const val PLAYLISTS_ID = "playlists"
+        const val LIBRARIES_ID = "libraries"
+        const val RECENTLY_PLAYED_ID = "home/recently_played"
+        const val MOST_PLAYED_ID = "home/most_played"
+        const val RECENTLY_ADDED_ID = "home/recently_added"
+        const val FAVORITES_ID = "home/favorites"
         const val TRACK_PREFIX = "track/"
         const val ALBUM_PREFIX = "album/"
         const val ARTIST_PREFIX = "artist/"
         const val PLAYLIST_PREFIX = "playlist/"
+        const val LIBRARY_PREFIX = "library/"
         const val ALBUM_LETTER_PREFIX = "album_letter/"
         const val ARTIST_LETTER_PREFIX = "artist_letter/"
         private const val NON_ALPHA_LETTER = "#"
