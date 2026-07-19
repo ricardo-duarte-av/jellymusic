@@ -52,6 +52,10 @@ data class AlbumDownloadEntity(
     val artworkPath: String? = null,
     val totalTracks: Int,
     val transcoded: Boolean,
+    /** True when the user explicitly downloaded this album. */
+    val manualRequest: Boolean = true,
+    /** True when the favourite-sync created this group because the album is a favourite. */
+    val favoriteRequest: Boolean = false,
     val requestedAt: Long,
 )
 
@@ -71,6 +75,10 @@ data class PlaylistDownloadEntity(
     /** IDs of the tracks that made up the playlist when it was queued. */
     val trackIds: List<String>,
     val transcoded: Boolean,
+    /** True when the user explicitly downloaded this playlist. */
+    val manualRequest: Boolean = true,
+    /** True when the favourite-sync created this group because the playlist is a favourite. */
+    val favoriteRequest: Boolean = false,
     val requestedAt: Long,
 )
 

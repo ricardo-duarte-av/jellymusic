@@ -87,13 +87,24 @@ object DatabaseModule {
         }
     }
 
+    // v10 adds the same manual/favourite request flags to the album & playlist download groups, so a
+    // favourite-synced album/playlist shows the downloaded badge and can be cleaned up on un-favourite.
+    private val MIGRATION_9_10 = object : Migration(9, 10) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE album_downloads ADD COLUMN manualRequest INTEGER NOT NULL DEFAULT 1")
+            db.execSQL("ALTER TABLE album_downloads ADD COLUMN favoriteRequest INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE playlist_downloads ADD COLUMN manualRequest INTEGER NOT NULL DEFAULT 1")
+            db.execSQL("ALTER TABLE playlist_downloads ADD COLUMN favoriteRequest INTEGER NOT NULL DEFAULT 0")
+        }
+    }
+
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): JellyMusicDatabase =
         Room.databaseBuilder(context, JellyMusicDatabase::class.java, "jellymusic.db")
             .addMigrations(
                 MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8,
-                MIGRATION_8_9,
+                MIGRATION_8_9, MIGRATION_9_10,
             )
             .fallbackToDestructiveMigration(dropAllTables = true)
             .build()

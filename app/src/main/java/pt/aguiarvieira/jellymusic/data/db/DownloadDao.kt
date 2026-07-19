@@ -103,11 +103,20 @@ interface DownloadDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAlbum(entity: AlbumDownloadEntity)
 
+    @Query("SELECT * FROM album_downloads WHERE albumId = :albumId")
+    suspend fun getAlbum(albumId: String): AlbumDownloadEntity?
+
     @Query("DELETE FROM album_downloads WHERE albumId = :albumId")
     suspend fun deleteAlbum(albumId: String)
 
     @Query("SELECT albumId FROM album_downloads")
     suspend fun downloadedAlbumIds(): List<String>
+
+    @Query("UPDATE album_downloads SET favoriteRequest = :favorite WHERE albumId = :albumId")
+    suspend fun setAlbumFavoriteRequest(albumId: String, favorite: Boolean)
+
+    @Query("SELECT * FROM album_downloads WHERE favoriteRequest = 1")
+    suspend fun favoriteAlbums(): List<AlbumDownloadEntity>
 
     // --- Playlist rows ---
 
@@ -122,4 +131,10 @@ interface DownloadDao {
 
     @Query("DELETE FROM playlist_downloads WHERE playlistId = :playlistId")
     suspend fun deletePlaylist(playlistId: String)
+
+    @Query("UPDATE playlist_downloads SET favoriteRequest = :favorite WHERE playlistId = :playlistId")
+    suspend fun setPlaylistFavoriteRequest(playlistId: String, favorite: Boolean)
+
+    @Query("SELECT * FROM playlist_downloads WHERE favoriteRequest = 1")
+    suspend fun favoritePlaylists(): List<PlaylistDownloadEntity>
 }

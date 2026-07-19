@@ -47,6 +47,8 @@ class FavoriteDownloadSyncManager @Inject constructor(
         scope.launch {
             mutex.withLock {
                 downloadDao.favoriteDownloads().forEach { downloadManager.releaseFavorite(it.trackId) }
+                downloadDao.favoriteAlbums().forEach { downloadManager.releaseFavoriteAlbumGroup(it.albumId) }
+                downloadDao.favoritePlaylists().forEach { downloadManager.releaseFavoritePlaylistGroup(it.playlistId) }
             }
         }
     }
@@ -61,30 +63,89 @@ class FavoriteDownloadSyncManager @Inject constructor(
             return
         }
 
+        val transcode = settingsStore.streamSettings.first().transcode
         val desired = LinkedHashMap<String, Track>()
         favoriteTracks.forEach { desired[it.id] = it }
-        // Favourite albums/playlists expand to their tracks; expansion failures are tolerated.
-        musicRepository.getAlbums(null, favoritesOnly = true).getOrNull()?.forEach { album ->
-            musicRepository.getAlbumTracks(album.id).getOrNull()?.forEach { desired.putIfAbsent(it.id, it) }
-        }
-        musicRepository.getPlaylists(null, favoritesOnly = true).getOrNull()?.forEach { playlist ->
-            musicRepository.getPlaylistTracks(playlist.id).getOrNull()?.forEach { desired.putIfAbsent(it.id, it) }
-        }
 
-        val transcode = settingsStore.streamSettings.first().transcode
+        // Expand favourite albums/playlists into their tracks + group metadata. [GroupIds.complete] is
+        // false if any sub-fetch failed, in which case we only add — never remove — this cycle, so a
+        // transient failure can't delete downloads.
+        val albumIds = expandFavoriteAlbums(desired, transcode)
+        val playlistIds = expandFavoritePlaylists(desired, transcode)
+        val desiredComplete = albumIds.complete && playlistIds.complete
+
         val current = downloadDao.favoriteDownloads().associateBy { it.trackId }
 
         // Add: queue anything favourited that we don't already claim.
         desired.values.forEach { track ->
             if (track.id !in current) downloadManager.queueFavorite(track, transcode)
         }
-        // Remove: release claims on tracks that are no longer favourites.
-        current.keys.forEach { trackId ->
-            if (trackId !in desired) downloadManager.releaseFavorite(trackId)
-        }
+
+        if (desiredComplete) removeStale(current.keys, desired.keys, albumIds.ids, playlistIds.ids)
+
         // Give previously-failed favourites another go on this sync.
         downloadDao.requeueFailedFavorites(System.currentTimeMillis())
 
         downloadManager.scheduleFavoriteWork(allowMetered = settingsStore.downloadFavoritesOnMetered.first())
+    }
+
+    /** IDs of the favourite groups we saw, and whether the fetch that produced them was complete. */
+    private data class GroupIds(val ids: Set<String>, val complete: Boolean)
+
+    /** Adds favourite-album tracks to [desired] and ensures each album's group row exists. */
+    private suspend fun expandFavoriteAlbums(desired: MutableMap<String, Track>, transcode: Boolean): GroupIds {
+        val albums = musicRepository.getAlbums(null, favoritesOnly = true).getOrNull()
+            ?: return GroupIds(emptySet(), complete = false)
+        val ids = mutableSetOf<String>()
+        var complete = true
+        albums.forEach { album ->
+            val tracks = musicRepository.getAlbumTracks(album.id).getOrNull()
+            if (tracks == null) {
+                complete = false
+            } else {
+                ids += album.id
+                // Group metadata so the album shows the downloaded badge like a manual download.
+                downloadManager.ensureFavoriteAlbumGroup(album, tracks.size, transcode)
+                tracks.forEach { desired.putIfAbsent(it.id, it) }
+            }
+        }
+        return GroupIds(ids, complete)
+    }
+
+    /** Adds favourite-playlist tracks to [desired] and ensures each playlist's group row exists. */
+    private suspend fun expandFavoritePlaylists(desired: MutableMap<String, Track>, transcode: Boolean): GroupIds {
+        val playlists = musicRepository.getPlaylists(null, favoritesOnly = true).getOrNull()
+            ?: return GroupIds(emptySet(), complete = false)
+        val ids = mutableSetOf<String>()
+        var complete = true
+        playlists.forEach { playlist ->
+            val tracks = musicRepository.getPlaylistTracks(playlist.id).getOrNull()
+            if (tracks == null) {
+                complete = false
+            } else {
+                ids += playlist.id
+                downloadManager.ensureFavoritePlaylistGroup(playlist, tracks.map { it.id }, transcode)
+                tracks.forEach { desired.putIfAbsent(it.id, it) }
+            }
+        }
+        return GroupIds(ids, complete)
+    }
+
+    /** Release tracks and album/playlist groups that are no longer favourites. */
+    private suspend fun removeStale(
+        currentTrackIds: Set<String>,
+        desiredTrackIds: Set<String>,
+        favoriteAlbumIds: Set<String>,
+        favoritePlaylistIds: Set<String>,
+    ) {
+        currentTrackIds.forEach { trackId ->
+            if (trackId !in desiredTrackIds) downloadManager.releaseFavorite(trackId)
+        }
+        downloadDao.favoriteAlbums().forEach { group ->
+            if (group.albumId !in favoriteAlbumIds) downloadManager.releaseFavoriteAlbumGroup(group.albumId)
+        }
+        downloadDao.favoritePlaylists().forEach { group ->
+            if (group.playlistId !in favoritePlaylistIds) downloadManager.releaseFavoritePlaylistGroup(group.playlistId)
+        }
     }
 }

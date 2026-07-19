@@ -18,8 +18,10 @@ import pt.aguiarvieira.jellymusic.data.db.DownloadDao
 import pt.aguiarvieira.jellymusic.data.db.PlaylistDownloadEntity
 import pt.aguiarvieira.jellymusic.data.db.TrackDownloadEntity
 import pt.aguiarvieira.jellymusic.data.settings.SettingsStore
+import pt.aguiarvieira.jellymusic.domain.model.Album
 import pt.aguiarvieira.jellymusic.domain.model.AudioCodec
 import pt.aguiarvieira.jellymusic.domain.model.DownloadState
+import pt.aguiarvieira.jellymusic.domain.model.Playlist
 import pt.aguiarvieira.jellymusic.domain.model.StreamSettings
 import pt.aguiarvieira.jellymusic.domain.model.Track
 import pt.aguiarvieira.jellymusic.domain.repository.MusicRepository
@@ -103,6 +105,9 @@ class MusicDownloadManager @Inject constructor(
                     artworkPath = artworkCache.cache(albumId, artworkUrl),
                     totalTracks = tracks.size,
                     transcoded = transcode,
+                    manualRequest = true,
+                    // Preserve an existing favourite claim so un-favourite later still cleans up right.
+                    favoriteRequest = dao.getAlbum(albumId)?.favoriteRequest ?: false,
                     requestedAt = System.currentTimeMillis(),
                 ),
             )
@@ -129,6 +134,9 @@ class MusicDownloadManager @Inject constructor(
                     totalTracks = tracks.size,
                     trackIds = tracks.map { it.id },
                     transcoded = transcode,
+                    manualRequest = true,
+                    // Preserve an existing favourite claim so un-favourite later still cleans up right.
+                    favoriteRequest = dao.getPlaylist(playlistId)?.favoriteRequest ?: false,
                     requestedAt = System.currentTimeMillis(),
                 ),
             )
@@ -163,6 +171,70 @@ class MusicDownloadManager @Inject constructor(
     private suspend fun removeFavoriteTrack(trackId: String) {
         deleteFilesFor(trackId)
         dao.deleteTrack(trackId)
+    }
+
+    /**
+     * Ensure a favourite album has a download-group row (so it renders the downloaded badge like a
+     * manual album download). Track files are owned by the track-level reconcile — this only manages
+     * the group metadata. If a group already exists (e.g. a manual download), just stamps the claim.
+     */
+    suspend fun ensureFavoriteAlbumGroup(album: Album, totalTracks: Int, transcode: Boolean) {
+        val existing = dao.getAlbum(album.id)
+        if (existing != null) {
+            if (!existing.favoriteRequest) dao.setAlbumFavoriteRequest(album.id, true)
+        } else {
+            dao.upsertAlbum(
+                AlbumDownloadEntity(
+                    albumId = album.id,
+                    name = album.name,
+                    artist = album.artist,
+                    artworkUrl = album.artworkUrl,
+                    artworkPath = artworkCache.cache(album.id, album.artworkUrl),
+                    totalTracks = totalTracks,
+                    transcoded = transcode,
+                    manualRequest = false,
+                    favoriteRequest = true,
+                    requestedAt = System.currentTimeMillis(),
+                ),
+            )
+        }
+    }
+
+    /** Drop a favourite album's group row; removes it only if it wasn't also a manual download. */
+    suspend fun releaseFavoriteAlbumGroup(albumId: String) {
+        val existing = dao.getAlbum(albumId) ?: return
+        dao.setAlbumFavoriteRequest(albumId, false)
+        if (!existing.manualRequest) dao.deleteAlbum(albumId)
+    }
+
+    /** Ensure a favourite playlist has a download-group row. See [ensureFavoriteAlbumGroup]. */
+    suspend fun ensureFavoritePlaylistGroup(playlist: Playlist, trackIds: List<String>, transcode: Boolean) {
+        val existing = dao.getPlaylist(playlist.id)
+        if (existing != null) {
+            if (!existing.favoriteRequest) dao.setPlaylistFavoriteRequest(playlist.id, true)
+        } else {
+            dao.upsertPlaylist(
+                PlaylistDownloadEntity(
+                    playlistId = playlist.id,
+                    name = playlist.name,
+                    artworkUrl = playlist.artworkUrl,
+                    artworkPath = artworkCache.cache(playlist.id, playlist.artworkUrl),
+                    totalTracks = trackIds.size,
+                    trackIds = trackIds,
+                    transcoded = transcode,
+                    manualRequest = false,
+                    favoriteRequest = true,
+                    requestedAt = System.currentTimeMillis(),
+                ),
+            )
+        }
+    }
+
+    /** Drop a favourite playlist's group row; removes it only if it wasn't also a manual download. */
+    suspend fun releaseFavoritePlaylistGroup(playlistId: String) {
+        val existing = dao.getPlaylist(playlistId) ?: return
+        dao.setPlaylistFavoriteRequest(playlistId, false)
+        if (!existing.manualRequest) dao.deletePlaylist(playlistId)
     }
 
     // --- Remove ---
