@@ -82,7 +82,10 @@ class AlbumRemoteMediator(
                     name = dto.name.orEmpty(),
                     artist = dto.albumArtist ?: dto.artists?.firstOrNull(),
                     year = dto.productionYear,
-                    artworkUrl = urlBuilder.imageUrl(dto.id.toString()),
+                    artworkUrl = urlBuilder.imageUrl(
+                        dto.id.toString(),
+                        tag = dto.imageTags?.get(ImageType.PRIMARY),
+                    ),
                     isFavorite = dto.userData?.isFavorite == true,
                 )
             }

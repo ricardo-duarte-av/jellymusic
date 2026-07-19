@@ -41,6 +41,7 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -100,6 +101,7 @@ fun AlbumDetailScreen(
 ) {
     val tracksState by viewModel.tracks.collectAsStateWithLifecycle()
     val isFavorite by viewModel.isFavorite.collectAsStateWithLifecycle()
+    val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
     val trackStatuses by downloadsViewModel.trackStatuses.collectAsStateWithLifecycle()
     val transcodeDefault by downloadsViewModel.transcodeDefault.collectAsStateWithLifecycle()
     var pendingDownload by remember { mutableStateOf<DownloadTarget?>(null) }
@@ -117,7 +119,9 @@ fun AlbumDetailScreen(
         onDismiss = { pendingDownload = null },
     )
 
-    // Retint the album screen to its cover once tracks (and their artwork) have loaded.
+    // Retint the album screen to its cover once tracks (and their artwork) have loaded. The artwork
+    // URL carries the album's Jellyfin image tag, so a pull-to-refresh that picks up a re-tagged
+    // cover yields a new URL — Coil fetches it and the theme reseeds off the new colours.
     val albumArt = (tracksState as? ContentState.Data)?.value?.firstOrNull()?.artworkUrl
     AlbumTheme(artworkUrl = albumArt) {
     Scaffold(
@@ -140,8 +144,10 @@ fun AlbumDetailScreen(
         },
         bottomBar = { MiniPlayer(onExpand = onExpandPlayer) },
     ) { padding ->
-        Box(
-            Modifier
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = viewModel::refresh,
+            modifier = Modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.surface)
                 .padding(padding),
@@ -155,6 +161,7 @@ fun AlbumDetailScreen(
                 is ContentState.Data -> AlbumTrackList(
                     title = viewModel.title,
                     tracks = state.value,
+                    heroArtworkUrl = albumArt,
                     onPlay = playbackViewModel::play,
                     onShufflePlay = playbackViewModel::playShuffled,
                     trackStatuses = trackStatuses,
@@ -173,6 +180,7 @@ fun AlbumDetailScreen(
 private fun AlbumTrackList(
     title: String,
     tracks: List<Track>,
+    heroArtworkUrl: String?,
     onPlay: (List<Track>, Int) -> Unit,
     onShufflePlay: (List<Track>) -> Unit,
     trackStatuses: Map<String, TrackDownloadStatus>,
@@ -224,7 +232,7 @@ private fun AlbumTrackList(
     ) {
         item(key = "art") {
             ArtworkImage(
-                url = tracks.firstOrNull()?.artworkUrl,
+                url = heroArtworkUrl,
                 contentDescription = title,
                 modifier = Modifier
                     .fillMaxWidth()

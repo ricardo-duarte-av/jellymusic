@@ -160,7 +160,7 @@ class MusicRepositoryImpl @Inject constructor(
                     name = item.album.orEmpty(),
                     artist = item.albumArtist ?: item.artists?.firstOrNull(),
                     year = null,
-                    artworkUrl = urlBuilder.imageUrl(albumId),
+                    artworkUrl = urlBuilder.imageUrl(albumId, tag = item.albumPrimaryImageTag),
                     isFavorite = false,
                 )
             }

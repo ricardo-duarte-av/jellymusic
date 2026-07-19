@@ -27,12 +27,19 @@ class StreamUrlBuilder @Inject constructor(
      * images instead of multi-megabyte originals — the same URL feeds grid cards, list thumbnails,
      * the media notification and Android Auto, none of which need full resolution. The cap is
      * comfortably larger than the full-screen player hero on a phone.
+     *
+     * [tag] is the item's Jellyfin image tag (a hash of the current image). Passing it makes the URL
+     * change whenever the cover changes on the server (e.g. re-tagged by Picard), so Coil's URL-keyed
+     * cache fetches the new image instead of serving a stale one. Callers should thread through the
+     * DTO's `imageTags[Primary]` (or `albumPrimaryImageTag` for tracks). Null falls back to the old
+     * tagless URL — still valid, just not self-invalidating.
      */
-    fun imageUrl(itemId: String, type: ImageType = ImageType.PRIMARY): String? {
+    fun imageUrl(itemId: String, type: ImageType = ImageType.PRIMARY, tag: String? = null): String? {
         val api = clientProvider.api ?: return null
         return ImageApi(api).getItemImageUrl(
             itemId = itemId.toUuid(),
             imageType = type,
+            tag = tag,
             maxWidth = ARTWORK_MAX_PX,
             maxHeight = ARTWORK_MAX_PX,
             quality = ARTWORK_QUALITY,

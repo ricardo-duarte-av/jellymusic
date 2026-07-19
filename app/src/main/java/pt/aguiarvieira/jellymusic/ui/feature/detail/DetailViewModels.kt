@@ -33,12 +33,30 @@ class AlbumDetailViewModel @Inject constructor(
     private val _isFavorite = MutableStateFlow(false)
     val isFavorite = _isFavorite.asStateFlow()
 
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing = _isRefreshing.asStateFlow()
+
     init {
         viewModelScope.launch {
             _tracks.value = musicRepository.getAlbumTracks(args.albumId).toContentState()
         }
         viewModelScope.launch {
             musicRepository.getFavorite(args.albumId).onSuccess { _isFavorite.value = it }
+        }
+    }
+
+    /**
+     * Re-fetch tracks + favourite from the server. Picks up a cover art change made on the server:
+     * the fresh tracks carry the album's new image tag, so the artwork URL changes and Coil fetches
+     * the updated cover instead of serving its cache. See [ItemMappers].
+     */
+    fun refresh() {
+        if (_isRefreshing.value) return
+        _isRefreshing.value = true
+        viewModelScope.launch {
+            _tracks.value = musicRepository.getAlbumTracks(args.albumId).toContentState()
+            musicRepository.getFavorite(args.albumId).onSuccess { _isFavorite.value = it }
+            _isRefreshing.value = false
         }
     }
 
