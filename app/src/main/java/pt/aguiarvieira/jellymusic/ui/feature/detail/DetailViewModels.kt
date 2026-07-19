@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import pt.aguiarvieira.jellymusic.data.download.FavoriteDownloadSyncManager
 import pt.aguiarvieira.jellymusic.domain.model.Album
 import pt.aguiarvieira.jellymusic.domain.model.Track
 import pt.aguiarvieira.jellymusic.domain.repository.MusicRepository
@@ -20,6 +21,7 @@ import javax.inject.Inject
 @HiltViewModel
 class AlbumDetailViewModel @Inject constructor(
     private val musicRepository: MusicRepository,
+    private val favoriteSyncManager: FavoriteDownloadSyncManager,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
     private val args = savedStateHandle.toRoute<Routes.AlbumDetail>()
@@ -41,15 +43,16 @@ class AlbumDetailViewModel @Inject constructor(
     }
 
     fun toggleFavorite() =
-        toggleFavoriteIn(_isFavorite, musicRepository, args.albumId)
+        toggleFavoriteIn(_isFavorite, musicRepository, favoriteSyncManager, args.albumId)
 
     fun toggleTrackFavorite(track: Track) =
-        toggleTrackFavoriteIn(_tracks, musicRepository, track)
+        toggleTrackFavoriteIn(_tracks, musicRepository, favoriteSyncManager, track)
 }
 
 @HiltViewModel
 class PlaylistDetailViewModel @Inject constructor(
     private val musicRepository: MusicRepository,
+    private val favoriteSyncManager: FavoriteDownloadSyncManager,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
     private val args = savedStateHandle.toRoute<Routes.PlaylistDetail>()
@@ -71,15 +74,16 @@ class PlaylistDetailViewModel @Inject constructor(
     }
 
     fun toggleFavorite() =
-        toggleFavoriteIn(_isFavorite, musicRepository, args.playlistId)
+        toggleFavoriteIn(_isFavorite, musicRepository, favoriteSyncManager, args.playlistId)
 
     fun toggleTrackFavorite(track: Track) =
-        toggleTrackFavoriteIn(_tracks, musicRepository, track)
+        toggleTrackFavoriteIn(_tracks, musicRepository, favoriteSyncManager, track)
 }
 
 @HiltViewModel
 class ArtistDetailViewModel @Inject constructor(
     private val musicRepository: MusicRepository,
+    private val favoriteSyncManager: FavoriteDownloadSyncManager,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
     private val args = savedStateHandle.toRoute<Routes.ArtistDetail>()
@@ -101,22 +105,26 @@ class ArtistDetailViewModel @Inject constructor(
     }
 
     fun toggleFavorite() =
-        toggleFavoriteIn(_isFavorite, musicRepository, args.artistId)
+        toggleFavoriteIn(_isFavorite, musicRepository, favoriteSyncManager, args.artistId)
 }
 
 /**
  * Optimistically flips [itemId]'s favourite state in [flow] and pushes it to the server, reverting
- * on failure. Shared by the detail viewmodels' top-bar heart toggle.
+ * on failure. On success, kicks the favourite-download sync so the change is reflected offline.
+ * Shared by the detail viewmodels' top-bar heart toggle.
  */
 private fun ViewModel.toggleFavoriteIn(
     flow: MutableStateFlow<Boolean>,
     repository: MusicRepository,
+    syncManager: FavoriteDownloadSyncManager,
     itemId: String,
 ) {
     val target = !flow.value
     flow.value = target
     viewModelScope.launch {
-        repository.setFavorite(itemId, target).onFailure { flow.value = !target }
+        repository.setFavorite(itemId, target)
+            .onSuccess { syncManager.requestSync() }
+            .onFailure { flow.value = !target }
     }
 }
 
@@ -124,6 +132,7 @@ private fun ViewModel.toggleFavoriteIn(
 private fun ViewModel.toggleTrackFavoriteIn(
     flow: MutableStateFlow<ContentState<List<Track>>>,
     repository: MusicRepository,
+    syncManager: FavoriteDownloadSyncManager,
     track: Track,
 ) {
     val target = !track.isFavorite
@@ -136,6 +145,8 @@ private fun ViewModel.toggleTrackFavoriteIn(
     }
     setInList(target)
     viewModelScope.launch {
-        repository.setFavorite(track.id, target).onFailure { setInList(!target) }
+        repository.setFavorite(track.id, target)
+            .onSuccess { syncManager.requestSync() }
+            .onFailure { setInList(!target) }
     }
 }

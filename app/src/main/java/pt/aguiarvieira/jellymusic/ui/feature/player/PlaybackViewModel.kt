@@ -17,6 +17,7 @@ import kotlinx.coroutines.launch
 import pt.aguiarvieira.jellymusic.domain.model.StreamSettings
 import pt.aguiarvieira.jellymusic.domain.model.Track
 import pt.aguiarvieira.jellymusic.domain.model.TrackAudioInfo
+import pt.aguiarvieira.jellymusic.data.download.FavoriteDownloadSyncManager
 import pt.aguiarvieira.jellymusic.domain.repository.MusicRepository
 import pt.aguiarvieira.jellymusic.playback.PlaybackConnection
 import javax.inject.Inject
@@ -26,6 +27,7 @@ import javax.inject.Inject
 class PlaybackViewModel @Inject constructor(
     private val connection: PlaybackConnection,
     private val musicRepository: MusicRepository,
+    private val favoriteSyncManager: FavoriteDownloadSyncManager,
 ) : ViewModel() {
 
     val state = connection.state
@@ -50,7 +52,9 @@ class PlaybackViewModel @Inject constructor(
         val target = !_isFavorite.value
         _isFavorite.value = target
         viewModelScope.launch {
-            musicRepository.setFavorite(trackId, target).onFailure { _isFavorite.value = !target }
+            musicRepository.setFavorite(trackId, target)
+                .onSuccess { favoriteSyncManager.requestSync() }
+                .onFailure { _isFavorite.value = !target }
         }
     }
 
