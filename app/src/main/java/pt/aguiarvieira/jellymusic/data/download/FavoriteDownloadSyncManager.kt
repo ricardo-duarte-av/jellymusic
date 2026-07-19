@@ -82,6 +82,8 @@ class FavoriteDownloadSyncManager @Inject constructor(
         current.keys.forEach { trackId ->
             if (trackId !in desired) downloadManager.releaseFavorite(trackId)
         }
+        // Give previously-failed favourites another go on this sync.
+        downloadDao.requeueFailedFavorites(System.currentTimeMillis())
 
         downloadManager.scheduleFavoriteWork(allowMetered = settingsStore.downloadFavoritesOnMetered.first())
     }

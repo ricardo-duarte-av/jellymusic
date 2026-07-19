@@ -22,6 +22,8 @@ val CHANGELOG: List<ChangelogVersion> = listOf(
             "New setting: Download favourites to device. Keep your hearted tracks, albums and " +
                 "playlists downloaded for offline listening — they sync automatically and only " +
                 "download on Wi-Fi (with an optional 'Allow on mobile data' override).",
+            "The favourite heart shown over album/artwork now uses your theme colour instead of " +
+                "plain white.",
         ),
     ),
     ChangelogVersion(

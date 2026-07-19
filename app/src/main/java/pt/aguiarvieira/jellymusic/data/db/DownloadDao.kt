@@ -56,6 +56,16 @@ interface DownloadDao {
     @Query("UPDATE track_downloads SET favoriteRequest = :favorite WHERE trackId = :trackId")
     suspend fun setFavoriteRequest(trackId: String, favorite: Boolean)
 
+    /**
+     * Re-queue favourite-only downloads that previously failed, so a later sync retries them. Scoped
+     * to favourite-only rows (a manual+favourite track is retried through the manual flow).
+     */
+    @Query(
+        "UPDATE track_downloads SET state = 'QUEUED', downloadedBytes = 0, updatedAt = :now " +
+            "WHERE state = 'FAILED' AND favoriteRequest = 1 AND manualRequest = 0",
+    )
+    suspend fun requeueFailedFavorites(now: Long)
+
     @Query("SELECT * FROM track_downloads WHERE state = 'COMPLETED'")
     suspend fun completedTracks(): List<TrackDownloadEntity>
 

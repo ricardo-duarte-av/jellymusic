@@ -48,7 +48,7 @@ fun FavoriteArtworkMarker(favorite: Boolean, modifier: Modifier = Modifier) {
         Icon(
             imageVector = Icons.Filled.Favorite,
             contentDescription = "Favourite",
-            tint = Color.White,
+            tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier
                 .padding(4.dp)
                 .size(16.dp),
