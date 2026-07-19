@@ -141,6 +141,9 @@ class BrowseViewModel @Inject constructor(
             )
         }
         albumQuery.update { it.copy(favoritesOnly = favoritesOnly) }
+        // Viewing favourites re-fetches them, so reconcile downloads against anything changed on
+        // another client (favourites are global, so this covers every library and "All music").
+        if (favoritesOnly) favoriteSyncManager.requestSync()
     }
 
     /** Loads Artists only if not already loaded (called when the Artists tab is viewed). */
