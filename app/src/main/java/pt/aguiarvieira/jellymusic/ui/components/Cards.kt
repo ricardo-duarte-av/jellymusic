@@ -85,9 +85,7 @@ fun AlbumCard(
                 )
                 FavoriteArtworkMarker(
                     favorite = album.isFavorite,
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(12.dp),
+                    modifier = Modifier.align(Alignment.TopStart),
                 )
             }
             Column(modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 10.dp)) {
@@ -162,9 +160,7 @@ fun ArtistCard(artist: Artist, onClick: () -> Unit, modifier: Modifier = Modifie
             )
             FavoriteArtworkMarker(
                 favorite = artist.isFavorite,
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(8.dp),
+                modifier = Modifier.align(Alignment.BottomEnd),
             )
         }
         Spacer(Modifier.height(8.dp))
@@ -220,9 +216,7 @@ fun PlaylistCard(
                 )
                 FavoriteArtworkMarker(
                     favorite = playlist.isFavorite,
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(12.dp),
+                    modifier = Modifier.align(Alignment.TopStart),
                 )
             }
             Column(modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 10.dp)) {
