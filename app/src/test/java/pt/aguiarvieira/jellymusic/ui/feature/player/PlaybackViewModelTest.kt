@@ -11,6 +11,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import pt.aguiarvieira.jellymusic.domain.model.AudioCodec
 import pt.aguiarvieira.jellymusic.domain.model.StreamSettings
+import pt.aguiarvieira.jellymusic.data.download.FavoriteDownloadSyncManager
 import pt.aguiarvieira.jellymusic.domain.model.TrackAudioInfo
 import pt.aguiarvieira.jellymusic.domain.repository.MusicRepository
 import pt.aguiarvieira.jellymusic.playback.PlaybackConnection
@@ -30,6 +31,7 @@ class PlaybackViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     private val repository = mockk<MusicRepository>()
+    private val favoriteSyncManager = mockk<FavoriteDownloadSyncManager>(relaxed = true)
 
     private fun viewModelWith(state: PlaybackUiState): PlaybackViewModel {
         val connection = mockk<PlaybackConnection>()
@@ -38,7 +40,7 @@ class PlaybackViewModelTest {
         every { connection.queue } returns MutableStateFlow(emptyList<QueueItem>())
         // The VM reads the current track's favourite state on init.
         coEvery { repository.getFavorite(any()) } returns Result.success(false)
-        return PlaybackViewModel(connection, repository)
+        return PlaybackViewModel(connection, repository, favoriteSyncManager)
     }
 
     private val flac = TrackAudioInfo(
