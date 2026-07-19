@@ -16,12 +16,16 @@ data class ChangelogVersion(
 /** Newest first. Unreleased (version = null) always on top. */
 val CHANGELOG: List<ChangelogVersion> = listOf(
     ChangelogVersion(
-        version = null,
-        date = null,
+        version = "0.1.53",
+        date = "19/07/2026",
         changes = listOf(
             "New setting: Download favourites to device. Keep your hearted tracks, albums and " +
-                "playlists downloaded for offline listening — they sync automatically and only " +
-                "download on Wi-Fi (with an optional 'Allow on mobile data' override).",
+                "playlists downloaded for offline listening — they sync automatically (on app start, " +
+                "when you switch library, when you toggle a favourite, or when you open the " +
+                "favourites filter) and only download on Wi-Fi, with an optional 'Allow on mobile " +
+                "data' override.",
+            "A favourited album or playlist now shows the downloaded badge on its artwork once its " +
+                "tracks are on the device.",
             "The favourite heart shown over album/artwork now uses your theme colour instead of " +
                 "plain white.",
         ),
