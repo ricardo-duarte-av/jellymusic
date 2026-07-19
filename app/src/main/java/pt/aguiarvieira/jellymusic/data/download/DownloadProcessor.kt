@@ -23,6 +23,12 @@ private const val BUFFER_SIZE = 64 * 1024
 private const val PROGRESS_EMIT_INTERVAL_MS = 300L
 
 /**
+ * Which pending queue a worker run drains. MANUAL tracks download on any connection; FAVORITE tracks
+ * are auto-downloaded favourites and (via their worker's constraints) only on Wi-Fi by default.
+ */
+enum class DownloadScope { MANUAL, FAVORITE }
+
+/**
  * Downloads pending tracks to portable files, updating their Room state. Runs inside the
  * [DownloadWorker] so downloads continue in the background and survive process death.
  */
@@ -36,9 +42,12 @@ class DownloadProcessor @Inject constructor(
         get() = File(context.filesDir, "downloads").apply { mkdirs() }
 
     /** Drains the pending queue one track at a time. [onTrack] fires before each (for the notification). */
-    suspend fun processAll(onTrack: suspend (TrackDownloadEntity) -> Unit) {
+    suspend fun processAll(scope: DownloadScope, onTrack: suspend (TrackDownloadEntity) -> Unit) {
         while (true) {
-            val next = dao.nextPending() ?: break
+            val next = when (scope) {
+                DownloadScope.MANUAL -> dao.nextPending()
+                DownloadScope.FAVORITE -> dao.nextPendingFavorite()
+            } ?: break
             onTrack(next)
             runCatching { process(next) }
                 .onFailure { e ->

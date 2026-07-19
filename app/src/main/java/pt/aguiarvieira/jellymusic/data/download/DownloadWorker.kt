@@ -42,11 +42,15 @@ class DownloadWorker(
             .fromApplication(applicationContext, Deps::class.java)
             .downloadProcessor()
 
+        val scope = runCatching {
+            DownloadScope.valueOf(inputData.getString(KEY_SCOPE) ?: DownloadScope.MANUAL.name)
+        }.getOrDefault(DownloadScope.MANUAL)
+
         ensureChannel()
         val manager = applicationContext.getSystemService(NotificationManager::class.java)
         manager?.notify(NOTIFICATION_ID, buildNotification("Preparing downloads…"))
         try {
-            processor.processAll { track ->
+            processor.processAll(scope) { track ->
                 manager?.notify(NOTIFICATION_ID, buildNotification("Downloading ${track.title}"))
             }
         } finally {
@@ -76,5 +80,7 @@ class DownloadWorker(
 
     companion object {
         const val WORK_NAME = "music_downloads"
+        const val FAVORITE_WORK_NAME = "music_favorite_downloads"
+        const val KEY_SCOPE = "scope"
     }
 }

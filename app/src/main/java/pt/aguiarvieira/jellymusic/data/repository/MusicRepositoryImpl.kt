@@ -148,21 +148,23 @@ class MusicRepositoryImpl @Inject constructor(
                 enableImageTypes = listOf(ImageType.PRIMARY),
             ),
         ).content.items
-        val albumsById = LinkedHashMap<String, Album>()
-        for (item in tracks) {
-            val albumId = item.albumId?.toString() ?: continue
-            if (albumId in albumsById) continue
-            albumsById[albumId] = Album(
-                id = albumId,
-                name = item.album.orEmpty(),
-                artist = item.albumArtist ?: item.artists?.firstOrNull(),
-                year = null,
-                artworkUrl = urlBuilder.imageUrl(albumId),
-                isFavorite = false,
-            )
-            if (albumsById.size >= SMART_NODE_LIMIT) break
-        }
-        albumsById.values.toList()
+        // Fold the played tracks down to their distinct albums (first-seen order), capped for the car.
+        tracks.asSequence()
+            .filter { it.albumId != null }
+            .distinctBy { it.albumId }
+            .take(SMART_NODE_LIMIT)
+            .map { item ->
+                val albumId = item.albumId.toString()
+                Album(
+                    id = albumId,
+                    name = item.album.orEmpty(),
+                    artist = item.albumArtist ?: item.artists?.firstOrNull(),
+                    year = null,
+                    artworkUrl = urlBuilder.imageUrl(albumId),
+                    isFavorite = false,
+                )
+            }
+            .toList()
     }
 
     override suspend fun getArtists(libraryId: String?, favoritesOnly: Boolean): Result<List<Artist>> {
@@ -212,6 +214,20 @@ class MusicRepositoryImpl @Inject constructor(
         }
         val cached = database.browseCacheDao().playlists().map { it.toPlaylist() }
         return if (cached.isNotEmpty()) Result.success(cached) else remote
+    }
+
+    override suspend fun getFavoriteTracks(libraryId: String?): Result<List<Track>> = query { api ->
+        ItemsApi(api).getItems(
+            GetItemsRequest(
+                parentId = libraryId.toParentUuid(),
+                includeItemTypes = listOf(BaseItemKind.AUDIO),
+                recursive = true,
+                isFavorite = true,
+                // MediaSources so downloaded favourites carry codec/rate/depth like other tracks.
+                fields = listOf(ItemFields.MEDIA_SOURCES),
+                enableUserData = true,
+            ),
+        ).content.items.map { it.toTrack(urlBuilder) }
     }
 
     override suspend fun getTrackAudioInfo(trackId: String): Result<TrackAudioInfo?> = query { api ->

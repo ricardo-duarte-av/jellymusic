@@ -6,6 +6,7 @@ import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
+import androidx.work.workDataOf
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -84,7 +85,7 @@ class MusicDownloadManager @Inject constructor(
 
     fun downloadTrack(track: Track, transcode: Boolean) {
         scope.launch {
-            upsertQueued(track, track.albumId, transcode)
+            upsertQueued(track, track.albumId, transcode, manual = true)
             scheduleWork()
         }
     }
@@ -105,7 +106,7 @@ class MusicDownloadManager @Inject constructor(
                     requestedAt = System.currentTimeMillis(),
                 ),
             )
-            tracks.forEach { upsertQueued(it, albumId, transcode) }
+            tracks.forEach { upsertQueued(it, albumId, transcode, manual = true) }
             scheduleWork()
         }
     }
@@ -131,9 +132,37 @@ class MusicDownloadManager @Inject constructor(
                     requestedAt = System.currentTimeMillis(),
                 ),
             )
-            tracks.forEach { upsertQueued(it, it.albumId, transcode) }
+            tracks.forEach { upsertQueued(it, it.albumId, transcode, manual = true) }
             scheduleWork()
         }
+    }
+
+    // --- Favourite auto-download (see FavoriteDownloadSyncManager) ---
+
+    /**
+     * Queue a favourite track for auto-download. If a row already exists (e.g. a manual download),
+     * just stamps the favourite claim so it survives an un-favourite without re-downloading. Callers
+     * must schedule the favourite work afterwards via [scheduleFavoriteWork].
+     */
+    suspend fun queueFavorite(track: Track, transcode: Boolean) {
+        val existing = dao.getTrack(track.id)
+        if (existing != null) {
+            dao.setFavoriteRequest(track.id, true)
+        } else {
+            upsertQueued(track, track.albumId, transcode, manual = false, favorite = true)
+        }
+    }
+
+    /** Drop a favourite's claim; physically removes the file only if it wasn't also a manual download. */
+    suspend fun releaseFavorite(trackId: String) {
+        val row = dao.getTrack(trackId) ?: return
+        dao.setFavoriteRequest(trackId, false)
+        if (!row.manualRequest) removeFavoriteTrack(trackId)
+    }
+
+    private suspend fun removeFavoriteTrack(trackId: String) {
+        deleteFilesFor(trackId)
+        dao.deleteTrack(trackId)
     }
 
     // --- Remove ---
@@ -181,7 +210,13 @@ class MusicDownloadManager @Inject constructor(
 
     // --- Internals ---
 
-    private suspend fun upsertQueued(track: Track, albumId: String?, transcode: Boolean) {
+    private suspend fun upsertQueued(
+        track: Track,
+        albumId: String?,
+        transcode: Boolean,
+        manual: Boolean,
+        favorite: Boolean = false,
+    ) {
         // Don't re-queue a track that's already downloaded/queued.
         val existing = dao.getTrack(track.id)
         if (existing != null && existing.state != DownloadState.FAILED.name) return
@@ -201,6 +236,8 @@ class MusicDownloadManager @Inject constructor(
                 // Cache the cover (keyed by album so an album's tracks share one file).
                 artworkPath = artworkCache.cache(albumId ?: track.id, track.artworkUrl),
                 transcoded = transcode,
+                manualRequest = manual,
+                favoriteRequest = favorite,
                 codec = if (transcode) settings.codec.name else null,
                 bitrateKbps = if (transcode) settings.maxBitrateKbps else null,
                 normalizationGainDb = track.normalizationGainDb,
@@ -211,15 +248,31 @@ class MusicDownloadManager @Inject constructor(
         )
     }
 
-    /** Enqueue the background download worker; a single unique instance drains the whole queue. */
+    /** Enqueue the background download worker; a single unique instance drains the manual queue. */
     private fun scheduleWork() {
         val request = OneTimeWorkRequestBuilder<DownloadWorker>()
             .setConstraints(
                 Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build(),
             )
+            .setInputData(workDataOf(DownloadWorker.KEY_SCOPE to DownloadScope.MANUAL.name))
             .build()
         WorkManager.getInstance(context)
             .enqueueUniqueWork(DownloadWorker.WORK_NAME, ExistingWorkPolicy.KEEP, request)
+    }
+
+    /**
+     * Enqueue the favourite-download worker, draining the favourite-only queue. Wi-Fi-only by default
+     * ([allowMetered] = false → [NetworkType.UNMETERED]); [allowMetered] relaxes it to any connection.
+     * REPLACE so a policy change (metered toggle) re-applies the new constraint immediately.
+     */
+    fun scheduleFavoriteWork(allowMetered: Boolean) {
+        val networkType = if (allowMetered) NetworkType.CONNECTED else NetworkType.UNMETERED
+        val request = OneTimeWorkRequestBuilder<DownloadWorker>()
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(networkType).build())
+            .setInputData(workDataOf(DownloadWorker.KEY_SCOPE to DownloadScope.FAVORITE.name))
+            .build()
+        WorkManager.getInstance(context)
+            .enqueueUniqueWork(DownloadWorker.FAVORITE_WORK_NAME, ExistingWorkPolicy.REPLACE, request)
     }
 
     private fun deleteFilesFor(trackId: String) {

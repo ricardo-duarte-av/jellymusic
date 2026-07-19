@@ -13,7 +13,7 @@ import androidx.room.TypeConverters
         CachedArtistEntity::class,
         CachedPlaylistEntity::class,
     ],
-    version = 8,
+    version = 9,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)

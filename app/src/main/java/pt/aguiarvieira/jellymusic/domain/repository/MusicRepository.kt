@@ -45,6 +45,9 @@ interface MusicRepository {
     suspend fun getArtists(libraryId: String?, favoritesOnly: Boolean = false): Result<List<Artist>>
     suspend fun getPlaylists(libraryId: String?, favoritesOnly: Boolean = false): Result<List<Playlist>>
 
+    /** The user's favourite tracks (individual hearted songs) in [libraryId], or all music when null. */
+    suspend fun getFavoriteTracks(libraryId: String?): Result<List<Track>>
+
     /** Reads the current favourite state of a single item (album/artist/playlist/track). */
     suspend fun getFavorite(itemId: String): Result<Boolean>
 

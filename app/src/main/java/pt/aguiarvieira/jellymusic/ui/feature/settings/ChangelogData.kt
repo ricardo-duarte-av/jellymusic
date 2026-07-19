@@ -16,6 +16,15 @@ data class ChangelogVersion(
 /** Newest first. Unreleased (version = null) always on top. */
 val CHANGELOG: List<ChangelogVersion> = listOf(
     ChangelogVersion(
+        version = null,
+        date = null,
+        changes = listOf(
+            "New setting: Download favourites to device. Keep your hearted tracks, albums and " +
+                "playlists downloaded for offline listening — they sync automatically and only " +
+                "download on Wi-Fi (with an optional 'Allow on mobile data' override).",
+        ),
+    ),
+    ChangelogVersion(
         version = "0.1.52",
         date = "19/07/2026",
         changes = listOf(

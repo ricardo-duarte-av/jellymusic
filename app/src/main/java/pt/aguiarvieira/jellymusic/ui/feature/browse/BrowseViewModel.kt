@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import pt.aguiarvieira.jellymusic.data.download.FavoriteDownloadSyncManager
 import pt.aguiarvieira.jellymusic.data.settings.SettingsStore
 import pt.aguiarvieira.jellymusic.domain.model.Album
 import pt.aguiarvieira.jellymusic.domain.model.AlbumSort
@@ -51,6 +52,7 @@ class BrowseViewModel @Inject constructor(
     private val musicRepository: MusicRepository,
     private val libraryRepository: LibraryRepository,
     private val settingsStore: SettingsStore,
+    private val favoriteSyncManager: FavoriteDownloadSyncManager,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(BrowseUiState())
@@ -77,6 +79,8 @@ class BrowseViewModel @Inject constructor(
             albumQuery.value = AlbumQuery(selected.id, sort, descending)
             loadLibraries()
         }
+        // App start: reconcile downloaded favourites with the server (no-ops when the setting is off).
+        favoriteSyncManager.requestSync()
     }
 
     /** Loads the picker options: "All music" plus every music library on the server. */
@@ -100,6 +104,8 @@ class BrowseViewModel @Inject constructor(
             }
             albumQuery.update { it.copy(libraryId = library.id) }
         }
+        // Library switch: re-trigger a favourites reconcile (favourites span all libraries).
+        favoriteSyncManager.requestSync()
     }
 
     fun setAlbumSort(sort: AlbumSort) {

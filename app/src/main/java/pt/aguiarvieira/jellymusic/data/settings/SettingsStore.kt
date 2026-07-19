@@ -56,6 +56,16 @@ class SettingsStore @Inject constructor(
         prefs[KEY_DYNAMIC_ALBUM_THEME] ?: true
     }
 
+    /** Whether the user's favourites are auto-downloaded for offline listening. Defaults off. */
+    val downloadFavorites: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_DOWNLOAD_FAVORITES] ?: false
+    }
+
+    /** Whether favourite auto-downloads may run on a metered connection. Defaults off (Wi-Fi only). */
+    val downloadFavoritesOnMetered: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_DOWNLOAD_FAVORITES_METERED] ?: false
+    }
+
     val albumSort: Flow<AlbumSort> = context.dataStore.data.map { prefs ->
         prefs[KEY_ALBUM_SORT]?.let { runCatching { AlbumSort.valueOf(it) }.getOrNull() }
             ?: AlbumSort.DEFAULT
@@ -104,6 +114,14 @@ class SettingsStore @Inject constructor(
         context.dataStore.edit { it[KEY_DYNAMIC_ALBUM_THEME] = enabled }
     }
 
+    suspend fun setDownloadFavorites(enabled: Boolean) {
+        context.dataStore.edit { it[KEY_DOWNLOAD_FAVORITES] = enabled }
+    }
+
+    suspend fun setDownloadFavoritesOnMetered(enabled: Boolean) {
+        context.dataStore.edit { it[KEY_DOWNLOAD_FAVORITES_METERED] = enabled }
+    }
+
     suspend fun setAlbumSort(sort: AlbumSort) {
         context.dataStore.edit { it[KEY_ALBUM_SORT] = sort.name }
     }
@@ -128,6 +146,8 @@ class SettingsStore @Inject constructor(
         val KEY_REPLAYGAIN_ENABLED = booleanPreferencesKey("replaygain_enabled")
         val KEY_REPLAYGAIN_PREAMP_DB = floatPreferencesKey("replaygain_preamp_db")
         val KEY_DYNAMIC_ALBUM_THEME = booleanPreferencesKey("dynamic_album_theme")
+        val KEY_DOWNLOAD_FAVORITES = booleanPreferencesKey("download_favorites")
+        val KEY_DOWNLOAD_FAVORITES_METERED = booleanPreferencesKey("download_favorites_metered")
         val KEY_ALBUM_SORT = stringPreferencesKey("album_sort")
         val KEY_ALBUM_SORT_DESC = booleanPreferencesKey("album_sort_descending")
         val KEY_PLAYBACK_SHUFFLE = booleanPreferencesKey("playback_shuffle")

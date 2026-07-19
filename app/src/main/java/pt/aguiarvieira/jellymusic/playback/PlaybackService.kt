@@ -433,7 +433,8 @@ class PlaybackService : MediaLibraryService() {
             ensureSession()
             android.util.Log.d(TAG, "onAddMediaItems: ${mediaItems.map { it.mediaId }}")
             val resolved = mediaItemTree.resolveForPlayback(mediaItems)
-            android.util.Log.d(TAG, "onAddMediaItems resolved ${resolved.size} items, uris=${resolved.map { it.localConfiguration?.uri != null }}")
+            val haveUris = resolved.map { it.localConfiguration?.uri != null }
+            android.util.Log.d(TAG, "onAddMediaItems resolved ${resolved.size} items, uris=$haveUris")
             resolved
         }
 

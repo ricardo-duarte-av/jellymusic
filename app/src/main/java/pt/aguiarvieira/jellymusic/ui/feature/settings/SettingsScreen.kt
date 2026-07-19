@@ -56,6 +56,8 @@ fun SettingsScreen(
     val settings by viewModel.streamSettings.collectAsStateWithLifecycle()
     val dynamicTheme by viewModel.dynamicAlbumTheme.collectAsStateWithLifecycle()
     val replayGain by viewModel.replayGainSettings.collectAsStateWithLifecycle()
+    val downloadFavorites by viewModel.downloadFavorites.collectAsStateWithLifecycle()
+    val downloadFavoritesOnMetered by viewModel.downloadFavoritesOnMetered.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {
@@ -206,6 +208,46 @@ fun SettingsScreen(
             )
 
             HorizontalDivider()
+
+            Text(
+                text = "Offline",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Download favourites to device", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        text = "Keep your hearted tracks, albums and playlists available offline.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(checked = downloadFavorites, onCheckedChange = viewModel::setDownloadFavorites)
+            }
+
+            if (downloadFavorites) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Allow on mobile data", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            text = "By default, favourites only download on Wi-Fi.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = downloadFavoritesOnMetered,
+                        onCheckedChange = viewModel::setDownloadFavoritesOnMetered,
+                    )
+                }
+            }
 
             // Entry point to the offline downloads manager.
             Row(

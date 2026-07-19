@@ -6,6 +6,8 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import kotlinx.coroutines.flow.Flow
 
+// A Room DAO naturally accrues one function per query across tracks/albums/playlists.
+@Suppress("TooManyFunctions")
 @Dao
 interface DownloadDao {
 
@@ -31,8 +33,28 @@ interface DownloadDao {
     @Query("SELECT * FROM track_downloads WHERE trackId = :trackId")
     suspend fun getTrack(trackId: String): TrackDownloadEntity?
 
-    @Query("SELECT * FROM track_downloads WHERE state IN ('QUEUED', 'DOWNLOADING') ORDER BY updatedAt ASC LIMIT 1")
+    @Query(
+        "SELECT * FROM track_downloads WHERE state IN ('QUEUED', 'DOWNLOADING') AND manualRequest = 1 " +
+            "ORDER BY updatedAt ASC LIMIT 1",
+    )
     suspend fun nextPending(): TrackDownloadEntity?
+
+    /**
+     * Next favourite-only pending track (a manual+favourite track is drained by [nextPending] on any
+     * network, which is correct — it's a manual download). Used by the Wi-Fi-gated favourite worker.
+     */
+    @Query(
+        "SELECT * FROM track_downloads WHERE state IN ('QUEUED', 'DOWNLOADING') " +
+            "AND favoriteRequest = 1 AND manualRequest = 0 ORDER BY updatedAt ASC LIMIT 1",
+    )
+    suspend fun nextPendingFavorite(): TrackDownloadEntity?
+
+    /** Every track claimed by favourite-sync, for reconciling against the server's favourites. */
+    @Query("SELECT * FROM track_downloads WHERE favoriteRequest = 1")
+    suspend fun favoriteDownloads(): List<TrackDownloadEntity>
+
+    @Query("UPDATE track_downloads SET favoriteRequest = :favorite WHERE trackId = :trackId")
+    suspend fun setFavoriteRequest(trackId: String, favorite: Boolean)
 
     @Query("SELECT * FROM track_downloads WHERE state = 'COMPLETED'")
     suspend fun completedTracks(): List<TrackDownloadEntity>

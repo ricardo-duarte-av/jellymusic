@@ -23,6 +23,10 @@ data class TrackDownloadEntity(
     val artworkPath: String? = null,
     /** Download-time transcode choice (independent of the streaming setting). */
     val transcoded: Boolean,
+    /** True when the user explicitly downloaded this (track/album/playlist). */
+    val manualRequest: Boolean = true,
+    /** True when the favourite-sync pulled this in because it's a favourite on the server. */
+    val favoriteRequest: Boolean = false,
     val codec: String?,        // AudioCodec.name when transcoded
     val bitrateKbps: Int?,     // when transcoded
     /** Jellyfin LUFS normalization gain (dB), captured at download so ReplayGain works offline. */
