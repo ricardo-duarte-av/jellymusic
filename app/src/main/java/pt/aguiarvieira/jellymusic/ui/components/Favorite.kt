@@ -1,7 +1,6 @@
 package pt.aguiarvieira.jellymusic.ui.components
 
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -14,9 +13,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
 /**
@@ -35,30 +34,28 @@ fun FavoriteMarker(favorite: Boolean, modifier: Modifier = Modifier, size: andro
 }
 
 /**
- * The same marker for placement over artwork: a filled heart on a theme-surface pill. Matches
- * [pt.aguiarvieira.jellymusic.ui.feature.downloads.AlbumArtDownloadBadge] exactly (pill colour, size
- * and 6.dp corner inset) so the favourite and downloaded badges sit symmetrically on opposite
- * corners. Place with just an `.align(...)`; the inset is built in. Renders nothing unless [favorite].
+ * The same marker for placement over artwork: a filled heart on a translucent scrim pill so it stays
+ * legible over any cover. Matches
+ * [pt.aguiarvieira.jellymusic.ui.feature.downloads.AlbumArtDownloadBadge] (scrim, icon size and 12.dp
+ * corner inset) so the favourite and downloaded badges sit symmetrically on opposite corners. Place
+ * with just an `.align(...)`; the inset is built in. Renders nothing unless [favorite].
  */
 @Composable
 fun FavoriteArtworkMarker(favorite: Boolean, modifier: Modifier = Modifier) {
     if (!favorite) return
     Surface(
-        modifier = modifier.padding(6.dp).size(26.dp),
+        modifier = modifier.padding(12.dp),
         shape = CircleShape,
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+        color = Color.Black.copy(alpha = 0.35f),
     ) {
-        Column(
-            modifier = Modifier.padding(4.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Favorite,
-                contentDescription = "Favourite",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(18.dp),
-            )
-        }
+        Icon(
+            imageVector = Icons.Filled.Favorite,
+            contentDescription = "Favourite",
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier
+                .padding(4.dp)
+                .size(16.dp),
+        )
     }
 }
 

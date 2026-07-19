@@ -27,6 +27,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import pt.aguiarvieira.jellymusic.domain.model.AlbumDownloadStatus
 import pt.aguiarvieira.jellymusic.domain.model.DownloadState
@@ -128,21 +129,18 @@ private fun targetLabel(target: DownloadTarget): String = when (target) {
 fun AlbumArtDownloadBadge(status: AlbumDownloadStatus?, modifier: Modifier = Modifier) {
     if (status?.isComplete != true) return
     Surface(
-        modifier = modifier.padding(6.dp).size(26.dp),
+        modifier = modifier.padding(12.dp),
         shape = CircleShape,
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+        color = Color.Black.copy(alpha = 0.35f),
     ) {
-        Column(
-            modifier = Modifier.padding(4.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Icon(
-                Icons.Filled.Save,
-                contentDescription = "Downloaded",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(18.dp),
-            )
-        }
+        Icon(
+            Icons.Filled.Save,
+            contentDescription = "Downloaded",
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier
+                .padding(4.dp)
+                .size(18.dp),
+        )
     }
 }
 
