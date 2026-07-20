@@ -46,7 +46,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.StateFlow
 import pt.aguiarvieira.jellymusic.playback.PlaybackProgress
 import pt.aguiarvieira.jellymusic.ui.components.ArtworkImage
-import pt.aguiarvieira.jellymusic.ui.components.nowPlayingArtSharedKey
+import pt.aguiarvieira.jellymusic.ui.components.NOW_PLAYING_ART_KEY
 import pt.aguiarvieira.jellymusic.ui.components.nowPlayingContainerTransform
 import pt.aguiarvieira.jellymusic.ui.components.sharedElementArt
 import pt.aguiarvieira.jellymusic.ui.theme.AlbumTheme
@@ -140,7 +140,7 @@ fun MiniPlayer(
                     modifier = Modifier
                         .size(48.dp)
                         .then(
-                            if (sharedNowPlaying) Modifier.sharedElementArt(nowPlayingArtSharedKey())
+                            if (sharedNowPlaying) Modifier.sharedElementArt(NOW_PLAYING_ART_KEY)
                             else Modifier,
                         ),
                     shape = MaterialTheme.shapes.small,

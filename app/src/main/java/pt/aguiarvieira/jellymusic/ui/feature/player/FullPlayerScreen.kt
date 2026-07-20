@@ -68,7 +68,7 @@ import pt.aguiarvieira.jellymusic.playback.QueueItem
 import pt.aguiarvieira.jellymusic.playback.RepeatMode
 import pt.aguiarvieira.jellymusic.ui.components.ArtworkImage
 import pt.aguiarvieira.jellymusic.ui.components.FavoriteToggleButton
-import pt.aguiarvieira.jellymusic.ui.components.nowPlayingArtSharedKey
+import pt.aguiarvieira.jellymusic.ui.components.NOW_PLAYING_ART_KEY
 import pt.aguiarvieira.jellymusic.ui.components.nowPlayingContainerTransform
 import pt.aguiarvieira.jellymusic.ui.components.sharedElementArt
 import pt.aguiarvieira.jellymusic.ui.theme.AlbumTheme
@@ -144,7 +144,7 @@ fun FullPlayerScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(1f)
-                        .sharedElementArt(nowPlayingArtSharedKey()),
+                        .sharedElementArt(NOW_PLAYING_ART_KEY),
                     shape = MaterialTheme.shapes.extraLarge,
                 )
 

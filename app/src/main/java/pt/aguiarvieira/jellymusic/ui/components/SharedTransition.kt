@@ -29,13 +29,13 @@ fun albumArtSharedKey(albumId: String): Any = "album-art-$albumId"
  * Shared-element key for the now-playing cover, matched between the mini player bar and the full
  * player. Constant — only one track is playing at a time, so only one of each is ever on screen.
  */
-fun nowPlayingArtSharedKey(): Any = "nowplaying-art"
+const val NOW_PLAYING_ART_KEY = "nowplaying-art"
 
 /** Shared-bounds key for an album's whole surface (the container that morphs card ↔ screen). */
 private fun albumContainerKey(albumId: String): Any = "album-container-$albumId"
 
 /** Shared-bounds key for the now-playing surface (mini player bar ↔ full player screen). */
-private fun nowPlayingContainerKey(): Any = "nowplaying-container"
+private const val NOW_PLAYING_CONTAINER_KEY = "nowplaying-container"
 
 /**
  * M3 container transform: a whole surface grows into a destination screen (and back). The outgoing
@@ -74,7 +74,7 @@ fun Modifier.albumContainerTransform(albumId: String): Modifier =
 /** Container transform for the mini player bar ↔ full player screen. See [containerTransform]. */
 @Composable
 fun Modifier.nowPlayingContainerTransform(): Modifier =
-    containerTransform(nowPlayingContainerKey())
+    containerTransform(NOW_PLAYING_CONTAINER_KEY)
 
 /**
  * Marks this element as one half of a shared-element transition keyed by [key]. Applied to the same
