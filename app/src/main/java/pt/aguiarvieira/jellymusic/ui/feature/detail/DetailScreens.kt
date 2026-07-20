@@ -74,6 +74,7 @@ import pt.aguiarvieira.jellymusic.ui.common.ContentState
 import pt.aguiarvieira.jellymusic.ui.components.AlbumCard
 import pt.aguiarvieira.jellymusic.ui.components.ArtworkImage
 import pt.aguiarvieira.jellymusic.ui.components.albumArtSharedKey
+import pt.aguiarvieira.jellymusic.ui.components.albumContainerTransform
 import pt.aguiarvieira.jellymusic.ui.components.sharedElementArt
 import pt.aguiarvieira.jellymusic.ui.components.FavoriteMarker
 import pt.aguiarvieira.jellymusic.ui.components.FavoriteToggleButton
@@ -130,6 +131,8 @@ fun AlbumDetailScreen(
     val loadedArt = (tracksState as? ContentState.Data)?.value?.firstOrNull()?.artworkUrl
     val heroArt = loadedArt ?: viewModel.heroArtworkUrl
     AlbumTheme(artworkUrl = heroArt) {
+    // Container transform: this whole surface grows from (and shrinks back to) the tapped grid card.
+    Box(modifier = Modifier.albumContainerTransform(viewModel.albumId)) {
     Scaffold(
         // (1) No album name in the header — keeps space for the Settings action.
         topBar = {
@@ -180,6 +183,7 @@ fun AlbumDetailScreen(
                 )
             }
         }
+    }
     }
     }
 }

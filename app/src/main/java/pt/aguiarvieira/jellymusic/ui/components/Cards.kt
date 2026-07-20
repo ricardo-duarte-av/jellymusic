@@ -59,6 +59,8 @@ fun AlbumCard(
         Card(
             modifier = modifier
                 .padding(6.dp)
+                // Whole-card container transform into the album screen (cover shares separately).
+                .albumContainerTransform(album.id)
                 // Stable handle for the screenshot instrumentation test to open an album.
                 .testTag("albumCard")
                 .combinedClickable(
