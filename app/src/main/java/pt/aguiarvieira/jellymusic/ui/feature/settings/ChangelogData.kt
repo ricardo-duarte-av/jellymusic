@@ -21,6 +21,10 @@ val CHANGELOG: List<ChangelogVersion> = listOf(
         changes = listOf(
             "Opening the full player now expands it out of the mini player bar — cover and all — " +
                 "instead of sliding the screen up.",
+            "Albums, artists, playlists and the album track list now show pulsing placeholders " +
+                "while they load, so the layout no longer jumps when content arrives.",
+            "Swipe left or right across the browse area to move between the Albums, Artists and " +
+                "Playlists tabs; tapping a tab still crossfades.",
         ),
     ),
     ChangelogVersion(

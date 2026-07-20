@@ -1,7 +1,14 @@
 package pt.aguiarvieira.jellymusic.ui.feature.browse
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -67,7 +74,10 @@ import pt.aguiarvieira.jellymusic.domain.model.AlbumSort
 import pt.aguiarvieira.jellymusic.domain.model.MusicLibrary
 import pt.aguiarvieira.jellymusic.ui.common.ContentState
 import pt.aguiarvieira.jellymusic.ui.components.AlbumCard
+import pt.aguiarvieira.jellymusic.ui.components.AlbumCardSkeleton
 import pt.aguiarvieira.jellymusic.ui.components.ArtistCard
+import pt.aguiarvieira.jellymusic.ui.components.ArtistCardSkeleton
+import pt.aguiarvieira.jellymusic.ui.components.GridSkeleton
 import pt.aguiarvieira.jellymusic.ui.components.PlaylistCard
 import pt.aguiarvieira.jellymusic.ui.feature.downloads.DownloadDialogs
 import pt.aguiarvieira.jellymusic.ui.feature.downloads.DownloadTarget
@@ -99,6 +109,9 @@ fun BrowseShell(
     val transcodeDefault by downloadsViewModel.transcodeDefault.collectAsStateWithLifecycle()
     var pendingDownload by remember { mutableStateOf<DownloadTarget?>(null) }
     var selectedTab by rememberSaveable { mutableStateOf(BrowseTab.ALBUMS) }
+    // How the last tab change happened, so the content transition can differ: a swipe slides
+    // laterally (M3 shared X axis), a tab tap crossfades. Reset appropriately at each entry point.
+    var switchedViaGesture by remember { mutableStateOf(false) }
     // Grid column count, adjustable by pinch (shared across tabs).
     var columns by rememberSaveable { mutableIntStateOf(2) }
     val onZoom: (Int) -> Unit = { delta -> columns = (columns + delta).coerceIn(1, 4) }
@@ -118,7 +131,10 @@ fun BrowseShell(
             BrowseTab.entries.forEach { tab ->
                 item(
                     selected = tab == selectedTab,
-                    onClick = { selectedTab = tab },
+                    onClick = {
+                        switchedViaGesture = false
+                        selectedTab = tab
+                    },
                     icon = { Icon(tab.icon, contentDescription = tab.label) },
                     label = { Text(tab.label) },
                 )
@@ -185,53 +201,104 @@ fun BrowseShell(
                 },
             )
 
-            Box(modifier = Modifier.weight(1f)) {
-                when (selectedTab) {
-                    BrowseTab.ALBUMS -> AlbumsPagingContent(
-                        albums = albumItems,
-                        columns = columns,
-                        onZoom = onZoom,
-                        onAlbumClick = onAlbumClick,
-                        albumStatuses = albumStatuses,
-                        onRequestDownload = { album ->
-                            pendingDownload = DownloadTarget.Album(album.id, album.name, album.artist, album.artworkUrl)
-                        },
-                        onRemoveAlbum = downloadsViewModel::removeAlbum,
-                    )
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    // Horizontal swipe moves to the adjacent tab. Vertical scroll/pinch stay with the
+                    // grid — detectHorizontalDragGestures only claims horizontal-dominant drags.
+                    .pointerInput(selectedTab) {
+                        var total = 0f
+                        detectHorizontalDragGestures(
+                            onDragStart = { total = 0f },
+                            onDragEnd = {
+                                val threshold = size.width * SWIPE_THRESHOLD_FRACTION
+                                val idx = selectedTab.ordinal
+                                when {
+                                    total <= -threshold && idx < BrowseTab.entries.lastIndex -> {
+                                        switchedViaGesture = true
+                                        selectedTab = BrowseTab.entries[idx + 1]
+                                    }
+                                    total >= threshold && idx > 0 -> {
+                                        switchedViaGesture = true
+                                        selectedTab = BrowseTab.entries[idx - 1]
+                                    }
+                                }
+                            },
+                            onHorizontalDrag = { _, delta -> total += delta },
+                        )
+                    },
+            ) {
+                AnimatedContent(
+                    targetState = selectedTab,
+                    transitionSpec = {
+                        if (switchedViaGesture) {
+                            // Shared X axis: new tab enters from the direction of travel, old leaves
+                            // the opposite way, both fading.
+                            val forward = targetState.ordinal > initialState.ordinal
+                            val dir = if (forward) 1 else -1
+                            (slideInHorizontally { w -> dir * w } + fadeIn()) togetherWith
+                                (slideOutHorizontally { w -> -dir * w } + fadeOut())
+                        } else {
+                            fadeIn() togetherWith fadeOut()
+                        }
+                    },
+                    label = "browseTabs",
+                ) { tab ->
+                    when (tab) {
+                        BrowseTab.ALBUMS -> AlbumsPagingContent(
+                            albums = albumItems,
+                            columns = columns,
+                            onZoom = onZoom,
+                            onAlbumClick = onAlbumClick,
+                            albumStatuses = albumStatuses,
+                            onRequestDownload = { album ->
+                                pendingDownload = DownloadTarget.Album(album.id, album.name, album.artist, album.artworkUrl)
+                            },
+                            onRemoveAlbum = downloadsViewModel::removeAlbum,
+                        )
 
-                    BrowseTab.ARTISTS -> ContentSection(state.artists, "No artists found") { artists ->
-                        PullToRefreshBox(
-                            isRefreshing = state.refreshing,
-                            onRefresh = viewModel::refreshArtists,
-                            modifier = Modifier.fillMaxSize(),
-                        ) {
-                            Grid(columns = columns, onZoom = onZoom) {
-                                items(artists, key = { it.id }) { artist ->
-                                    ArtistCard(artist, onClick = { onArtistClick(artist.id, artist.name) })
+                        BrowseTab.ARTISTS -> ContentSection(
+                            state = state.artists,
+                            emptyMessage = "No artists found",
+                            loadingContent = { GridSkeleton(columns = columns) { ArtistCardSkeleton() } },
+                        ) { artists ->
+                            PullToRefreshBox(
+                                isRefreshing = state.refreshing,
+                                onRefresh = viewModel::refreshArtists,
+                                modifier = Modifier.fillMaxSize(),
+                            ) {
+                                Grid(columns = columns, onZoom = onZoom) {
+                                    items(artists, key = { it.id }) { artist ->
+                                        ArtistCard(artist, onClick = { onArtistClick(artist.id, artist.name) })
+                                    }
                                 }
                             }
                         }
-                    }
 
-                    BrowseTab.PLAYLISTS -> ContentSection(state.playlists, "No playlists found") { playlists ->
-                        PullToRefreshBox(
-                            isRefreshing = state.refreshing,
-                            onRefresh = viewModel::refreshPlaylists,
-                            modifier = Modifier.fillMaxSize(),
-                        ) {
-                            Grid(columns = columns, onZoom = onZoom) {
-                                items(playlists, key = { it.id }) { playlist ->
-                                    PlaylistCard(
-                                        playlist,
-                                        onClick = { onPlaylistClick(playlist.id, playlist.name) },
-                                        downloadStatus = playlistStatuses[playlist.id],
-                                        onDownload = {
-                                            pendingDownload = DownloadTarget.Playlist(
-                                                playlist.id, playlist.name, playlist.artworkUrl,
-                                            )
-                                        },
-                                        onRemoveLocal = { downloadsViewModel.removePlaylist(playlist.id) },
-                                    )
+                        BrowseTab.PLAYLISTS -> ContentSection(
+                            state = state.playlists,
+                            emptyMessage = "No playlists found",
+                            loadingContent = { GridSkeleton(columns = columns) { AlbumCardSkeleton() } },
+                        ) { playlists ->
+                            PullToRefreshBox(
+                                isRefreshing = state.refreshing,
+                                onRefresh = viewModel::refreshPlaylists,
+                                modifier = Modifier.fillMaxSize(),
+                            ) {
+                                Grid(columns = columns, onZoom = onZoom) {
+                                    items(playlists, key = { it.id }) { playlist ->
+                                        PlaylistCard(
+                                            playlist,
+                                            onClick = { onPlaylistClick(playlist.id, playlist.name) },
+                                            downloadStatus = playlistStatuses[playlist.id],
+                                            onDownload = {
+                                                pendingDownload = DownloadTarget.Playlist(
+                                                    playlist.id, playlist.name, playlist.artworkUrl,
+                                                )
+                                            },
+                                            onRemoveLocal = { downloadsViewModel.removePlaylist(playlist.id) },
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -424,7 +491,7 @@ private fun AlbumsPagingContent(
             }
         }
 
-        refresh is LoadState.Loading -> Centered { CircularProgressIndicator() }
+        refresh is LoadState.Loading -> GridSkeleton(columns = columns) { AlbumCardSkeleton() }
         refresh is LoadState.Error -> Centered {
             Text(
                 text = refresh.error.message ?: "Couldn't load albums",
@@ -494,14 +561,18 @@ private fun Grid(
 /** Cumulative zoom factor within one pinch that triggers a one-column step. */
 private const val PINCH_STEP = 1.3f
 
+/** Fraction of the content width a horizontal swipe must cover to switch to the adjacent tab. */
+private const val SWIPE_THRESHOLD_FRACTION = 0.2f
+
 @Composable
 private fun <T> ContentSection(
     state: ContentState<List<T>>,
     emptyMessage: String,
+    loadingContent: @Composable () -> Unit = { Centered { CircularProgressIndicator() } },
     content: @Composable (List<T>) -> Unit,
 ) {
     when (state) {
-        ContentState.Loading -> Centered { CircularProgressIndicator() }
+        ContentState.Loading -> loadingContent()
         is ContentState.Error -> Centered {
             Text(state.message, color = MaterialTheme.colorScheme.error)
         }

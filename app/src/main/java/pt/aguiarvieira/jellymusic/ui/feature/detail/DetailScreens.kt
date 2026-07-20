@@ -73,6 +73,7 @@ import pt.aguiarvieira.jellymusic.domain.model.TrackDownloadStatus
 import pt.aguiarvieira.jellymusic.ui.common.ContentState
 import pt.aguiarvieira.jellymusic.ui.components.AlbumCard
 import pt.aguiarvieira.jellymusic.ui.components.ArtworkImage
+import pt.aguiarvieira.jellymusic.ui.components.TrackListSkeleton
 import pt.aguiarvieira.jellymusic.ui.components.albumArtSharedKey
 import pt.aguiarvieira.jellymusic.ui.components.albumContainerTransform
 import pt.aguiarvieira.jellymusic.ui.components.sharedElementArt
@@ -165,8 +166,15 @@ fun AlbumDetailScreen(
                 .padding(padding),
         ) {
             when (val state = tracksState) {
-                ContentState.Loading -> AlbumHeroStatus(heroArt, viewModel.albumId, viewModel.title) {
-                    CircularProgressIndicator()
+                // Hero (lands the shared element immediately) + track skeletons where the rows will be.
+                ContentState.Loading -> Column(modifier = Modifier.fillMaxSize()) {
+                    AlbumHeroArt(
+                        url = heroArt,
+                        title = viewModel.title,
+                        albumId = viewModel.albumId,
+                        modifier = Modifier.fillMaxWidth().height(MAX_ART_HEIGHT),
+                    )
+                    TrackListSkeleton()
                 }
                 is ContentState.Error -> AlbumHeroStatus(heroArt, viewModel.albumId, viewModel.title) {
                     Text(state.message, color = MaterialTheme.colorScheme.error)
