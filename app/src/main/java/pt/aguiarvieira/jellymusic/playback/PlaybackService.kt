@@ -11,6 +11,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -176,6 +177,43 @@ class PlaybackService : MediaLibraryService() {
     }
 
     /**
+     * DIAGNOSTIC (temporary): logs every audio-sink underrun — the moment the AudioTrack buffer runs
+     * dry and playback glitches. `bufferSizeMs` is how much cushion the buffer holds; a small value
+     * with `elapsedSinceLastFeedMs` spiking past it is a starved-CPU underrun (our screen-off stutter
+     * theory). Correlate these timestamps with the audible stutters, then remove this listener.
+     */
+    private val underrunLogger = object : AnalyticsListener {
+        override fun onAudioUnderrun(
+            eventTime: AnalyticsListener.EventTime,
+            bufferSize: Int,
+            bufferSizeMs: Long,
+            elapsedSinceLastFeedMs: Long,
+        ) {
+            val line = "AUDIO UNDERRUN: bufferSize=$bufferSize bytes, bufferSizeMs=$bufferSizeMs, " +
+                "elapsedSinceLastFeedMs=$elapsedSinceLastFeedMs, positionMs=${player.currentPosition}"
+            android.util.Log.w(TAG, line)
+            recordDiagnostic(line)
+        }
+    }
+
+    /**
+     * DIAGNOSTIC (temporary): appends a timestamped line to <externalFilesDir>/underruns.log so
+     * underruns can be captured with the device **fully disconnected** — no live adb session, which
+     * keeps the phone charging/awake and would mask the very low-power state we're hunting. Reproduce
+     * unplugged, then pull afterwards (debug build id has the `.debug` suffix):
+     *   adb pull /sdcard/Android/data/pt.aguiarvieira.jellymusic.debug/files/underruns.log
+     */
+    private fun recordDiagnostic(line: String) {
+        serviceScope.launch(Dispatchers.IO) {
+            runCatching {
+                val stamp = java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.US)
+                    .format(java.util.Date())
+                java.io.File(getExternalFilesDir(null), "underruns.log").appendText("$stamp  $line\n")
+            }
+        }
+    }
+
+    /**
      * Computes and pushes the effective gain for the current track into [gainProcessor]: the track's
      * Jellyfin normalization gain plus the manual preamp when ReplayGain is on, else unity (bypass).
      */
@@ -312,6 +350,7 @@ class PlaybackService : MediaLibraryService() {
                 it.addListener(modeListener)
                 it.addListener(widgetListener)
                 it.addListener(gainListener)
+                it.addAnalyticsListener(underrunLogger)
             }
     }
 
