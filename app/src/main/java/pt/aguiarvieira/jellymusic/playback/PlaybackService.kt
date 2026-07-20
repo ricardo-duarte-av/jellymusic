@@ -14,6 +14,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
+import androidx.media3.exoplayer.audio.DefaultAudioTrackBufferSizeProvider
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.extractor.DefaultExtractorsFactory
 import androidx.media3.session.CommandButton
@@ -326,6 +327,17 @@ class PlaybackService : MediaLibraryService() {
             ): AudioSink = DefaultAudioSink.Builder(context)
                 .setEnableFloatOutput(floatOutput)
                 .setAudioProcessors(arrayOf(gainProcessor))
+                // Ride out audio-thread stalls. The default AudioTrack buffer is ~500ms, but on a busy
+                // 2.4GHz environment (Wi-Fi/BT coexistence, screen off) the feed thread can be starved
+                // for ~1s at a time — measured via onAudioUnderrun — which drains a 500ms buffer dry and
+                // glitches. A 2–5s cushion absorbs those stalls silently. Cost is higher play/pause/skip
+                // latency and ~a few MB RAM, both acceptable for a music player.
+                .setAudioTrackBufferSizeProvider(
+                    DefaultAudioTrackBufferSizeProvider.Builder()
+                        .setMinPcmBufferDurationUs(2_500_000)
+                        .setMaxPcmBufferDurationUs(5_000_000)
+                        .build(),
+                )
                 .build()
         }
         return ExoPlayer.Builder(this, renderersFactory)
