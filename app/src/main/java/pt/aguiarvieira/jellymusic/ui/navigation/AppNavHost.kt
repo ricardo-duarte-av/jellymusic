@@ -4,8 +4,6 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.navigation.NavHostController
@@ -128,15 +126,15 @@ fun AppNavHost(
             )
         }
 
-        composable<Routes.Player>(
-            // Rise up when opened from the mini player; collapse straight down on close.
-            enterTransition = { slideInVertically(initialOffsetY = { it }) },
-            popExitTransition = { slideOutVertically(targetOffsetY = { it }) },
-        ) {
-            FullPlayerScreen(
-                onCollapse = { navController.popBackStack() },
-                onOpenSettings = { navController.navigateSingleTop(Routes.Settings) },
-            )
+        composable<Routes.Player> {
+            // The now-playing cover expands out of the mini player bar (shared element) while the rest
+            // of the sheet crossfades in — replacing the old rise-up slide.
+            CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this) {
+                FullPlayerScreen(
+                    onCollapse = { navController.popBackStack() },
+                    onOpenSettings = { navController.navigateSingleTop(Routes.Settings) },
+                )
+            }
         }
 
         composable<Routes.Settings> {

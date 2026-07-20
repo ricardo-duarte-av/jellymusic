@@ -25,6 +25,12 @@ val LocalNavAnimatedVisibilityScope = compositionLocalOf<AnimatedVisibilityScope
 /** Shared-element key for an album's cover, matched between the grid card and the detail hero. */
 fun albumArtSharedKey(albumId: String): Any = "album-art-$albumId"
 
+/**
+ * Shared-element key for the now-playing cover, matched between the mini player bar and the full
+ * player. Constant — only one track is playing at a time, so only one of each is ever on screen.
+ */
+fun nowPlayingArtSharedKey(): Any = "nowplaying-art"
+
 /** Shared-bounds key for an album's whole surface (the container that morphs card ↔ screen). */
 private fun albumContainerKey(albumId: String): Any = "album-container-$albumId"
 

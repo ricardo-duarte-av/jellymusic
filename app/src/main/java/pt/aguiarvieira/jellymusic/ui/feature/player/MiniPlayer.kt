@@ -46,6 +46,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.StateFlow
 import pt.aguiarvieira.jellymusic.playback.PlaybackProgress
 import pt.aguiarvieira.jellymusic.ui.components.ArtworkImage
+import pt.aguiarvieira.jellymusic.ui.components.nowPlayingArtSharedKey
+import pt.aguiarvieira.jellymusic.ui.components.sharedElementArt
 import pt.aguiarvieira.jellymusic.ui.theme.AlbumTheme
 
 /** Fraction of the bar's width a swipe must pass to dismiss (stop) instead of springing back. */
@@ -129,7 +131,9 @@ fun MiniPlayer(
                 ArtworkImage(
                     url = state.artworkUri,
                     contentDescription = null,
-                    modifier = Modifier.size(48.dp),
+                    modifier = Modifier
+                        .size(48.dp)
+                        .sharedElementArt(nowPlayingArtSharedKey()),
                     shape = MaterialTheme.shapes.small,
                 )
                 Column(

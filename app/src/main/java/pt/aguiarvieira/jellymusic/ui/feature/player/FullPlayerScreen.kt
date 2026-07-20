@@ -68,6 +68,8 @@ import pt.aguiarvieira.jellymusic.playback.QueueItem
 import pt.aguiarvieira.jellymusic.playback.RepeatMode
 import pt.aguiarvieira.jellymusic.ui.components.ArtworkImage
 import pt.aguiarvieira.jellymusic.ui.components.FavoriteToggleButton
+import pt.aguiarvieira.jellymusic.ui.components.nowPlayingArtSharedKey
+import pt.aguiarvieira.jellymusic.ui.components.sharedElementArt
 import pt.aguiarvieira.jellymusic.ui.theme.AlbumTheme
 import pt.aguiarvieira.jellymusic.ui.theme.LocalDynamicColorEnabled
 import kotlin.math.abs
@@ -137,7 +139,8 @@ fun FullPlayerScreen(
                     contentDescription = state.title,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .aspectRatio(1f),
+                        .aspectRatio(1f)
+                        .sharedElementArt(nowPlayingArtSharedKey()),
                     shape = MaterialTheme.shapes.extraLarge,
                 )
 
