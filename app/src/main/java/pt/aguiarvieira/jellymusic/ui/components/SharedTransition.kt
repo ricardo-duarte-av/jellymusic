@@ -49,7 +49,7 @@ fun Modifier.albumContainerTransform(albumId: String): Modifier {
             exit = fadeOut(),
             // Scale (cheap) rather than remeasure the whole Scaffold every frame; the content fades
             // fast enough that the transient stretch isn't visible.
-            resizeMode = SharedTransitionScope.ResizeMode.ScaleToBounds(
+            resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds(
                 contentScale = ContentScale.Crop,
                 alignment = Alignment.Center,
             ),
