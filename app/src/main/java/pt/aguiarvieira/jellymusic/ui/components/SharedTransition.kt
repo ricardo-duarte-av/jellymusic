@@ -3,7 +3,6 @@ package pt.aguiarvieira.jellymusic.ui.components
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
-import androidx.compose.animation.SharedTransitionScope.ResizeMode.Companion.ScaleToBounds
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.Composable
@@ -50,7 +49,10 @@ fun Modifier.albumContainerTransform(albumId: String): Modifier {
             exit = fadeOut(),
             // Scale (cheap) rather than remeasure the whole Scaffold every frame; the content fades
             // fast enough that the transient stretch isn't visible.
-            resizeMode = ScaleToBounds(contentScale = ContentScale.Crop, alignment = Alignment.Center),
+            resizeMode = SharedTransitionScope.ResizeMode.ScaleToBounds(
+                contentScale = ContentScale.Crop,
+                alignment = Alignment.Center,
+            ),
         )
     }
 }
