@@ -69,6 +69,7 @@ import pt.aguiarvieira.jellymusic.playback.RepeatMode
 import pt.aguiarvieira.jellymusic.ui.components.ArtworkImage
 import pt.aguiarvieira.jellymusic.ui.components.FavoriteToggleButton
 import pt.aguiarvieira.jellymusic.ui.components.nowPlayingArtSharedKey
+import pt.aguiarvieira.jellymusic.ui.components.nowPlayingContainerTransform
 import pt.aguiarvieira.jellymusic.ui.components.sharedElementArt
 import pt.aguiarvieira.jellymusic.ui.theme.AlbumTheme
 import pt.aguiarvieira.jellymusic.ui.theme.LocalDynamicColorEnabled
@@ -89,6 +90,9 @@ fun FullPlayerScreen(
     var showQueue by remember { mutableStateOf(false) }
 
     AlbumTheme(artworkUrl = state.artworkUri) {
+    // Container transform: this whole screen grows out of (and collapses back into) the mini player
+    // bar, with the cover riding on top as a shared element.
+    Box(modifier = Modifier.nowPlayingContainerTransform()) {
     Scaffold(
         topBar = {
             TopAppBar(
@@ -281,6 +285,7 @@ fun FullPlayerScreen(
                 )
             }
         }
+    }
     }
 }
 

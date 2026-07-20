@@ -151,7 +151,9 @@ fun AlbumDetailScreen(
                 },
             )
         },
-        bottomBar = { MiniPlayer(onExpand = onExpandPlayer) },
+        // Shared now-playing transform disabled here: this screen runs its own card→screen container
+        // transform that the bar sits inside, and the two would fight. Opening the player just fades.
+        bottomBar = { MiniPlayer(onExpand = onExpandPlayer, sharedNowPlaying = false) },
     ) { padding ->
         PullToRefreshBox(
             isRefreshing = isRefreshing,

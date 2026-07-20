@@ -47,6 +47,7 @@ import kotlinx.coroutines.flow.StateFlow
 import pt.aguiarvieira.jellymusic.playback.PlaybackProgress
 import pt.aguiarvieira.jellymusic.ui.components.ArtworkImage
 import pt.aguiarvieira.jellymusic.ui.components.nowPlayingArtSharedKey
+import pt.aguiarvieira.jellymusic.ui.components.nowPlayingContainerTransform
 import pt.aguiarvieira.jellymusic.ui.components.sharedElementArt
 import pt.aguiarvieira.jellymusic.ui.theme.AlbumTheme
 
@@ -62,6 +63,10 @@ private fun dismissFraction(offset: Float, widthPx: Int): Float =
 fun MiniPlayer(
     onExpand: () -> Unit,
     modifier: Modifier = Modifier,
+    // Whether this bar participates in the shared container transform into the full player. Disabled
+    // on the album screen, whose own card→screen container transform would otherwise fight it (the
+    // bar sits inside that scaling container). Opening the player from the album screen just fades.
+    sharedNowPlaying: Boolean = true,
     viewModel: PlaybackViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -77,6 +82,7 @@ fun MiniPlayer(
         Column(
             modifier
                 .fillMaxWidth()
+                .then(if (sharedNowPlaying) Modifier.nowPlayingContainerTransform() else Modifier)
                 .onSizeChanged { widthPx = it.width }
                 .offset { IntOffset(offsetX.value.roundToInt(), 0) }
                 // Fade out as it slides so the swipe reads as a dismissal.
@@ -133,7 +139,10 @@ fun MiniPlayer(
                     contentDescription = null,
                     modifier = Modifier
                         .size(48.dp)
-                        .sharedElementArt(nowPlayingArtSharedKey()),
+                        .then(
+                            if (sharedNowPlaying) Modifier.sharedElementArt(nowPlayingArtSharedKey())
+                            else Modifier,
+                        ),
                     shape = MaterialTheme.shapes.small,
                 )
                 Column(

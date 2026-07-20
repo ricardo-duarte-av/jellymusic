@@ -34,22 +34,25 @@ fun nowPlayingArtSharedKey(): Any = "nowplaying-art"
 /** Shared-bounds key for an album's whole surface (the container that morphs card ↔ screen). */
 private fun albumContainerKey(albumId: String): Any = "album-container-$albumId"
 
+/** Shared-bounds key for the now-playing surface (mini player bar ↔ full player screen). */
+private fun nowPlayingContainerKey(): Any = "nowplaying-container"
+
 /**
- * M3 container transform: the tapped card's whole surface grows into the album screen (and back). The
- * outgoing content fades as the bounds grow while the incoming content fades in, so the two screens
- * read as one morphing container instead of two pages cross-fading against each other. The album
- * cover, tagged separately with [sharedElementArt], rides on top and stays crisp throughout.
+ * M3 container transform: a whole surface grows into a destination screen (and back). The outgoing
+ * content fades as the bounds grow while the incoming content fades in, so the two screens read as
+ * one morphing container instead of two pages cross-fading against each other. A cover tagged
+ * separately with [sharedElementArt] rides on top and stays crisp throughout.
  *
- * Apply to the grid card and to the album screen's root with the same [albumId].
+ * Apply to the source surface and to the destination screen's root with the same [key].
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-fun Modifier.albumContainerTransform(albumId: String): Modifier {
+private fun Modifier.containerTransform(key: Any): Modifier {
     val sharedScope = LocalSharedTransitionScope.current ?: return this
     val animScope = LocalNavAnimatedVisibilityScope.current ?: return this
     return with(sharedScope) {
-        this@albumContainerTransform.sharedBounds(
-            rememberSharedContentState(key = albumContainerKey(albumId)),
+        this@containerTransform.sharedBounds(
+            rememberSharedContentState(key = key),
             animatedVisibilityScope = animScope,
             enter = fadeIn(),
             exit = fadeOut(),
@@ -62,6 +65,16 @@ fun Modifier.albumContainerTransform(albumId: String): Modifier {
         )
     }
 }
+
+/** Container transform for the album card ↔ album screen. See [containerTransform]. */
+@Composable
+fun Modifier.albumContainerTransform(albumId: String): Modifier =
+    containerTransform(albumContainerKey(albumId))
+
+/** Container transform for the mini player bar ↔ full player screen. See [containerTransform]. */
+@Composable
+fun Modifier.nowPlayingContainerTransform(): Modifier =
+    containerTransform(nowPlayingContainerKey())
 
 /**
  * Marks this element as one half of a shared-element transition keyed by [key]. Applied to the same

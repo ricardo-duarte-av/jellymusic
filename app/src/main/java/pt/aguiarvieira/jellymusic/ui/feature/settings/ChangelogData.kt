@@ -19,8 +19,8 @@ val CHANGELOG: List<ChangelogVersion> = listOf(
         version = null,
         date = null,
         changes = listOf(
-            "Opening the full player now expands the now-playing artwork out of the mini player " +
-                "bar instead of sliding the screen up.",
+            "Opening the full player now expands it out of the mini player bar — cover and all — " +
+                "instead of sliding the screen up.",
         ),
     ),
     ChangelogVersion(
