@@ -42,11 +42,12 @@ import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -270,7 +271,12 @@ fun FullPlayerScreen(
     }
 
         if (showQueue) {
-            val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+            // Start hidden and allow only Hidden/Expanded — the replacement for the old
+            // skipPartiallyExpanded = true (no half-open detent for the queue sheet).
+            val sheetState = rememberBottomSheetState(
+                initialValue = SheetValue.Hidden,
+                enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded),
+            )
             ModalBottomSheet(
                 onDismissRequest = { showQueue = false },
                 sheetState = sheetState,
@@ -318,9 +324,6 @@ private fun QueueSheet(
                         shape = MaterialTheme.shapes.small,
                     )
                 },
-                headlineContent = {
-                    Text(item.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                },
                 supportingContent = if (item.artist.isNotEmpty()) {
                     { Text(item.artist, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                 } else {
@@ -331,7 +334,9 @@ private fun QueueSheet(
                         Icon(Icons.Filled.Close, contentDescription = "Remove from queue")
                     }
                 },
-            )
+            ) {
+                Text(item.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
         }
     }
 }
