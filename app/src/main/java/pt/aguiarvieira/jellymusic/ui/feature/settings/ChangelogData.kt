@@ -16,8 +16,8 @@ data class ChangelogVersion(
 /** Newest first. Unreleased (version = null) always on top. */
 val CHANGELOG: List<ChangelogVersion> = listOf(
     ChangelogVersion(
-        version = null,
-        date = null,
+        version = "0.1.60",
+        date = "20/07/2026",
         changes = listOf(
             "Opening the full player now expands it out of the mini player bar — cover and all — " +
                 "instead of sliding the screen up.",
