@@ -25,34 +25,6 @@ val LocalNavAnimatedVisibilityScope = compositionLocalOf<AnimatedVisibilityScope
 /** Shared-element key for an album's cover, matched between the grid card and the detail hero. */
 fun albumArtSharedKey(albumId: String): Any = "album-art-$albumId"
 
-/** Shared-bounds keys for the album title / artist text, matched card ↔ header. */
-fun albumTitleSharedKey(albumId: String): Any = "album-title-$albumId"
-fun albumArtistSharedKey(albumId: String): Any = "album-artist-$albumId"
-
-/**
- * Shares a run of text across the transition, keyed by [key]. Uses [scaleToBounds][ScaleToBounds] so
- * the glyphs scale between the card's small style and the header's large one instead of reflowing
- * (the two ends differ in size and alignment). Applied to the same [key] on both.
- */
-@OptIn(ExperimentalSharedTransitionApi::class)
-@Composable
-fun Modifier.sharedText(key: Any): Modifier {
-    val sharedScope = LocalSharedTransitionScope.current ?: return this
-    val animScope = LocalNavAnimatedVisibilityScope.current ?: return this
-    return with(sharedScope) {
-        this@sharedText.sharedBounds(
-            rememberSharedContentState(key = key),
-            animatedVisibilityScope = animScope,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds(
-                contentScale = ContentScale.FillWidth,
-                alignment = Alignment.Center,
-            ),
-        )
-    }
-}
-
 /** Shared-bounds key for an album's whole surface (the container that morphs card ↔ screen). */
 private fun albumContainerKey(albumId: String): Any = "album-container-$albumId"
 

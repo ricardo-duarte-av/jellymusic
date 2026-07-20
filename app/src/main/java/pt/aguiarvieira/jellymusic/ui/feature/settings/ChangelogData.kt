@@ -19,8 +19,8 @@ val CHANGELOG: List<ChangelogVersion> = listOf(
         version = null,
         date = null,
         changes = listOf(
-            "Tapping an album now smoothly expands the card — cover, title and artist — into the " +
-                "album screen, and collapses back on the way out.",
+            "Tapping an album now smoothly expands the card into the album screen, and collapses " +
+                "back on the way out.",
         ),
     ),
     ChangelogVersion(
