@@ -16,6 +16,13 @@ data class ChangelogVersion(
 /** Newest first. Unreleased (version = null) always on top. */
 val CHANGELOG: List<ChangelogVersion> = listOf(
     ChangelogVersion(
+        version = "0.1.56",
+        date = "20/07/2026",
+        changes = listOf(
+            "Fixed occasional audio stutter during playback with the screen off.",
+        ),
+    ),
+    ChangelogVersion(
         version = "0.1.55",
         date = "20/07/2026",
         changes = listOf(

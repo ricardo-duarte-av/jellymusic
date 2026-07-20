@@ -4,6 +4,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.operations.PlayStateApi
 import org.jellyfin.sdk.model.api.PlayMethod
@@ -18,6 +19,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 private const val TICKS_PER_MS = 10_000L
+private const val REPORT_TIMEOUT_MS = 5_000L
 
 /**
  * Reports playback start/progress/stop to Jellyfin so the server tracks play counts, resume points
@@ -72,7 +74,9 @@ class PlaybackReporter @Inject constructor(
 
     private fun report(block: suspend (ApiClient) -> Unit) {
         val api = clientProvider.api ?: return
-        scope.launch { runCatching { block(api) } }
+        // Bound the call: when playing a downloaded track offline (screen off, Wi-Fi asleep) the POST
+        // can otherwise stall on the socket timeout, tying up an IO thread. Best-effort — drop it early.
+        scope.launch { runCatching { withTimeoutOrNull(REPORT_TIMEOUT_MS) { block(api) } } }
     }
 
     private fun String.toUuid(): UUID = UUID.fromString(this)

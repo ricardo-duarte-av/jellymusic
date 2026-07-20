@@ -29,6 +29,7 @@ import com.google.common.util.concurrent.ListenableFuture
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
@@ -49,7 +50,10 @@ import pt.aguiarvieira.jellymusic.widget.nowPlayingWidgetData
 import pt.aguiarvieira.jellymusic.widget.writeNowPlayingWidgetData
 import javax.inject.Inject
 
-private const val PROGRESS_REPORT_INTERVAL_MS = 10_000L
+// Slow heartbeat (only while playing) that keeps the server's "Now Playing" position and resume point
+// fresh between events — matters mainly for a long, single, uninterrupted track where no track
+// transition fires. Track-boundary/pause/seek reporting is event-driven; this just fills the gaps.
+private const val PROGRESS_REPORT_INTERVAL_MS = 30_000L
 private const val TAG = "PlaybackService"
 
 // Custom session commands backing the notification / Android Auto shuffle & repeat buttons.
@@ -133,12 +137,28 @@ class PlaybackService : MediaLibraryService() {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             lastPositionMs = player.currentPosition
             reportedItemId?.let { playbackReporter.reportProgress(it, lastPositionMs, !isPlaying, currentPlayMethod()) }
+            setProgressReporting(isPlaying)
         }
 
         override fun onPlaybackStateChanged(playbackState: Int) {
             if (playbackState == Player.STATE_ENDED) {
                 reportedItemId?.let { playbackReporter.reportStop(it, lastPositionMs) }
                 reportedItemId = null
+            }
+        }
+
+        // A manual scrub jumps the position with no other event, so report it immediately — otherwise
+        // the server's resume point/now-playing would stay wrong until the next heartbeat. Auto
+        // track-to-track transitions come through onMediaItemTransition, so only handle explicit seeks.
+        override fun onPositionDiscontinuity(
+            oldPosition: Player.PositionInfo,
+            newPosition: Player.PositionInfo,
+            reason: Int,
+        ) {
+            if (reason != Player.DISCONTINUITY_REASON_SEEK) return
+            lastPositionMs = newPosition.positionMs
+            reportedItemId?.let {
+                playbackReporter.reportProgress(it, lastPositionMs, !player.isPlaying, currentPlayMethod())
             }
         }
     }
@@ -280,6 +300,12 @@ class PlaybackService : MediaLibraryService() {
                 /* handleAudioFocus = */ true,
             )
             .setHandleAudioBecomingNoisy(true)
+            // Hold a partial wake lock (+ Wi-Fi lock) *while playing* so the CPU/radio can't doze mid-
+            // track with the screen off and starve the audio pipeline — the classic screen-off stutter.
+            // media3 acquires these only during active playback and releases them on pause/stop, so idle
+            // battery cost is nil. NETWORK (not LOCAL) because the app streams by default; the added
+            // Wi-Fi lock is what keeps streamed playback smooth, and it's harmless for offline downloads.
+            .setWakeMode(C.WAKE_MODE_NETWORK)
             .build()
             .also {
                 it.addListener(reporterListener)
@@ -373,17 +399,32 @@ class PlaybackService : MediaLibraryService() {
                 }
         }
 
-        // Periodic progress reports so the server's resume point/now-playing stays fresh.
-        serviceScope.launch {
-            while (isActive) {
-                delay(PROGRESS_REPORT_INTERVAL_MS)
-                if (player.isPlaying) {
+        // The progress-report heartbeat is started/stopped by onIsPlayingChanged (see reporterListener)
+        // so it only ticks while audio is actually playing — no periodic wakeup sitting paused/stopped.
+    }
+
+    /**
+     * Runs the progress-report heartbeat for as long as audio is playing, and nothing when it isn't.
+     * Driven by [Player.Listener.onIsPlayingChanged]; the job is cancelled the moment playback pauses
+     * or stops, so a paused/idle session costs no periodic wakeups.
+     */
+    private var progressReportJob: Job? = null
+
+    private fun setProgressReporting(playing: Boolean) {
+        if (playing) {
+            if (progressReportJob?.isActive == true) return
+            progressReportJob = serviceScope.launch {
+                while (isActive) {
+                    delay(PROGRESS_REPORT_INTERVAL_MS)
                     lastPositionMs = player.currentPosition
                     reportedItemId?.let {
                         playbackReporter.reportProgress(it, lastPositionMs, isPaused = false, currentPlayMethod())
                     }
                 }
             }
+        } else {
+            progressReportJob?.cancel()
+            progressReportJob = null
         }
     }
 
