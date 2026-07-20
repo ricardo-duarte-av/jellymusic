@@ -111,6 +111,12 @@ class PlaybackService : MediaLibraryService() {
     private var replayGainEnabled = true
     private var replayGainPreampDb = 0f
 
+    // Whether the current player's audio sink was built with float output. Float output preserves
+    // hi-res FLAC fidelity but routes decoded audio down a sink branch that bypasses our custom
+    // gain processor (see buildPlayer), so it's only usable when ReplayGain is off. Flipping the
+    // ReplayGain toggle therefore requires rebuilding the player in the other mode (rebuildPlayer).
+    private var usingFloatOutput = false
+
     // Track being reported to the server, and its last observed position.
     private var reportedItemId: String? = null
     private var lastPositionMs: Long = 0L
@@ -228,30 +234,43 @@ class PlaybackService : MediaLibraryService() {
             .build(),
     )
 
-    override fun onCreate() {
-        super.onCreate()
+    /**
+     * Builds an [ExoPlayer] with the ReplayGain [gainProcessor] installed in its audio pipeline, with
+     * all playback listeners attached.
+     *
+     * [floatOutput] selects the audio-sink output mode, and it is a hard either/or with ReplayGain:
+     *
+     * `false` (int): the decoder emits native integer PCM, everything flows through DefaultAudioSink's
+     * *int16* pipeline branch, and the gain processor runs — this is the only mode ReplayGain works in.
+     * DefaultAudioSink only adds custom AudioProcessors on the int16 branch: configure() appends our
+     * chain solely in the `!shouldUseFloatOutput` case.
+     *
+     * `true` (float): enabling float output makes MediaCodecAudioRenderer.getMediaFormat() request
+     * ENCODING_PCM_FLOAT straight from the decoder (getFormatSupport reports float as supported), which
+     * the FLAC decoder honors for every FLAC (16- or 24-bit). That float PCM then trips
+     * shouldUseFloatOutput() and takes the branch that appends only ToFloatPcmAudioProcessor and stops
+     * — bypassing the gain processor entirely. So float preserves hi-res fidelity (no forced 16-bit
+     * downconvert) but silently disables ReplayGain. media3 offers no way to run a custom processor on
+     * the float path, hence the mode switch: we use float only while ReplayGain is off.
+     */
+    private fun buildPlayer(floatOutput: Boolean): ExoPlayer {
         // Constant-bitrate seeking lets ADTS-AAC/MP3 files be scrubbed even though they carry no seek
         // index — this is what makes seeking work on downloaded (transcoded-AAC) tracks, which are
         // played as local progressive files. Without it, seekTo on those is a no-op.
         val extractorsFactory = DefaultExtractorsFactory()
             .setConstantBitrateSeekingEnabled(true)
             .setConstantBitrateSeekingAlwaysEnabled(true)
-        // Install the ReplayGain processor in the audio pipeline via a custom sink. Force float
-        // output so every bit depth (incl. 24-bit hi-res FLAC) reaches the processor as float PCM —
-        // its float branch then normalizes all of them, and boost gains avoid 16-bit clip
-        // quantization. Media3 falls back to 16-bit where the device can't do float, which the
-        // processor's 16-bit branch still handles.
         val renderersFactory = object : DefaultRenderersFactory(this) {
             override fun buildAudioSink(
                 context: Context,
                 enableFloatOutput: Boolean,
                 enableAudioTrackPlaybackParams: Boolean,
             ): AudioSink = DefaultAudioSink.Builder(context)
-                .setEnableFloatOutput(true)
+                .setEnableFloatOutput(floatOutput)
                 .setAudioProcessors(arrayOf(gainProcessor))
                 .build()
         }
-        player = ExoPlayer.Builder(this, renderersFactory)
+        return ExoPlayer.Builder(this, renderersFactory)
             .setMediaSourceFactory(DefaultMediaSourceFactory(this, extractorsFactory))
             .setAudioAttributes(
                 AudioAttributes.Builder()
@@ -262,7 +281,50 @@ class PlaybackService : MediaLibraryService() {
             )
             .setHandleAudioBecomingNoisy(true)
             .build()
-        player.addListener(reporterListener)
+            .also {
+                it.addListener(reporterListener)
+                it.addListener(modeListener)
+                it.addListener(widgetListener)
+                it.addListener(gainListener)
+            }
+    }
+
+    /**
+     * Swaps the running player for a fresh one built in the given [floatOutput] mode, carrying over the
+     * queue, current index, position, play/pause and shuffle/repeat so the switch is as seamless as
+     * possible (a brief re-buffer of the current track is unavoidable). Called only when the ReplayGain
+     * toggle flips the required audio-sink mode.
+     */
+    private fun rebuildPlayer(floatOutput: Boolean) {
+        val old = player
+        val items = (0 until old.mediaItemCount).map { old.getMediaItemAt(it) }
+        val index = old.currentMediaItemIndex.coerceAtLeast(0)
+        val position = old.currentPosition.coerceAtLeast(0L)
+        val resumePlayback = old.playWhenReady
+        val shuffle = old.shuffleModeEnabled
+        val repeat = old.repeatMode
+
+        val fresh = buildPlayer(floatOutput)
+        fresh.shuffleModeEnabled = shuffle
+        fresh.repeatMode = repeat
+        if (items.isNotEmpty()) {
+            fresh.setMediaItems(items, index, position)
+            fresh.playWhenReady = resumePlayback
+            fresh.prepare()
+        }
+        player = fresh
+        usingFloatOutput = floatOutput
+        mediaSession.setPlayer(fresh)
+        old.release()
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        // Start in int (ReplayGain-capable) mode; the replayGainSettings collector below rebuilds
+        // into float mode if ReplayGain is off (see buildPlayer / rebuildPlayer). At startup nothing
+        // is playing yet, so that initial rebuild is seamless.
+        player = buildPlayer(floatOutput = false)
+        usingFloatOutput = false
 
         mediaSession = MediaLibrarySession.Builder(this, player, LibraryCallback())
             .setSessionActivity(openPlayerPendingIntent())
@@ -270,24 +332,26 @@ class PlaybackService : MediaLibraryService() {
 
         // Restore persisted shuffle/repeat, then keep them (and the buttons) in sync going forward.
         // Setting the modes here also refreshes the layout via [modeListener] when they differ from
-        // the player's defaults.
+        // the player's defaults. Reads the `player` field lazily so it targets whatever player is
+        // current if a rebuild races this.
         serviceScope.launch {
             val modes = settingsStore.playbackModes.first()
             player.shuffleModeEnabled = modes.shuffle
             player.repeatMode = modes.repeatMode
             mediaSession.setMediaButtonPreferences(mediaButtonPreferences())
         }
-        player.addListener(modeListener)
-        player.addListener(widgetListener)
-        player.addListener(gainListener)
         pushWidgetUpdate()
 
         // Keep ReplayGain settings live: re-apply to the current track whenever the toggle or preamp
-        // changes (and once on startup to seed the values).
+        // changes (and once on startup to seed the values). Float output (better hi-res FLAC
+        // fidelity) is only possible while ReplayGain is off, so switch the player's audio-sink mode
+        // to match whenever the toggle flips.
         serviceScope.launch {
             settingsStore.replayGainSettings.collect { rg ->
                 replayGainEnabled = rg.enabled
                 replayGainPreampDb = rg.preampDb
+                val wantFloatOutput = !rg.enabled
+                if (wantFloatOutput != usingFloatOutput) rebuildPlayer(floatOutput = wantFloatOutput)
                 applyGainForCurrentItem()
             }
         }

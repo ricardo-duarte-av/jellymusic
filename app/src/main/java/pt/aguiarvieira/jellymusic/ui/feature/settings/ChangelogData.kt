@@ -16,6 +16,16 @@ data class ChangelogVersion(
 /** Newest first. Unreleased (version = null) always on top. */
 val CHANGELOG: List<ChangelogVersion> = listOf(
     ChangelogVersion(
+        version = "0.1.55",
+        date = "20/07/2026",
+        changes = listOf(
+            "Fixed volume normalization (ReplayGain) not being applied to FLAC tracks when streaming " +
+                "without transcoding.",
+            "With volume normalization turned off, hi-res FLAC now plays at full float precision " +
+                "instead of being downscaled to 16-bit.",
+        ),
+    ),
+    ChangelogVersion(
         version = "0.1.54",
         date = "19/07/2026",
         changes = listOf(
