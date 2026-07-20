@@ -2,6 +2,8 @@ package pt.aguiarvieira.jellymusic.ui.navigation
 
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.runtime.Composable
@@ -38,6 +40,13 @@ fun AppNavHost(
     NavHost(
         navController = navController,
         startDestination = if (startAtHome) Routes.Home else Routes.ConnectServer,
+        // Plain crossfade between destinations so the shared album cover is the only thing that
+        // moves; the default scale/slide made the album grid appear to shrink behind the morphing
+        // cover. Destinations that want something different (e.g. Player's slide) still override.
+        enterTransition = { fadeIn() },
+        exitTransition = { fadeOut() },
+        popEnterTransition = { fadeIn() },
+        popExitTransition = { fadeOut() },
     ) {
         composable<Routes.ConnectServer> {
             ConnectServerScreen(
