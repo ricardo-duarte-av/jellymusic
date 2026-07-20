@@ -131,8 +131,6 @@ fun AlbumDetailScreen(
     val loadedArt = (tracksState as? ContentState.Data)?.value?.firstOrNull()?.artworkUrl
     val heroArt = loadedArt ?: viewModel.heroArtworkUrl
     AlbumTheme(artworkUrl = heroArt) {
-    // Container transform: this whole surface grows from (and shrinks back to) the tapped grid card.
-    Box(modifier = Modifier.albumContainerTransform(viewModel.albumId)) {
     Scaffold(
         // (1) No album name in the header — keeps space for the Settings action.
         topBar = {
@@ -151,15 +149,18 @@ fun AlbumDetailScreen(
                 },
             )
         },
-        // Shared now-playing transform disabled here: this screen runs its own card→screen container
-        // transform that the bar sits inside, and the two would fight. Opening the player just fades.
-        bottomBar = { MiniPlayer(onExpand = onExpandPlayer, sharedNowPlaying = false) },
+        // The mini player bar stays outside the album's container transform (below), so it can run its
+        // own now-playing container transform into the full player without the two fighting.
+        bottomBar = { MiniPlayer(onExpand = onExpandPlayer) },
     ) { padding ->
+        // Container transform scoped to the album body: it grows out of the tapped grid card (and back)
+        // while the top bar and mini player — Scaffold chrome outside it — stay put.
         PullToRefreshBox(
             isRefreshing = isRefreshing,
             onRefresh = viewModel::refresh,
             modifier = Modifier
                 .fillMaxSize()
+                .albumContainerTransform(viewModel.albumId)
                 .background(MaterialTheme.colorScheme.surface)
                 .padding(padding),
         ) {
@@ -185,7 +186,6 @@ fun AlbumDetailScreen(
                 )
             }
         }
-    }
     }
     }
 }
