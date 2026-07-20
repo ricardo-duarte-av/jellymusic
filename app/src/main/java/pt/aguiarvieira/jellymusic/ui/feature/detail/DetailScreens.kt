@@ -74,8 +74,11 @@ import pt.aguiarvieira.jellymusic.ui.common.ContentState
 import pt.aguiarvieira.jellymusic.ui.components.AlbumCard
 import pt.aguiarvieira.jellymusic.ui.components.ArtworkImage
 import pt.aguiarvieira.jellymusic.ui.components.albumArtSharedKey
+import pt.aguiarvieira.jellymusic.ui.components.albumArtistSharedKey
 import pt.aguiarvieira.jellymusic.ui.components.albumContainerTransform
+import pt.aguiarvieira.jellymusic.ui.components.albumTitleSharedKey
 import pt.aguiarvieira.jellymusic.ui.components.sharedElementArt
+import pt.aguiarvieira.jellymusic.ui.components.sharedText
 import pt.aguiarvieira.jellymusic.ui.components.FavoriteMarker
 import pt.aguiarvieira.jellymusic.ui.components.FavoriteToggleButton
 import pt.aguiarvieira.jellymusic.ui.components.TrackRow
@@ -258,6 +261,7 @@ private fun AlbumTrackList(
         stickyHeader(key = "header") {
             AlbumHeader(
                 title = title,
+                albumId = albumId,
                 artist = tracks.firstOrNull()?.artist,
                 trackCount = tracks.size,
                 onPlay = { onPlay(tracks, 0) },
@@ -381,6 +385,7 @@ private fun DiscCard(
 @Composable
 private fun AlbumHeader(
     title: String,
+    albumId: String,
     artist: String?,
     trackCount: Int,
     onPlay: () -> Unit,
@@ -399,6 +404,7 @@ private fun AlbumHeader(
             textAlign = TextAlign.Center,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.sharedText(albumTitleSharedKey(albumId)),
         )
         // (2) Album artist — smaller than the title, larger than track rows.
         if (!artist.isNullOrEmpty()) {
@@ -409,7 +415,7 @@ private fun AlbumHeader(
                 textAlign = TextAlign.Center,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 4.dp),
+                modifier = Modifier.padding(top = 4.dp).sharedText(albumArtistSharedKey(albumId)),
             )
         }
         Spacer(Modifier.height(16.dp))

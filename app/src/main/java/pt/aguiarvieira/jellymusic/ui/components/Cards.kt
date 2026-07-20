@@ -97,6 +97,7 @@ fun AlbumCard(
                     style = MaterialTheme.typography.titleSmall,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.sharedText(albumTitleSharedKey(album.id)),
                 )
                 album.artist?.let {
                     Text(
@@ -105,6 +106,7 @@ fun AlbumCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.sharedText(albumArtistSharedKey(album.id)),
                     )
                 }
                 // Album-wide download progress while queued/downloading.
