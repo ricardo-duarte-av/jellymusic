@@ -75,7 +75,7 @@ import pt.aguiarvieira.jellymusic.ui.feature.player.PlaybackViewModel
 @Composable
 fun SearchScreen(
     onBack: () -> Unit,
-    onAlbumClick: (String, String) -> Unit,
+    onAlbumClick: (String, String, String?) -> Unit,
     onArtistClick: (String, String) -> Unit,
     onPlaylistClick: (String, String) -> Unit,
     onExpandPlayer: () -> Unit,
@@ -218,7 +218,7 @@ private enum class SearchKind(val label: String) {
 private fun ResultsContent(
     results: SearchResults,
     onPlayTrack: (pt.aguiarvieira.jellymusic.domain.model.Track) -> Unit,
-    onAlbumClick: (String, String) -> Unit,
+    onAlbumClick: (String, String, String?) -> Unit,
     onArtistClick: (String, String) -> Unit,
     onPlaylistClick: (String, String) -> Unit,
     trackStatuses: Map<String, TrackDownloadStatus>,
@@ -293,7 +293,7 @@ private fun ResultsContent(
                         title = album.name,
                         subtitle = album.artist,
                         artworkUrl = album.artworkUrl,
-                        onClick = { onAlbumClick(album.id, album.name) },
+                        onClick = { onAlbumClick(album.id, album.name, album.artworkUrl) },
                         downloadStatus = albumStatuses[album.id],
                         onDownload = { onDownloadAlbum(album) },
                         onRemoveLocal = { onRemoveAlbum(album.id) },

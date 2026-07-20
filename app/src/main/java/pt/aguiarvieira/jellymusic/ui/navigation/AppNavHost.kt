@@ -1,12 +1,17 @@
 package pt.aguiarvieira.jellymusic.ui.navigation
 
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import pt.aguiarvieira.jellymusic.ui.components.LocalNavAnimatedVisibilityScope
+import pt.aguiarvieira.jellymusic.ui.components.LocalSharedTransitionScope
 import pt.aguiarvieira.jellymusic.ui.feature.browse.BrowseShell
 import pt.aguiarvieira.jellymusic.ui.feature.detail.AlbumDetailScreen
 import pt.aguiarvieira.jellymusic.ui.feature.detail.ArtistDetailScreen
@@ -20,11 +25,16 @@ import pt.aguiarvieira.jellymusic.ui.feature.settings.AboutScreen
 import pt.aguiarvieira.jellymusic.ui.feature.settings.ChangelogScreen
 import pt.aguiarvieira.jellymusic.ui.feature.settings.SettingsScreen
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun AppNavHost(
     startAtHome: Boolean,
     navController: NavHostController = rememberNavController(),
 ) {
+    // One SharedTransitionLayout around the whole graph; each destination provides its own
+    // AnimatedContentScope below, letting the album cover morph between grid and viewer.
+    SharedTransitionLayout {
+        CompositionLocalProvider(LocalSharedTransitionScope provides this) {
     NavHost(
         navController = navController,
         startDestination = if (startAtHome) Routes.Home else Routes.ConnectServer,
@@ -56,41 +66,49 @@ fun AppNavHost(
         }
 
         composable<Routes.Home> {
-            BrowseShell(
-                onAlbumClick = { id, name -> navController.navigateSingleTop(Routes.AlbumDetail(id, name)) },
-                onArtistClick = { id, name -> navController.navigateSingleTop(Routes.ArtistDetail(id, name)) },
-                onPlaylistClick = { id, name -> navController.navigateSingleTop(Routes.PlaylistDetail(id, name)) },
-                onExpandPlayer = { navController.navigateSingleTop(Routes.Player) },
-                onOpenSettings = { navController.navigateSingleTop(Routes.Settings) },
-                onOpenSearch = { navController.navigateSingleTop(Routes.Search) },
-            )
+            CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this) {
+                BrowseShell(
+                    onAlbumClick = { id, name, art -> navController.navigateSingleTop(Routes.AlbumDetail(id, name, art)) },
+                    onArtistClick = { id, name -> navController.navigateSingleTop(Routes.ArtistDetail(id, name)) },
+                    onPlaylistClick = { id, name -> navController.navigateSingleTop(Routes.PlaylistDetail(id, name)) },
+                    onExpandPlayer = { navController.navigateSingleTop(Routes.Player) },
+                    onOpenSettings = { navController.navigateSingleTop(Routes.Settings) },
+                    onOpenSearch = { navController.navigateSingleTop(Routes.Search) },
+                )
+            }
         }
 
         composable<Routes.Search> {
-            SearchScreen(
-                onBack = { navController.popBackStack() },
-                onAlbumClick = { id, name -> navController.navigateSingleTop(Routes.AlbumDetail(id, name)) },
-                onArtistClick = { id, name -> navController.navigateSingleTop(Routes.ArtistDetail(id, name)) },
-                onPlaylistClick = { id, name -> navController.navigateSingleTop(Routes.PlaylistDetail(id, name)) },
-                onExpandPlayer = { navController.navigateSingleTop(Routes.Player) },
-            )
+            CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this) {
+                SearchScreen(
+                    onBack = { navController.popBackStack() },
+                    onAlbumClick = { id, name, art -> navController.navigateSingleTop(Routes.AlbumDetail(id, name, art)) },
+                    onArtistClick = { id, name -> navController.navigateSingleTop(Routes.ArtistDetail(id, name)) },
+                    onPlaylistClick = { id, name -> navController.navigateSingleTop(Routes.PlaylistDetail(id, name)) },
+                    onExpandPlayer = { navController.navigateSingleTop(Routes.Player) },
+                )
+            }
         }
 
         composable<Routes.AlbumDetail> {
-            AlbumDetailScreen(
-                onBack = { navController.popBackStack() },
-                onExpandPlayer = { navController.navigateSingleTop(Routes.Player) },
-                onOpenSettings = { navController.navigateSingleTop(Routes.Settings) },
-            )
+            CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this) {
+                AlbumDetailScreen(
+                    onBack = { navController.popBackStack() },
+                    onExpandPlayer = { navController.navigateSingleTop(Routes.Player) },
+                    onOpenSettings = { navController.navigateSingleTop(Routes.Settings) },
+                )
+            }
         }
 
         composable<Routes.ArtistDetail> {
-            ArtistDetailScreen(
-                onBack = { navController.popBackStack() },
-                onAlbumClick = { id, name -> navController.navigateSingleTop(Routes.AlbumDetail(id, name)) },
-                onExpandPlayer = { navController.navigateSingleTop(Routes.Player) },
-                onOpenSettings = { navController.navigateSingleTop(Routes.Settings) },
-            )
+            CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this) {
+                ArtistDetailScreen(
+                    onBack = { navController.popBackStack() },
+                    onAlbumClick = { id, name, art -> navController.navigateSingleTop(Routes.AlbumDetail(id, name, art)) },
+                    onExpandPlayer = { navController.navigateSingleTop(Routes.Player) },
+                    onOpenSettings = { navController.navigateSingleTop(Routes.Settings) },
+                )
+            }
         }
 
         composable<Routes.PlaylistDetail> {
@@ -122,12 +140,14 @@ fun AppNavHost(
         }
 
         composable<Routes.Downloads> {
-            DownloadsScreen(
-                onBack = { navController.popBackStack() },
-                onAlbumClick = { id, name -> navController.navigateSingleTop(Routes.AlbumDetail(id, name)) },
-                onPlaylistClick = { id, name -> navController.navigateSingleTop(Routes.PlaylistDetail(id, name)) },
-                onExpandPlayer = { navController.navigateSingleTop(Routes.Player) },
-            )
+            CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this) {
+                DownloadsScreen(
+                    onBack = { navController.popBackStack() },
+                    onAlbumClick = { id, name, art -> navController.navigateSingleTop(Routes.AlbumDetail(id, name, art)) },
+                    onPlaylistClick = { id, name -> navController.navigateSingleTop(Routes.PlaylistDetail(id, name)) },
+                    onExpandPlayer = { navController.navigateSingleTop(Routes.Player) },
+                )
+            }
         }
 
         composable<Routes.Changelog> {
@@ -136,6 +156,8 @@ fun AppNavHost(
 
         composable<Routes.About> {
             AboutScreen(onBack = { navController.popBackStack() })
+        }
+    }
         }
     }
 }

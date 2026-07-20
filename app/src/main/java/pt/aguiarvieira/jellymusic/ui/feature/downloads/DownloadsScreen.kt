@@ -49,7 +49,7 @@ import pt.aguiarvieira.jellymusic.ui.feature.player.PlaybackViewModel
 @Composable
 fun DownloadsScreen(
     onBack: () -> Unit,
-    onAlbumClick: (String, String) -> Unit,
+    onAlbumClick: (String, String, String?) -> Unit,
     onPlaylistClick: (String, String) -> Unit,
     onExpandPlayer: () -> Unit,
     viewModel: DownloadsViewModel = hiltViewModel(),
@@ -126,7 +126,7 @@ fun DownloadsScreen(
                                 album = album,
                                 status = albumStatuses[album.albumId],
                                 sizeBytes = albumSizes[album.albumId] ?: 0L,
-                                onClick = { onAlbumClick(album.albumId, album.name) },
+                                onClick = { onAlbumClick(album.albumId, album.name, album.artworkUrl) },
                                 onRemove = { viewModel.removeAlbum(album.albumId) },
                             )
                         }

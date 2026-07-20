@@ -20,7 +20,13 @@ object Routes {
     object Home
 
     @Serializable
-    data class AlbumDetail(val albumId: String, val albumName: String)
+    data class AlbumDetail(
+        val albumId: String,
+        val albumName: String,
+        // Carried so the detail hero can render (and land the shared-element transition) before the
+        // album's tracks — which is where the artwork URL otherwise comes from — have loaded.
+        val artworkUrl: String? = null,
+    )
 
     @Serializable
     data class ArtistDetail(val artistId: String, val artistName: String)

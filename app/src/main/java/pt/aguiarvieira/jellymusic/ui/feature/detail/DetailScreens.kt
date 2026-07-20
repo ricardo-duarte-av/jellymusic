@@ -73,6 +73,8 @@ import pt.aguiarvieira.jellymusic.domain.model.TrackDownloadStatus
 import pt.aguiarvieira.jellymusic.ui.common.ContentState
 import pt.aguiarvieira.jellymusic.ui.components.AlbumCard
 import pt.aguiarvieira.jellymusic.ui.components.ArtworkImage
+import pt.aguiarvieira.jellymusic.ui.components.albumArtSharedKey
+import pt.aguiarvieira.jellymusic.ui.components.sharedElementArt
 import pt.aguiarvieira.jellymusic.ui.components.FavoriteMarker
 import pt.aguiarvieira.jellymusic.ui.components.FavoriteToggleButton
 import pt.aguiarvieira.jellymusic.ui.components.TrackRow
@@ -122,8 +124,12 @@ fun AlbumDetailScreen(
     // Retint the album screen to its cover once tracks (and their artwork) have loaded. The artwork
     // URL carries the album's Jellyfin image tag, so a pull-to-refresh that picks up a re-tagged
     // cover yields a new URL — Coil fetches it and the theme reseeds off the new colours.
-    val albumArt = (tracksState as? ContentState.Data)?.value?.firstOrNull()?.artworkUrl
-    AlbumTheme(artworkUrl = albumArt) {
+    // Prefer the loaded track artwork (picks up server-side cover changes on refresh); fall back to
+    // the URL handed in via the route so the hero — and the shared-element landing spot — exists from
+    // the first frame, before tracks load.
+    val loadedArt = (tracksState as? ContentState.Data)?.value?.firstOrNull()?.artworkUrl
+    val heroArt = loadedArt ?: viewModel.heroArtworkUrl
+    AlbumTheme(artworkUrl = heroArt) {
     Scaffold(
         // (1) No album name in the header — keeps space for the Settings action.
         topBar = {
@@ -153,15 +159,18 @@ fun AlbumDetailScreen(
                 .padding(padding),
         ) {
             when (val state = tracksState) {
-                ContentState.Loading -> Centered { CircularProgressIndicator() }
-                is ContentState.Error -> Centered {
+                ContentState.Loading -> AlbumHeroStatus(heroArt, viewModel.albumId, viewModel.title) {
+                    CircularProgressIndicator()
+                }
+                is ContentState.Error -> AlbumHeroStatus(heroArt, viewModel.albumId, viewModel.title) {
                     Text(state.message, color = MaterialTheme.colorScheme.error)
                 }
 
                 is ContentState.Data -> AlbumTrackList(
                     title = viewModel.title,
+                    albumId = viewModel.albumId,
                     tracks = state.value,
-                    heroArtworkUrl = albumArt,
+                    heroArtworkUrl = heroArt,
                     onPlay = playbackViewModel::play,
                     onShufflePlay = playbackViewModel::playShuffled,
                     trackStatuses = trackStatuses,
@@ -179,6 +188,7 @@ fun AlbumDetailScreen(
 @Composable
 private fun AlbumTrackList(
     title: String,
+    albumId: String,
     tracks: List<Track>,
     heroArtworkUrl: String?,
     onPlay: (List<Track>, Int) -> Unit,
@@ -231,15 +241,13 @@ private fun AlbumTrackList(
             .nestedScroll(collapseConnection),
     ) {
         item(key = "art") {
-            ArtworkImage(
+            AlbumHeroArt(
                 url = heroArtworkUrl,
-                contentDescription = title,
+                title = title,
+                albumId = albumId,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(with(density) { artHeightPx.toDp() }),
-                shape = RectangleShape,
-                // Scale the whole cover to fit so it shrinks with the frame instead of clipping.
-                contentScale = ContentScale.Fit,
             )
         }
         // Pins to the top once the art has scrolled away; the track list scrolls beneath it.
@@ -282,6 +290,43 @@ private fun AlbumTrackList(
                 )
             }
         }
+    }
+}
+
+/**
+ * The album cover as a shared element, keyed on the album so it morphs to/from the matching grid
+ * card. [ContentScale.Fit] lets it shrink with the collapsing frame instead of clipping.
+ */
+@Composable
+private fun AlbumHeroArt(url: String?, title: String, albumId: String, modifier: Modifier) {
+    ArtworkImage(
+        url = url,
+        contentDescription = title,
+        modifier = modifier.sharedElementArt(albumArtSharedKey(albumId)),
+        shape = RectangleShape,
+        contentScale = ContentScale.Fit,
+    )
+}
+
+/**
+ * Loading/error placeholder that still renders the hero on top, so the shared-element transition has
+ * a landing spot the instant the screen appears (tracks — and thus the full list — arrive later).
+ */
+@Composable
+private fun AlbumHeroStatus(
+    heroArtworkUrl: String?,
+    albumId: String,
+    title: String,
+    content: @Composable () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        AlbumHeroArt(
+            url = heroArtworkUrl,
+            title = title,
+            albumId = albumId,
+            modifier = Modifier.fillMaxWidth().height(MAX_ART_HEIGHT),
+        )
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { content() }
     }
 }
 
@@ -686,7 +731,7 @@ private fun TrackListDetail(
 @Composable
 fun ArtistDetailScreen(
     onBack: () -> Unit,
-    onAlbumClick: (String, String) -> Unit,
+    onAlbumClick: (String, String, String?) -> Unit,
     onExpandPlayer: () -> Unit,
     onOpenSettings: () -> Unit,
     viewModel: ArtistDetailViewModel = hiltViewModel(),
@@ -711,7 +756,7 @@ private fun ArtistDetailContent(
     title: String,
     albumsState: ContentState<List<Album>>,
     onBack: () -> Unit,
-    onAlbumClick: (String, String) -> Unit,
+    onAlbumClick: (String, String, String?) -> Unit,
     onExpandPlayer: () -> Unit,
     onOpenSettings: () -> Unit,
     favorite: Boolean? = null,
@@ -746,7 +791,7 @@ private fun ArtistDetailContent(
                         modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
                     ) {
                         items(albumsState.value, key = { it.id }) { album ->
-                            AlbumCard(album, onClick = { onAlbumClick(album.id, album.name) })
+                            AlbumCard(album, onClick = { onAlbumClick(album.id, album.name, album.artworkUrl) })
                         }
                     }
                 }

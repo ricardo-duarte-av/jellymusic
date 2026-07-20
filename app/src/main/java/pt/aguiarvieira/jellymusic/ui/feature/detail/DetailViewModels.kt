@@ -26,6 +26,10 @@ class AlbumDetailViewModel @Inject constructor(
 ) : ViewModel() {
     private val args = savedStateHandle.toRoute<Routes.AlbumDetail>()
     val title: String = args.albumName
+    val albumId: String = args.albumId
+
+    /** Cover URL from the grid, used to render the hero before tracks (its usual source) load. */
+    val heroArtworkUrl: String? = args.artworkUrl
 
     private val _tracks = MutableStateFlow<ContentState<List<Track>>>(ContentState.Loading)
     val tracks = _tracks.asStateFlow()

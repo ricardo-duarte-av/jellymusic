@@ -74,7 +74,8 @@ fun AlbumCard(
                         contentDescription = album.name,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .aspectRatio(1f),
+                            .aspectRatio(1f)
+                            .sharedElementArt(albumArtSharedKey(album.id)),
                         shape = RectangleShape,
                     )
                 }

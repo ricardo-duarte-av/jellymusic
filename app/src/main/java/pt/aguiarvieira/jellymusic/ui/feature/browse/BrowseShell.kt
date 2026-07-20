@@ -83,7 +83,7 @@ private enum class BrowseTab(val label: String, val icon: ImageVector) {
 @OptIn(ExperimentalMaterial3AdaptiveNavigationSuiteApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun BrowseShell(
-    onAlbumClick: (String, String) -> Unit,
+    onAlbumClick: (String, String, String?) -> Unit,
     onArtistClick: (String, String) -> Unit,
     onPlaylistClick: (String, String) -> Unit,
     onExpandPlayer: () -> Unit,
@@ -379,7 +379,7 @@ private fun AlbumsPagingContent(
     albums: LazyPagingItems<Album>,
     columns: Int,
     onZoom: (Int) -> Unit,
-    onAlbumClick: (String, String) -> Unit,
+    onAlbumClick: (String, String, String?) -> Unit,
     albumStatuses: Map<String, AlbumDownloadStatus>,
     onRequestDownload: (Album) -> Unit,
     onRemoveAlbum: (String) -> Unit,
@@ -402,7 +402,7 @@ private fun AlbumsPagingContent(
                     albums[index]?.let { album ->
                         AlbumCard(
                             album = album,
-                            onClick = { onAlbumClick(album.id, album.name) },
+                            onClick = { onAlbumClick(album.id, album.name, album.artworkUrl) },
                             downloadStatus = albumStatuses[album.id],
                             onDownload = { onRequestDownload(album) },
                             onRemoveLocal = { onRemoveAlbum(album.id) },
