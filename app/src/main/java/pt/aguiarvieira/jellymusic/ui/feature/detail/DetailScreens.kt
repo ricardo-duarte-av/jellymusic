@@ -3,6 +3,8 @@ package pt.aguiarvieira.jellymusic.ui.feature.detail
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -771,9 +773,12 @@ fun ArtistDetailScreen(
 ) {
     val albums by viewModel.albums.collectAsStateWithLifecycle()
     val isFavorite by viewModel.isFavorite.collectAsStateWithLifecycle()
+    val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
     ArtistDetailContent(
         title = viewModel.title,
         albumsState = albums,
+        isRefreshing = isRefreshing,
+        onRefresh = viewModel::refresh,
         onBack = onBack,
         onAlbumClick = onAlbumClick,
         onExpandPlayer = onExpandPlayer,
@@ -788,6 +793,8 @@ fun ArtistDetailScreen(
 private fun ArtistDetailContent(
     title: String,
     albumsState: ContentState<List<Album>>,
+    isRefreshing: Boolean,
+    onRefresh: () -> Unit,
     onBack: () -> Unit,
     onAlbumClick: (String, String, String?) -> Unit,
     onExpandPlayer: () -> Unit,
@@ -807,17 +814,22 @@ private fun ArtistDetailContent(
         },
         bottomBar = { MiniPlayer(onExpand = onExpandPlayer) },
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = onRefresh,
+            modifier = Modifier.fillMaxSize().padding(padding),
+        ) {
             when (albumsState) {
                 ContentState.Loading -> GridSkeleton(
                     cells = GridCells.Adaptive(minSize = 150.dp),
                 ) { AlbumCardSkeleton() }
-                is ContentState.Error -> Centered {
+                // Scrollable so pull-to-refresh has something to drag even with no albums/an error.
+                is ContentState.Error -> CenteredScrollable {
                     Text(albumsState.message, color = MaterialTheme.colorScheme.error)
                 }
 
                 is ContentState.Data -> if (albumsState.value.isEmpty()) {
-                    Centered {
+                    CenteredScrollable {
                         Text("No albums", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 } else {
@@ -863,4 +875,15 @@ private fun DetailTopBar(
 @Composable
 private fun Centered(content: @Composable () -> Unit) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { content() }
+}
+
+/** Like [Centered] but vertically scrollable, so an enclosing pull-to-refresh can be dragged. */
+@Composable
+private fun CenteredScrollable(content: @Composable () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState()),
+        contentAlignment = Alignment.Center,
+    ) { content() }
 }

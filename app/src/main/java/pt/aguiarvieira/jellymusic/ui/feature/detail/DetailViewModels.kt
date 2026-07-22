@@ -117,12 +117,26 @@ class ArtistDetailViewModel @Inject constructor(
     private val _isFavorite = MutableStateFlow(false)
     val isFavorite = _isFavorite.asStateFlow()
 
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing = _isRefreshing.asStateFlow()
+
     init {
         viewModelScope.launch {
             _albums.value = musicRepository.getArtistAlbums(args.artistId).toContentState()
         }
         viewModelScope.launch {
             musicRepository.getFavorite(args.artistId).onSuccess { _isFavorite.value = it }
+        }
+    }
+
+    /** Re-fetch the artist's albums + favourite from the server (pull-to-refresh). */
+    fun refresh() {
+        if (_isRefreshing.value) return
+        _isRefreshing.value = true
+        viewModelScope.launch {
+            _albums.value = musicRepository.getArtistAlbums(args.artistId).toContentState()
+            musicRepository.getFavorite(args.artistId).onSuccess { _isFavorite.value = it }
+            _isRefreshing.value = false
         }
     }
 
