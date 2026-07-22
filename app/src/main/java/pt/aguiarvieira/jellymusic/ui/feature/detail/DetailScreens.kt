@@ -154,24 +154,26 @@ fun AlbumDetailScreen(
         // own now-playing container transform into the full player without the two fighting.
         bottomBar = { MiniPlayer(onExpand = onExpandPlayer) },
     ) { padding ->
-        Box(modifier = Modifier.fillMaxSize()) {
-            // The list backdrop (the surface seen behind/between the track and disc cards). It sits
-            // OUTSIDE the container transform on purpose: content tagged with albumContainerTransform is
-            // lifted into the shared-element overlay during the transition, which makes it escape the
-            // seeked nav-level popExit fade and rely on the container's own fade — and predictive back
-            // only seeks the bounds of that, not its alpha, so the backdrop used to shrink opaque and
-            // pop at commit. Kept as a plain sibling here, it rides the seeked nav-level fade and
-            // dissolves with the drag (revealing the browse grid fading in beneath). Full-size, behind
-            // the scaffold chrome too, matching the old `.background()` before `.padding()`.
+        // Container transform scoped to the album body: it grows out of the tapped grid card (and
+        // back) while the top bar and mini player — Scaffold chrome outside it — stay put.
+        Box(modifier = Modifier.fillMaxSize().albumContainerTransform(viewModel.albumId)) {
+            // The list backdrop (the surface seen behind/between the track and disc cards) lives as a
+            // child *inside* the container transform. sharedBounds lifts its content into the overlay
+            // and fades it via the container's own enter/exit — but that fade only reaches laid-out
+            // children, not a `.background()` drawn by a modifier on the shared node (which draws
+            // outside the content cross-fade, so it shrank opaque and popped). As a child it dissolves
+            // into the card with the cards. Full-size, behind the scaffold chrome too.
+            //
+            // NOTE: with the real `surface` colour the dissolve is nearly invisible because the browse
+            // screen behind is also `surface`. To VERIFY the fade under a back-swipe, temporarily swap
+            // the line below for the magenta one — it should dissolve smoothly, not pop at ~80%:
+            // Box(modifier = Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Magenta))
             Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface))
-            // Container transform scoped to the album body: it grows out of the tapped grid card (and
-            // back) while the top bar and mini player — Scaffold chrome outside it — stay put.
             PullToRefreshBox(
                 isRefreshing = isRefreshing,
                 onRefresh = viewModel::refresh,
                 modifier = Modifier
                     .fillMaxSize()
-                    .albumContainerTransform(viewModel.albumId)
                     .padding(padding),
             ) {
                 when (val state = tracksState) {
