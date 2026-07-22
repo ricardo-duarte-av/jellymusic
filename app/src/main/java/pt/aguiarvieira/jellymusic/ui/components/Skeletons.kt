@@ -143,12 +143,43 @@ fun GridSkeleton(
     }
 }
 
-/** Loading state for the album viewer's track list: a column of [TrackRowSkeleton]s. */
+/**
+ * Placeholder matching the album viewer's `AlbumHeader`: centred title + artist lines, a pair of
+ * action buttons, and a track-count line. Sits between the hero art and the track rows so the
+ * skeleton lands where the real content will — the header, not the first track row.
+ */
 @Composable
-fun TrackListSkeleton(modifier: Modifier = Modifier, count: Int = 8) {
+fun AlbumHeaderSkeleton(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        SkeletonBox(Modifier.fillMaxWidth(0.6f).height(24.dp))
+        Spacer(Modifier.height(8.dp))
+        SkeletonBox(Modifier.fillMaxWidth(0.4f).height(16.dp))
+        Spacer(Modifier.height(16.dp))
+        Row {
+            SkeletonBox(Modifier.width(96.dp).height(40.dp), shape = CircleShape)
+            Spacer(Modifier.width(12.dp))
+            SkeletonBox(Modifier.width(96.dp).height(40.dp), shape = CircleShape)
+        }
+        Spacer(Modifier.height(16.dp))
+        SkeletonBox(Modifier.fillMaxWidth(0.25f).height(11.dp))
+    }
+}
+
+/**
+ * Full loading state for the album viewer beneath the hero art: the [AlbumHeaderSkeleton] followed
+ * by a column of [TrackRowSkeleton]s, all pulsing in sync under a single [SkeletonScreen].
+ */
+@Composable
+fun AlbumDetailSkeleton(modifier: Modifier = Modifier, trackCount: Int = 8) {
     SkeletonScreen {
         Column(modifier = modifier.fillMaxWidth()) {
-            repeat(count) { TrackRowSkeleton() }
+            AlbumHeaderSkeleton()
+            repeat(trackCount) { TrackRowSkeleton() }
         }
     }
 }
