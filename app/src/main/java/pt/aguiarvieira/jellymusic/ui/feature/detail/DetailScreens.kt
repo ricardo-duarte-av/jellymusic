@@ -154,21 +154,24 @@ fun AlbumDetailScreen(
         // own now-playing container transform into the full player without the two fighting.
         bottomBar = { MiniPlayer(onExpand = onExpandPlayer) },
     ) { padding ->
-        // Container transform scoped to the album body: it grows out of the tapped grid card (and back)
-        // while the top bar and mini player — Scaffold chrome outside it — stay put.
-        Box(modifier = Modifier.fillMaxSize().albumContainerTransform(viewModel.albumId)) {
-            // The list backdrop (the surface seen behind/between the track and disc cards). It's a
-            // laid-out child of the container — not a draw modifier on the shared-bounds node — so it
-            // rides the transform's fade alongside the content. Painting it as a modifier made the
-            // predictive-back *seek* skip its fade, so the backdrop stayed opaque and popped near the
-            // end of the shrink instead of dissolving with the cards. Fills the whole container
-            // (behind the scaffold chrome too), matching the old `.background()` before `.padding()`.
+        Box(modifier = Modifier.fillMaxSize()) {
+            // The list backdrop (the surface seen behind/between the track and disc cards). It sits
+            // OUTSIDE the container transform on purpose: content tagged with albumContainerTransform is
+            // lifted into the shared-element overlay during the transition, which makes it escape the
+            // seeked nav-level popExit fade and rely on the container's own fade — and predictive back
+            // only seeks the bounds of that, not its alpha, so the backdrop used to shrink opaque and
+            // pop at commit. Kept as a plain sibling here, it rides the seeked nav-level fade and
+            // dissolves with the drag (revealing the browse grid fading in beneath). Full-size, behind
+            // the scaffold chrome too, matching the old `.background()` before `.padding()`.
             Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface))
+            // Container transform scoped to the album body: it grows out of the tapped grid card (and
+            // back) while the top bar and mini player — Scaffold chrome outside it — stay put.
             PullToRefreshBox(
                 isRefreshing = isRefreshing,
                 onRefresh = viewModel::refresh,
                 modifier = Modifier
                     .fillMaxSize()
+                    .albumContainerTransform(viewModel.albumId)
                     .padding(padding),
             ) {
                 when (val state = tracksState) {
