@@ -249,3 +249,26 @@ fun TrackListDetailSkeleton(
         }
     }
 }
+
+/** Placeholder matching a search `SectionHeader`: a short label line. */
+@Composable
+private fun SectionHeaderSkeleton() {
+    SkeletonBox(Modifier.padding(horizontal = 16.dp, vertical = 8.dp).width(80.dp).height(14.dp))
+}
+
+/**
+ * Loading state for the search screen: a couple of labelled sections, each a header placeholder
+ * over a few `ResultRow`-shaped ([TrackListItemSkeleton]) rows, pulsing in sync under one
+ * [SkeletonScreen].
+ */
+@Composable
+fun SearchResultsSkeleton(modifier: Modifier = Modifier) {
+    SkeletonScreen {
+        Column(modifier = modifier.fillMaxWidth()) {
+            repeat(2) {
+                SectionHeaderSkeleton()
+                repeat(3) { TrackListItemSkeleton(showArtwork = true) }
+            }
+        }
+    }
+}

@@ -25,6 +25,7 @@ val CHANGELOG: List<ChangelogVersion> = listOf(
                 "spinner.",
             "Opening a playlist now shows cover, title and track-row placeholders while loading, " +
                 "instead of a spinner.",
+            "Search now shows result-row placeholders while loading, instead of a spinner.",
         ),
     ),
     ChangelogVersion(

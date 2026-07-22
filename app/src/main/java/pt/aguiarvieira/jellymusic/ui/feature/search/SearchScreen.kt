@@ -24,7 +24,6 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -62,6 +61,7 @@ import pt.aguiarvieira.jellymusic.domain.model.Playlist
 import pt.aguiarvieira.jellymusic.domain.model.SearchResults
 import pt.aguiarvieira.jellymusic.domain.model.TrackDownloadStatus
 import pt.aguiarvieira.jellymusic.ui.components.ArtworkImage
+import pt.aguiarvieira.jellymusic.ui.components.SearchResultsSkeleton
 import pt.aguiarvieira.jellymusic.ui.components.TrackRow
 import pt.aguiarvieira.jellymusic.ui.feature.downloads.AlbumArtDownloadBadge
 import pt.aguiarvieira.jellymusic.ui.feature.downloads.AlbumDownloadBar
@@ -144,7 +144,7 @@ fun SearchScreen(
                     )
                 }
 
-                SearchUiState.Loading -> Centered { CircularProgressIndicator() }
+                SearchUiState.Loading -> SearchResultsSkeleton()
 
                 is SearchUiState.Error -> Centered {
                     Text(s.message, color = MaterialTheme.colorScheme.error)
