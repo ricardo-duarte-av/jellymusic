@@ -629,6 +629,7 @@ fun PlaylistDetailScreen(
 ) {
     val tracks by viewModel.tracks.collectAsStateWithLifecycle()
     val isFavorite by viewModel.isFavorite.collectAsStateWithLifecycle()
+    val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
     val trackStatuses by downloadsViewModel.trackStatuses.collectAsStateWithLifecycle()
     val transcodeDefault by downloadsViewModel.transcodeDefault.collectAsStateWithLifecycle()
     var pendingDownload by remember { mutableStateOf<DownloadTarget?>(null) }
@@ -648,6 +649,8 @@ fun PlaylistDetailScreen(
     TrackListDetail(
         title = viewModel.title,
         tracksState = tracks,
+        isRefreshing = isRefreshing,
+        onRefresh = viewModel::refresh,
         onBack = onBack,
         onExpandPlayer = onExpandPlayer,
         onOpenSettings = onOpenSettings,
@@ -668,6 +671,8 @@ fun PlaylistDetailScreen(
 private fun TrackListDetail(
     title: String,
     tracksState: ContentState<List<Track>>,
+    isRefreshing: Boolean,
+    onRefresh: () -> Unit,
     onBack: () -> Unit,
     onExpandPlayer: () -> Unit,
     onOpenSettings: () -> Unit,
@@ -693,10 +698,15 @@ private fun TrackListDetail(
         },
         bottomBar = { MiniPlayer(onExpand = onExpandPlayer) },
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = onRefresh,
+            modifier = Modifier.fillMaxSize().padding(padding),
+        ) {
             when (tracksState) {
                 ContentState.Loading -> TrackListDetailSkeleton(showTrackArtwork = showTrackArtwork)
-                is ContentState.Error -> Centered {
+                // Scrollable so pull-to-refresh has something to drag on an error.
+                is ContentState.Error -> CenteredScrollable {
                     Text(tracksState.message, color = MaterialTheme.colorScheme.error)
                 }
 

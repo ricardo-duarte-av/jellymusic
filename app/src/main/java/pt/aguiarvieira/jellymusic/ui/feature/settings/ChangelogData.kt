@@ -27,6 +27,7 @@ val CHANGELOG: List<ChangelogVersion> = listOf(
                 "instead of a spinner.",
             "Search now shows result-row placeholders while loading, instead of a spinner.",
             "You can now pull to refresh an artist's albums from the server.",
+            "You can now pull to refresh a playlist's tracks from the server.",
         ),
     ),
     ChangelogVersion(

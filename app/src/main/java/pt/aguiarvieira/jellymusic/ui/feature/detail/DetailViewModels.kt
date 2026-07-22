@@ -86,12 +86,26 @@ class PlaylistDetailViewModel @Inject constructor(
     private val _isFavorite = MutableStateFlow(false)
     val isFavorite = _isFavorite.asStateFlow()
 
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing = _isRefreshing.asStateFlow()
+
     init {
         viewModelScope.launch {
             _tracks.value = musicRepository.getPlaylistTracks(args.playlistId).toContentState()
         }
         viewModelScope.launch {
             musicRepository.getFavorite(args.playlistId).onSuccess { _isFavorite.value = it }
+        }
+    }
+
+    /** Re-fetch the playlist's tracks + favourite from the server (pull-to-refresh). */
+    fun refresh() {
+        if (_isRefreshing.value) return
+        _isRefreshing.value = true
+        viewModelScope.launch {
+            _tracks.value = musicRepository.getPlaylistTracks(args.playlistId).toContentState()
+            musicRepository.getFavorite(args.playlistId).onSuccess { _isFavorite.value = it }
+            _isRefreshing.value = false
         }
     }
 
