@@ -186,10 +186,9 @@ fun ConnectServerScreen(
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         ListItem(
-                            headlineContent = { Text(server.name) },
                             supportingContent = { Text(server.address) },
                             leadingContent = { Icon(Icons.Filled.Dns, contentDescription = null) },
-                        )
+                        ) { Text(server.name) }
                     }
                 }
             }

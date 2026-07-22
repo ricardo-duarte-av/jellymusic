@@ -365,7 +365,6 @@ private fun ResultRow(
                     onClick = onClick,
                     onLongClick = if (hasMenu) ({ menuOpen = true }) else null,
                 ),
-                headlineContent = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 supportingContent = subtitle?.let {
                     { Text(it, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                 },
@@ -380,7 +379,7 @@ private fun ResultRow(
                 trailingContent = {
                     AlbumArtDownloadBadge(status = downloadStatus)
                 },
-            )
+            ) { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) }
             AlbumDownloadBar(
                 status = downloadStatus,
                 modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 6.dp),

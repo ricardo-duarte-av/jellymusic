@@ -56,9 +56,6 @@ fun TrackRow(
                 onClick = onClick,
                 onLongClick = if (hasMenu) ({ menuOpen = true }) else null,
             ),
-            headlineContent = {
-                Text(track.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            },
             supportingContent = trackSupporting(track, downloadStatus),
             leadingContent = {
                 if (showArtwork) {
@@ -92,7 +89,7 @@ fun TrackRow(
                     }
                 }
             },
-        )
+        ) { Text(track.name, maxLines = 1, overflow = TextOverflow.Ellipsis) }
         TrackDownloadBar(
             status = downloadStatus,
             modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 6.dp),
