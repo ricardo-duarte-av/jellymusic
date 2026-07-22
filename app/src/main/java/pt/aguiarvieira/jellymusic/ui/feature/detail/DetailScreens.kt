@@ -156,42 +156,49 @@ fun AlbumDetailScreen(
     ) { padding ->
         // Container transform scoped to the album body: it grows out of the tapped grid card (and back)
         // while the top bar and mini player — Scaffold chrome outside it — stay put.
-        PullToRefreshBox(
-            isRefreshing = isRefreshing,
-            onRefresh = viewModel::refresh,
-            modifier = Modifier
-                .fillMaxSize()
-                .albumContainerTransform(viewModel.albumId)
-                .background(MaterialTheme.colorScheme.surface)
-                .padding(padding),
-        ) {
-            when (val state = tracksState) {
-                // Hero (lands the shared element immediately) + track skeletons where the rows will be.
-                ContentState.Loading -> Column(modifier = Modifier.fillMaxSize()) {
-                    AlbumHeroArt(
-                        url = heroArt,
+        Box(modifier = Modifier.fillMaxSize().albumContainerTransform(viewModel.albumId)) {
+            // The list backdrop (the surface seen behind/between the track and disc cards). It's a
+            // laid-out child of the container — not a draw modifier on the shared-bounds node — so it
+            // rides the transform's fade alongside the content. Painting it as a modifier made the
+            // predictive-back *seek* skip its fade, so the backdrop stayed opaque and popped near the
+            // end of the shrink instead of dissolving with the cards. Fills the whole container
+            // (behind the scaffold chrome too), matching the old `.background()` before `.padding()`.
+            Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface))
+            PullToRefreshBox(
+                isRefreshing = isRefreshing,
+                onRefresh = viewModel::refresh,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+            ) {
+                when (val state = tracksState) {
+                    // Hero (lands the shared element) + track skeletons where the rows will be.
+                    ContentState.Loading -> Column(modifier = Modifier.fillMaxSize()) {
+                        AlbumHeroArt(
+                            url = heroArt,
+                            title = viewModel.title,
+                            albumId = viewModel.albumId,
+                            modifier = Modifier.fillMaxWidth().height(MAX_ART_HEIGHT),
+                        )
+                        TrackListSkeleton()
+                    }
+                    is ContentState.Error -> AlbumHeroStatus(heroArt, viewModel.albumId, viewModel.title) {
+                        Text(state.message, color = MaterialTheme.colorScheme.error)
+                    }
+
+                    is ContentState.Data -> AlbumTrackList(
                         title = viewModel.title,
                         albumId = viewModel.albumId,
-                        modifier = Modifier.fillMaxWidth().height(MAX_ART_HEIGHT),
+                        tracks = state.value,
+                        heroArtworkUrl = heroArt,
+                        onPlay = playbackViewModel::play,
+                        onShufflePlay = playbackViewModel::playShuffled,
+                        trackStatuses = trackStatuses,
+                        onRequestDownload = { pendingDownload = DownloadTarget.TrackItem(it) },
+                        onRemoveTrack = downloadsViewModel::removeTrack,
+                        onToggleTrackFavorite = viewModel::toggleTrackFavorite,
                     )
-                    TrackListSkeleton()
                 }
-                is ContentState.Error -> AlbumHeroStatus(heroArt, viewModel.albumId, viewModel.title) {
-                    Text(state.message, color = MaterialTheme.colorScheme.error)
-                }
-
-                is ContentState.Data -> AlbumTrackList(
-                    title = viewModel.title,
-                    albumId = viewModel.albumId,
-                    tracks = state.value,
-                    heroArtworkUrl = heroArt,
-                    onPlay = playbackViewModel::play,
-                    onShufflePlay = playbackViewModel::playShuffled,
-                    trackStatuses = trackStatuses,
-                    onRequestDownload = { pendingDownload = DownloadTarget.TrackItem(it) },
-                    onRemoveTrack = downloadsViewModel::removeTrack,
-                    onToggleTrackFavorite = viewModel::toggleTrackFavorite,
-                )
             }
         }
     }
