@@ -882,12 +882,7 @@ private fun DetailTopBar(
     )
 }
 
-@Composable
-private fun Centered(content: @Composable () -> Unit) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { content() }
-}
-
-/** Like [Centered] but vertically scrollable, so an enclosing pull-to-refresh can be dragged. */
+/** A centred single child, vertically scrollable so an enclosing pull-to-refresh can be dragged. */
 @Composable
 private fun CenteredScrollable(content: @Composable () -> Unit) {
     Box(
