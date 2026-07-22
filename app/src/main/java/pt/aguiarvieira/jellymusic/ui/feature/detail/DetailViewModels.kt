@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import pt.aguiarvieira.jellymusic.core.image.ImageCacheManager
 import pt.aguiarvieira.jellymusic.data.download.FavoriteDownloadSyncManager
 import pt.aguiarvieira.jellymusic.domain.model.Album
 import pt.aguiarvieira.jellymusic.domain.model.Track
@@ -22,6 +23,7 @@ import javax.inject.Inject
 class AlbumDetailViewModel @Inject constructor(
     private val musicRepository: MusicRepository,
     private val favoriteSyncManager: FavoriteDownloadSyncManager,
+    private val imageCache: ImageCacheManager,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
     private val args = savedStateHandle.toRoute<Routes.AlbumDetail>()
@@ -50,15 +52,16 @@ class AlbumDetailViewModel @Inject constructor(
     }
 
     /**
-     * Re-fetch tracks + favourite from the server. Picks up a cover art change made on the server:
-     * the fresh tracks carry the album's new image tag, so the artwork URL changes and Coil fetches
-     * the updated cover instead of serving its cache. See [ItemMappers].
+     * Re-fetch tracks + favourite from the server. Picks up a cover art change made on the server
+     * (the fresh tracks carry the album's new image tag, so the URL changes and Coil fetches the new
+     * cover). Also evicts the current artwork from Coil's cache and cache-busts the reloaded URLs, so
+     * a poisoned/corrupt cached image recovers on refresh instead of needing an app cache clear.
      */
     fun refresh() {
         if (_isRefreshing.value) return
         _isRefreshing.value = true
         viewModelScope.launch {
-            _tracks.value = musicRepository.getAlbumTracks(args.albumId).toContentState()
+            _tracks.value = musicRepository.getAlbumTracks(args.albumId).refreshArtwork(imageCache)
             musicRepository.getFavorite(args.albumId).onSuccess { _isFavorite.value = it }
             _isRefreshing.value = false
         }
@@ -75,6 +78,7 @@ class AlbumDetailViewModel @Inject constructor(
 class PlaylistDetailViewModel @Inject constructor(
     private val musicRepository: MusicRepository,
     private val favoriteSyncManager: FavoriteDownloadSyncManager,
+    private val imageCache: ImageCacheManager,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
     private val args = savedStateHandle.toRoute<Routes.PlaylistDetail>()
@@ -98,12 +102,16 @@ class PlaylistDetailViewModel @Inject constructor(
         }
     }
 
-    /** Re-fetch the playlist's tracks + favourite from the server (pull-to-refresh). */
+    /**
+     * Re-fetch the playlist's tracks + favourite from the server (pull-to-refresh). Evicts the
+     * current artwork from Coil's cache and cache-busts the reloaded URLs so a poisoned cached cover
+     * recovers on refresh.
+     */
     fun refresh() {
         if (_isRefreshing.value) return
         _isRefreshing.value = true
         viewModelScope.launch {
-            _tracks.value = musicRepository.getPlaylistTracks(args.playlistId).toContentState()
+            _tracks.value = musicRepository.getPlaylistTracks(args.playlistId).refreshArtwork(imageCache)
             musicRepository.getFavorite(args.playlistId).onSuccess { _isFavorite.value = it }
             _isRefreshing.value = false
         }
@@ -120,6 +128,7 @@ class PlaylistDetailViewModel @Inject constructor(
 class ArtistDetailViewModel @Inject constructor(
     private val musicRepository: MusicRepository,
     private val favoriteSyncManager: FavoriteDownloadSyncManager,
+    private val imageCache: ImageCacheManager,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
     private val args = savedStateHandle.toRoute<Routes.ArtistDetail>()
@@ -143,12 +152,16 @@ class ArtistDetailViewModel @Inject constructor(
         }
     }
 
-    /** Re-fetch the artist's albums + favourite from the server (pull-to-refresh). */
+    /**
+     * Re-fetch the artist's albums + favourite from the server (pull-to-refresh). Evicts the current
+     * album covers from Coil's cache and cache-busts the reloaded URLs so a poisoned cached cover
+     * recovers on refresh.
+     */
     fun refresh() {
         if (_isRefreshing.value) return
         _isRefreshing.value = true
         viewModelScope.launch {
-            _albums.value = musicRepository.getArtistAlbums(args.artistId).toContentState()
+            _albums.value = musicRepository.getArtistAlbums(args.artistId).refreshAlbumArtwork(imageCache)
             musicRepository.getFavorite(args.artistId).onSuccess { _isFavorite.value = it }
             _isRefreshing.value = false
         }
@@ -200,3 +213,32 @@ private fun ViewModel.toggleTrackFavoriteIn(
             .onFailure { setInList(!target) }
     }
 }
+
+/**
+ * On a successful refetch, evicts the items' current artwork from Coil's cache and returns them with
+ * a one-shot cache-bust on each URL. Eviction un-poisons a corrupt cached image for every screen;
+ * the cache-bust makes the reloaded screen re-request rather than re-show the failed placeholder
+ * (Coil latches a failed URL until it changes). On failure the result is passed through untouched.
+ */
+private suspend fun Result<List<Track>>.refreshArtwork(
+    imageCache: ImageCacheManager,
+): ContentState<List<Track>> {
+    val tracks = getOrNull() ?: return toContentState()
+    imageCache.evict(tracks.mapNotNull { it.artworkUrl })
+    val bust = System.currentTimeMillis()
+    return ContentState.Data(tracks.map { it.copy(artworkUrl = it.artworkUrl?.cacheBust(bust)) })
+}
+
+/** [refreshArtwork] for an album list (artist viewer). */
+private suspend fun Result<List<Album>>.refreshAlbumArtwork(
+    imageCache: ImageCacheManager,
+): ContentState<List<Album>> {
+    val albums = getOrNull() ?: return toContentState()
+    imageCache.evict(albums.mapNotNull { it.artworkUrl })
+    val bust = System.currentTimeMillis()
+    return ContentState.Data(albums.map { it.copy(artworkUrl = it.artworkUrl?.cacheBust(bust)) })
+}
+
+/** Appends a one-shot query param so Coil treats this as a fresh URL, bypassing its cache. */
+private fun String.cacheBust(nonce: Long): String =
+    this + (if (contains('?')) "&" else "?") + "cb=" + nonce

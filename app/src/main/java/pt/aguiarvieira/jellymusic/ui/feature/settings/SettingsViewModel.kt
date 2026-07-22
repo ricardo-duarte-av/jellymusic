@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import pt.aguiarvieira.jellymusic.core.image.ImageCacheManager
 import pt.aguiarvieira.jellymusic.data.download.FavoriteDownloadSyncManager
 import pt.aguiarvieira.jellymusic.data.settings.SettingsStore
 import pt.aguiarvieira.jellymusic.domain.model.AudioCodec
@@ -18,6 +19,7 @@ import javax.inject.Inject
 class SettingsViewModel @Inject constructor(
     private val settingsStore: SettingsStore,
     private val favoriteSyncManager: FavoriteDownloadSyncManager,
+    private val imageCache: ImageCacheManager,
 ) : ViewModel() {
 
     val streamSettings = settingsStore.streamSettings
@@ -72,5 +74,13 @@ class SettingsViewModel @Inject constructor(
 
     fun setBitrate(kbps: Int) {
         viewModelScope.launch { settingsStore.setStreamBitrate(kbps) }
+    }
+
+    /** Wipes Coil's entire image cache (memory + disk), then invokes [onCleared] on completion. */
+    fun clearImageCache(onCleared: () -> Unit) {
+        viewModelScope.launch {
+            imageCache.clearAll()
+            onCleared()
+        }
     }
 }

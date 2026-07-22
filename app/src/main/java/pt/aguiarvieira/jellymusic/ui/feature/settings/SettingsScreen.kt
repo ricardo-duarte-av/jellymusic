@@ -17,6 +17,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -27,6 +28,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -34,9 +36,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import android.widget.Toast
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -58,6 +62,7 @@ fun SettingsScreen(
     val replayGain by viewModel.replayGainSettings.collectAsStateWithLifecycle()
     val downloadFavorites by viewModel.downloadFavorites.collectAsStateWithLifecycle()
     val downloadFavoritesOnMetered by viewModel.downloadFavoritesOnMetered.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     Scaffold(
         topBar = {
@@ -97,6 +102,31 @@ fun SettingsScreen(
                     )
                 }
                 Switch(checked = dynamicTheme, onCheckedChange = viewModel::setDynamicAlbumTheme)
+            }
+
+            // Recovery for a corrupt cached cover: wipes Coil's image cache so artwork re-fetches.
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Clear image cache", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        text = "Fixes covers stuck on a placeholder. Artwork re-downloads as needed.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                TextButton(
+                    onClick = {
+                        viewModel.clearImageCache {
+                            Toast.makeText(context, "Image cache cleared", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                ) {
+                    Icon(Icons.Filled.Refresh, contentDescription = null)
+                    Text("Clear", modifier = Modifier.padding(start = 8.dp))
+                }
             }
 
             HorizontalDivider()

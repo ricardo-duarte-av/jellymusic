@@ -16,6 +16,15 @@ data class ChangelogVersion(
 /** Newest first. Unreleased (version = null) always on top. */
 val CHANGELOG: List<ChangelogVersion> = listOf(
     ChangelogVersion(
+        version = null,
+        date = null,
+        changes = listOf(
+            "Pull to refresh now re-downloads an album, artist or playlist's artwork, fixing covers " +
+                "stuck on a placeholder from a bad cached image.",
+            "Added a \"Clear image cache\" button in Settings to force all artwork to re-download.",
+        ),
+    ),
+    ChangelogVersion(
         version = "0.1.69",
         date = "22/07/2026",
         changes = listOf(
