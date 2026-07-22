@@ -76,6 +76,7 @@ import pt.aguiarvieira.jellymusic.ui.components.ArtworkImage
 import pt.aguiarvieira.jellymusic.ui.components.TrackListSkeleton
 import pt.aguiarvieira.jellymusic.ui.components.albumArtSharedKey
 import pt.aguiarvieira.jellymusic.ui.components.albumContainerTransform
+import pt.aguiarvieira.jellymusic.ui.components.fastExitFade
 import pt.aguiarvieira.jellymusic.ui.components.sharedElementArt
 import pt.aguiarvieira.jellymusic.ui.components.FavoriteMarker
 import pt.aguiarvieira.jellymusic.ui.components.FavoriteToggleButton
@@ -158,17 +159,17 @@ fun AlbumDetailScreen(
         // back) while the top bar and mini player — Scaffold chrome outside it — stay put.
         Box(modifier = Modifier.fillMaxSize().albumContainerTransform(viewModel.albumId)) {
             // The list backdrop (the surface seen behind/between the track and disc cards) lives as a
-            // child *inside* the container transform. sharedBounds lifts its content into the overlay
-            // and fades it via the container's own enter/exit — but that fade only reaches laid-out
-            // children, not a `.background()` drawn by a modifier on the shared node (which draws
-            // outside the content cross-fade, so it shrank opaque and popped). As a child it dissolves
-            // into the card with the cards. Full-size, behind the scaffold chrome too.
+            // child *inside* the container transform. The container's own bounds shrink it slower than
+            // the shared cover flies, so left to itself the backdrop lingers and gets cut once the
+            // cover lands. fastExitFade gives it an explicit short fadeOut (via the seeked nav scope)
+            // so it drops out early instead of dragging down with the bounds. Full-size, behind the
+            // scaffold chrome too.
             //
-            // NOTE: with the real `surface` colour the dissolve is nearly invisible because the browse
-            // screen behind is also `surface`. To VERIFY the fade under a back-swipe, temporarily swap
-            // the line below for the magenta one — it should dissolve smoothly, not pop at ~80%:
-            // Box(modifier = Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Magenta))
-            Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface))
+            // NOTE: with the real `surface` colour the fade is subtle because the browse screen behind
+            // is also `surface`. To VERIFY it under a back-swipe, temporarily swap the line below for
+            // the magenta one — the magenta should vanish early, not linger and get cut at the end:
+            // Box(modifier = Modifier.fillMaxSize().fastExitFade().background(androidx.compose.ui.graphics.Color.Magenta))
+            Box(modifier = Modifier.fillMaxSize().fastExitFade().background(MaterialTheme.colorScheme.surface))
             PullToRefreshBox(
                 isRefreshing = isRefreshing,
                 onRefresh = viewModel::refresh,

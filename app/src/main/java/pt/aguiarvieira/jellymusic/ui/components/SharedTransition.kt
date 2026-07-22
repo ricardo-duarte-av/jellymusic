@@ -1,8 +1,10 @@
 package pt.aguiarvieira.jellymusic.ui.components
 
 import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.Composable
@@ -75,6 +77,27 @@ fun Modifier.albumContainerTransform(albumId: String): Modifier =
 @Composable
 fun Modifier.nowPlayingContainerTransform(): Modifier =
     containerTransform(NOW_PLAYING_CONTAINER_KEY)
+
+/**
+ * Fast exit fade for a full-bleed child of a container transform (e.g. the album screen's surface
+ * backdrop). A [containerTransform] lifts its content into the shared overlay and does not fade a
+ * full-bleed backdrop along with the shrinking bounds, so under a predictive-back gesture the
+ * backdrop lingers as a slowly shrinking opaque surface and only gets cut once the faster shared
+ * cover has landed. Declaring an explicit short [fadeOut] on the child via the nav
+ * [AnimatedVisibilityScope] — the transition predictive back actually seeks — drops the backdrop out
+ * early instead of dragging it down with the bounds. Enter is left instant so opening a screen is
+ * unaffected. Degrades to a plain modifier outside a nav destination (e.g. previews).
+ */
+@Composable
+fun Modifier.fastExitFade(durationMillis: Int = 90): Modifier {
+    val animScope = LocalNavAnimatedVisibilityScope.current ?: return this
+    return with(animScope) {
+        this@fastExitFade.animateEnterExit(
+            enter = EnterTransition.None,
+            exit = fadeOut(tween(durationMillis)),
+        )
+    }
+}
 
 /**
  * Marks this element as one half of a shared-element transition keyed by [key]. Applied to the same
