@@ -42,6 +42,11 @@ data class PlaybackUiState(
     val trackId: String? = null,
     val title: String = "",
     val artist: String = "",
+    val album: String? = null,
+    /** Album id of the current track, for navigating to its album. Null when unknown. */
+    val albumId: String? = null,
+    /** Artist id of the current track, for navigating to its artist. Null when unknown. */
+    val artistId: String? = null,
     val artworkUri: String? = null,
     val shuffleEnabled: Boolean = false,
     val repeatMode: RepeatMode = RepeatMode.OFF,
@@ -202,6 +207,8 @@ class PlaybackConnection @Inject constructor(
                         playbackSettings,
                         isLocal,
                         StreamSettingsExtras.gainDbFrom(item.mediaMetadata.extras),
+                        StreamSettingsExtras.albumIdFrom(item.mediaMetadata.extras),
+                        StreamSettingsExtras.artistIdFrom(item.mediaMetadata.extras),
                     ),
                 )
                 .build()
@@ -288,6 +295,9 @@ class PlaybackConnection @Inject constructor(
             trackId = c.currentMediaItem?.mediaId?.removePrefix("track/"),
             title = metadata.title?.toString().orEmpty(),
             artist = metadata.artist?.toString().orEmpty(),
+            album = metadata.albumTitle?.toString(),
+            albumId = StreamSettingsExtras.albumIdFrom(c.currentMediaItem?.mediaMetadata?.extras),
+            artistId = StreamSettingsExtras.artistIdFrom(c.currentMediaItem?.mediaMetadata?.extras),
             artworkUri = metadata.artworkUri?.toString(),
             shuffleEnabled = c.shuffleModeEnabled,
             repeatMode = when (c.repeatMode) {
@@ -340,6 +350,8 @@ class PlaybackConnection @Inject constructor(
                     title = md.title?.toString().orEmpty(),
                     artist = md.artist?.toString().orEmpty(),
                     album = md.albumTitle?.toString(),
+                    albumId = StreamSettingsExtras.albumIdFrom(md.extras),
+                    artistId = StreamSettingsExtras.artistIdFrom(md.extras),
                     artworkUrl = md.artworkUri?.toString(),
                     durationMs = md.durationMs,
                     normalizationGainDb = StreamSettingsExtras.gainDbFrom(md.extras),

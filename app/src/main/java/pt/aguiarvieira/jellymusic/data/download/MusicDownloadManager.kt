@@ -298,6 +298,7 @@ class MusicDownloadManager @Inject constructor(
             TrackDownloadEntity(
                 trackId = track.id,
                 albumId = albumId,
+                artistId = track.artistId,
                 title = track.name,
                 artist = track.artist,
                 album = track.album,

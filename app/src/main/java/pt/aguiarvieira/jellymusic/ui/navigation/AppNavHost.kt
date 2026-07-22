@@ -133,6 +133,8 @@ fun AppNavHost(
                 FullPlayerScreen(
                     onCollapse = { navController.popBackStack() },
                     onOpenSettings = { navController.navigateSingleTop(Routes.Settings) },
+                    onNavigateToAlbum = { id, name, art -> navController.navigateSingleTop(Routes.AlbumDetail(id, name, art)) },
+                    onNavigateToArtist = { id, name -> navController.navigateSingleTop(Routes.ArtistDetail(id, name)) },
                 )
             }
         }

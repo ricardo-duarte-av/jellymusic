@@ -12,6 +12,7 @@ import pt.aguiarvieira.jellymusic.domain.model.Track
 data class TrackDownloadEntity(
     @PrimaryKey val trackId: String,
     val albumId: String?,
+    val artistId: String? = null,
     val title: String,
     val artist: String?,
     val album: String?,
@@ -89,6 +90,7 @@ fun TrackDownloadEntity.toDomainTrack(): Track = Track(
     artist = artist,
     album = album,
     albumId = albumId,
+    artistId = artistId,
     discNumber = discNumber,
     trackNumber = trackNumber,
     durationMs = durationMs,

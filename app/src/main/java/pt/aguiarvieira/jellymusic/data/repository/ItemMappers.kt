@@ -49,6 +49,9 @@ internal fun BaseItemDto.toTrack(urlBuilder: StreamUrlBuilder) = Track(
     artist = artists?.firstOrNull() ?: albumArtist,
     album = album,
     albumId = albumId?.toString(),
+    // Prefer the track's own artist link; fall back to the album artist. Used to navigate from the
+    // now-playing screen to the artist detail screen.
+    artistId = (artistItems?.firstOrNull() ?: albumArtists?.firstOrNull())?.id?.toString(),
     // Jellyfin exposes the disc number as parentIndexNumber for audio tracks.
     discNumber = parentIndexNumber,
     trackNumber = indexNumber,

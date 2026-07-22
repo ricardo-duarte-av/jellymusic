@@ -81,6 +81,8 @@ import kotlin.math.abs
 fun FullPlayerScreen(
     onCollapse: () -> Unit,
     onOpenSettings: () -> Unit,
+    onNavigateToAlbum: (albumId: String, albumName: String, artworkUrl: String?) -> Unit,
+    onNavigateToArtist: (artistId: String, artistName: String) -> Unit,
     viewModel: PlaybackViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -151,13 +153,37 @@ fun FullPlayerScreen(
 
                 Spacer(Modifier.height(32.dp))
 
+                // Track title and album both jump to the album detail screen; artist jumps to the
+                // artist detail screen. Each is tappable only when the id is known.
+                val albumTarget = state.albumId
                 Text(
                     text = state.title,
                     style = MaterialTheme.typography.headlineSmallEmphasized,
                     textAlign = TextAlign.Center,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.clickableTo(
+                        enabled = albumTarget != null,
+                        onClick = { albumTarget?.let { onNavigateToAlbum(it, state.album.orEmpty(), state.artworkUri) } },
+                    ),
                 )
+                state.album?.takeIf { it.isNotBlank() }?.let { album ->
+                    Text(
+                        text = album,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .padding(top = 2.dp)
+                            .clickableTo(
+                                enabled = albumTarget != null,
+                                onClick = { albumTarget?.let { onNavigateToAlbum(it, album, state.artworkUri) } },
+                            ),
+                    )
+                }
+                val artistTarget = state.artistId
                 Text(
                     text = state.artist,
                     style = MaterialTheme.typography.titleMedium,
@@ -165,6 +191,12 @@ fun FullPlayerScreen(
                     textAlign = TextAlign.Center,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .padding(top = 2.dp)
+                        .clickableTo(
+                            enabled = artistTarget != null,
+                            onClick = { artistTarget?.let { onNavigateToArtist(it, state.artist) } },
+                        ),
                 )
                 // File quality: original details, "original → transcoded" when streaming transcode is on,
                 // or just the transcoded format when playing a downloaded transcoded file.
@@ -457,6 +489,23 @@ private fun AlbumColorBanner(modifier: Modifier = Modifier) {
         }
     }
 }
+
+/**
+ * Makes a now-playing metadata line tappable (rounded ripple) only when a navigation target is
+ * known; otherwise it stays plain text with no click affordance.
+ */
+@Composable
+private fun Modifier.clickableTo(enabled: Boolean, onClick: () -> Unit): Modifier =
+    if (enabled) {
+        then(
+            Modifier
+                .clip(MaterialTheme.shapes.small)
+                .clickable(onClick = onClick)
+                .padding(horizontal = 8.dp, vertical = 2.dp),
+        )
+    } else {
+        this
+    }
 
 private const val SEEK_SETTLE_GRACE_MS = 1_000L
 

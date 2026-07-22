@@ -98,13 +98,21 @@ object DatabaseModule {
         }
     }
 
+    // v11 stores each downloaded track's artistId so the now-playing screen can navigate to the
+    // artist while offline (existing rows keep NULL and simply aren't artist-linked).
+    private val MIGRATION_10_11 = object : Migration(10, 11) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE track_downloads ADD COLUMN artistId TEXT")
+        }
+    }
+
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): JellyMusicDatabase =
         Room.databaseBuilder(context, JellyMusicDatabase::class.java, "jellymusic.db")
             .addMigrations(
                 MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8,
-                MIGRATION_8_9, MIGRATION_9_10,
+                MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11,
             )
             .fallbackToDestructiveMigration(dropAllTables = true)
             .build()
