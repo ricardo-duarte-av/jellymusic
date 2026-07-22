@@ -142,7 +142,11 @@ fun AlbumDetailScreen(
         containerColor = Color.Transparent,
         // (1) No album name in the header — keeps space for the Settings action.
         topBar = {
+            // Scaffold chrome, so it's not in the container transform's overlay — predictive back
+            // would otherwise scale this opaque bar down as a lingering frame like the old backdrop.
+            // fastExitFade clears it as the gesture starts, matching the body.
             TopAppBar(
+                modifier = Modifier.fastExitFade(),
                 title = {},
                 navigationIcon = {
                     IconButton(onClick = onBack) {

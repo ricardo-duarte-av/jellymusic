@@ -16,6 +16,14 @@ data class ChangelogVersion(
 /** Newest first. Unreleased (version = null) always on top. */
 val CHANGELOG: List<ChangelogVersion> = listOf(
     ChangelogVersion(
+        version = "0.1.67",
+        date = "22/07/2026",
+        changes = listOf(
+            "The album screen's top bar now clears with the rest of the screen when back-swiping " +
+                "out, instead of lingering and shrinking on its own.",
+        ),
+    ),
+    ChangelogVersion(
         version = "0.1.66",
         date = "22/07/2026",
         changes = listOf(
