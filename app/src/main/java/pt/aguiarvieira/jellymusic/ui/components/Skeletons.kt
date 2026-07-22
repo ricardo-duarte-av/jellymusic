@@ -122,19 +122,19 @@ fun TrackRowSkeleton(modifier: Modifier = Modifier) {
 }
 
 /**
- * A non-scrolling grid of placeholder [item]s matching the real grid's [columns], used as the
- * loading state for the browse tabs.
+ * A non-scrolling grid of placeholder [item]s matching the real grid's [cells], used as the
+ * loading state for the browse tabs and the artist viewer.
  */
 @Composable
 fun GridSkeleton(
-    columns: Int,
+    cells: GridCells,
     modifier: Modifier = Modifier,
     count: Int = 9,
     item: @Composable () -> Unit,
 ) {
     SkeletonScreen {
         LazyVerticalGrid(
-            columns = GridCells.Fixed(columns),
+            columns = cells,
             modifier = modifier.fillMaxSize().padding(horizontal = 8.dp),
             userScrollEnabled = false,
         ) {
@@ -142,6 +142,15 @@ fun GridSkeleton(
         }
     }
 }
+
+/** [GridSkeleton] convenience for fixed-column grids. */
+@Composable
+fun GridSkeleton(
+    columns: Int,
+    modifier: Modifier = Modifier,
+    count: Int = 9,
+    item: @Composable () -> Unit,
+) = GridSkeleton(GridCells.Fixed(columns), modifier, count, item)
 
 /**
  * Placeholder matching the album viewer's `AlbumHeader`: centred title + artist lines, a pair of

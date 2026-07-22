@@ -72,8 +72,10 @@ import pt.aguiarvieira.jellymusic.domain.model.Track
 import pt.aguiarvieira.jellymusic.domain.model.TrackDownloadStatus
 import pt.aguiarvieira.jellymusic.ui.common.ContentState
 import pt.aguiarvieira.jellymusic.ui.components.AlbumCard
+import pt.aguiarvieira.jellymusic.ui.components.AlbumCardSkeleton
 import pt.aguiarvieira.jellymusic.ui.components.ArtworkImage
 import pt.aguiarvieira.jellymusic.ui.components.AlbumDetailSkeleton
+import pt.aguiarvieira.jellymusic.ui.components.GridSkeleton
 import pt.aguiarvieira.jellymusic.ui.components.albumArtSharedKey
 import pt.aguiarvieira.jellymusic.ui.components.albumContainerTransform
 import pt.aguiarvieira.jellymusic.ui.components.fastExitFade
@@ -807,7 +809,9 @@ private fun ArtistDetailContent(
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             when (albumsState) {
-                ContentState.Loading -> Centered { CircularProgressIndicator() }
+                ContentState.Loading -> GridSkeleton(
+                    cells = GridCells.Adaptive(minSize = 150.dp),
+                ) { AlbumCardSkeleton() }
                 is ContentState.Error -> Centered {
                     Text(albumsState.message, color = MaterialTheme.colorScheme.error)
                 }

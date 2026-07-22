@@ -21,6 +21,8 @@ val CHANGELOG: List<ChangelogVersion> = listOf(
         changes = listOf(
             "The album loading placeholder now shows a header outline where the title, artist and " +
                 "buttons will appear, so the track rows no longer sit directly under the cover.",
+            "Opening an artist now shows a grid of album placeholders while loading, instead of a " +
+                "spinner.",
         ),
     ),
     ChangelogVersion(
