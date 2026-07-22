@@ -134,6 +134,12 @@ fun AlbumDetailScreen(
     val heroArt = loadedArt ?: viewModel.heroArtworkUrl
     AlbumTheme(artworkUrl = heroArt) {
     Scaffold(
+        // Transparent so the Scaffold draws no opaque fill of its own: without this it defaults to an
+        // opaque colorScheme.background behind everything, which — being part of the destination root —
+        // is what predictive back scaled down as a lingering frame, underneath (and independent of)
+        // the fastExitFade backdrop. With it transparent, the backdrop below is the only fill and its
+        // fade actually reveals the browse grid.
+        containerColor = Color.Transparent,
         // (1) No album name in the header — keeps space for the Settings action.
         topBar = {
             TopAppBar(
