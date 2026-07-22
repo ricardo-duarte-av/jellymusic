@@ -1,16 +1,19 @@
 package pt.aguiarvieira.jellymusic.ui.components
 
 import androidx.compose.animation.AnimatedVisibilityScope
-import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 
 /**
@@ -80,23 +83,29 @@ fun Modifier.nowPlayingContainerTransform(): Modifier =
 
 /**
  * Fast exit fade for a full-bleed child of a container transform (e.g. the album screen's surface
- * backdrop). A [containerTransform] lifts its content into the shared overlay and does not fade a
- * full-bleed backdrop along with the shrinking bounds, so under a predictive-back gesture the
- * backdrop lingers as a slowly shrinking opaque surface and only gets cut once the faster shared
- * cover has landed. Declaring an explicit short [fadeOut] on the child via the nav
- * [AnimatedVisibilityScope] — the transition predictive back actually seeks — drops the backdrop out
- * early instead of dragging it down with the bounds. Enter is left instant so opening a screen is
- * unaffected. Degrades to a plain modifier outside a nav destination (e.g. previews).
+ * backdrop).
+ *
+ * Predictive back seeks the transition's *bounds* but not its exit *alpha*, and it disposes the
+ * popped screen before any exit spec ([fadeOut]/`animateEnterExit`) can play — so a spec-based fade
+ * never shows during the gesture, and the opaque backdrop just shrinks with the bounds (slower than
+ * the shared cover flies) and gets cut when the cover lands. So don't animate a spec that gets
+ * seeked and disposed: read the destination's target state and drive alpha with a *real-time*
+ * [animateFloatAsState] on its own clock. The instant a back gesture or the back button starts, the
+ * target leaves [EnterExitState.Visible] and the backdrop fades out over [durationMillis],
+ * regardless of seek or disposal, revealing whatever is beneath early. Entering keeps it opaque (the
+ * initial state is already Visible, so no fade-in). Degrades to a plain modifier outside a nav
+ * destination (e.g. previews).
  */
 @Composable
-fun Modifier.fastExitFade(durationMillis: Int = 90): Modifier {
+fun Modifier.fastExitFade(durationMillis: Int = 120): Modifier {
     val animScope = LocalNavAnimatedVisibilityScope.current ?: return this
-    return with(animScope) {
-        this@fastExitFade.animateEnterExit(
-            enter = EnterTransition.None,
-            exit = fadeOut(tween(durationMillis)),
-        )
-    }
+    val leaving = animScope.transition.targetState != EnterExitState.Visible
+    val alpha by animateFloatAsState(
+        targetValue = if (leaving) 0f else 1f,
+        animationSpec = tween(durationMillis),
+        label = "backdropExitAlpha",
+    )
+    return this.graphicsLayer { this.alpha = alpha }
 }
 
 /**

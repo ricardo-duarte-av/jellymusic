@@ -159,16 +159,10 @@ fun AlbumDetailScreen(
         // back) while the top bar and mini player — Scaffold chrome outside it — stay put.
         Box(modifier = Modifier.fillMaxSize().albumContainerTransform(viewModel.albumId)) {
             // The list backdrop (the surface seen behind/between the track and disc cards) lives as a
-            // child *inside* the container transform. The container's own bounds shrink it slower than
-            // the shared cover flies, so left to itself the backdrop lingers and gets cut once the
-            // cover lands. fastExitFade gives it an explicit short fadeOut (via the seeked nav scope)
-            // so it drops out early instead of dragging down with the bounds. Full-size, behind the
-            // scaffold chrome too.
-            //
-            // NOTE: with the real `surface` colour the fade is subtle because the browse screen behind
-            // is also `surface`. To VERIFY it under a back-swipe, temporarily swap the line below for
-            // the magenta one — the magenta should vanish early, not linger and get cut at the end:
-            // Box(modifier = Modifier.fillMaxSize().fastExitFade().background(androidx.compose.ui.graphics.Color.Magenta))
+            // child *inside* the container transform. fastExitFade clears it fast the moment a back
+            // gesture/button starts (real-time, not tied to the seeked-and-disposed exit spec) so it
+            // no longer lingers and get cut when the cover lands — revealing the browse grid beneath
+            // as the cover and cards morph into the card. Full-size, behind the scaffold chrome too.
             Box(modifier = Modifier.fillMaxSize().fastExitFade().background(MaterialTheme.colorScheme.surface))
             PullToRefreshBox(
                 isRefreshing = isRefreshing,
