@@ -49,6 +49,7 @@ class DownloadModelsTest {
         artist = "Artist",
         album = "Album",
         albumId = "a1",
+        artistId = "ar1",
         discNumber = 1,
         trackNumber = 1,
         durationMs = 1000,
