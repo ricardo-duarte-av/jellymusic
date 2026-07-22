@@ -23,6 +23,8 @@ val CHANGELOG: List<ChangelogVersion> = listOf(
                 "buttons will appear, so the track rows no longer sit directly under the cover.",
             "Opening an artist now shows a grid of album placeholders while loading, instead of a " +
                 "spinner.",
+            "Opening a playlist now shows cover, title and track-row placeholders while loading, " +
+                "instead of a spinner.",
         ),
     ),
     ChangelogVersion(

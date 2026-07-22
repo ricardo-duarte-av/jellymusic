@@ -33,7 +33,6 @@ import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -82,6 +81,7 @@ import pt.aguiarvieira.jellymusic.ui.components.fastExitFade
 import pt.aguiarvieira.jellymusic.ui.components.sharedElementArt
 import pt.aguiarvieira.jellymusic.ui.components.FavoriteMarker
 import pt.aguiarvieira.jellymusic.ui.components.FavoriteToggleButton
+import pt.aguiarvieira.jellymusic.ui.components.TrackListDetailSkeleton
 import pt.aguiarvieira.jellymusic.ui.components.TrackRow
 import pt.aguiarvieira.jellymusic.ui.components.trackMetaLine
 import pt.aguiarvieira.jellymusic.ui.feature.downloads.DownloadDialogs
@@ -693,7 +693,7 @@ private fun TrackListDetail(
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             when (tracksState) {
-                ContentState.Loading -> Centered { CircularProgressIndicator() }
+                ContentState.Loading -> TrackListDetailSkeleton(showTrackArtwork = showTrackArtwork)
                 is ContentState.Error -> Centered {
                     Text(tracksState.message, color = MaterialTheme.colorScheme.error)
                 }

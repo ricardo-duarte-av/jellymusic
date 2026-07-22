@@ -192,3 +192,60 @@ fun AlbumDetailSkeleton(modifier: Modifier = Modifier, trackCount: Int = 8) {
         }
     }
 }
+
+/** Placeholder matching a `ListItem` [TrackRow]: leading art/number, title/subtitle, duration. */
+@Composable
+private fun TrackListItemSkeleton(showArtwork: Boolean) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (showArtwork) {
+            SkeletonBox(Modifier.size(48.dp))
+        } else {
+            SkeletonBox(Modifier.size(20.dp), shape = CircleShape)
+        }
+        Spacer(Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            SkeletonBox(Modifier.fillMaxWidth(0.7f).height(13.dp))
+            Spacer(Modifier.height(6.dp))
+            SkeletonBox(Modifier.fillMaxWidth(0.45f).height(11.dp))
+        }
+        Spacer(Modifier.width(12.dp))
+        SkeletonBox(Modifier.width(26.dp).height(11.dp))
+    }
+}
+
+/**
+ * Loading state for the playlist / track-list viewer: a centred hero (square cover, title and
+ * count lines, two action buttons) followed by a column of [TrackListItemSkeleton]s, pulsing in
+ * sync under one [SkeletonScreen].
+ */
+@Composable
+fun TrackListDetailSkeleton(
+    modifier: Modifier = Modifier,
+    showTrackArtwork: Boolean = false,
+    trackCount: Int = 8,
+) {
+    SkeletonScreen {
+        Column(modifier = modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                SkeletonBox(Modifier.size(200.dp), shape = MaterialTheme.shapes.extraLarge)
+                Spacer(Modifier.height(16.dp))
+                SkeletonBox(Modifier.fillMaxWidth(0.6f).height(26.dp))
+                Spacer(Modifier.height(8.dp))
+                SkeletonBox(Modifier.fillMaxWidth(0.25f).height(11.dp))
+                Spacer(Modifier.height(16.dp))
+                Row {
+                    SkeletonBox(Modifier.width(96.dp).height(40.dp), shape = CircleShape)
+                    Spacer(Modifier.width(12.dp))
+                    SkeletonBox(Modifier.width(96.dp).height(40.dp), shape = CircleShape)
+                }
+            }
+            repeat(trackCount) { TrackListItemSkeleton(showTrackArtwork) }
+        }
+    }
+}
