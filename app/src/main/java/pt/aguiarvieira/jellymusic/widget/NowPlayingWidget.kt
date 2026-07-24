@@ -97,6 +97,11 @@ private val CORNER_THUMB = 120.dp
 /** Bounded artwork size keeps the widget under the RemoteViews memory limit. */
 private const val ARTWORK_PX = 512
 
+/** Frosted-background blur: working resolution + box-blur radius/pass count (see [NowPlayingWidget.blurArtwork]). */
+private const val BLUR_WORK_PX = 128
+private const val BLUR_RADIUS = 8
+private const val BLUR_PASSES = 3
+
 @UnstableApi
 class NowPlayingWidget : GlanceAppWidget() {
 
@@ -149,12 +154,62 @@ class NowPlayingWidget : GlanceAppWidget() {
         }
     }
 
-    /** Cheap frosted blur for the tall-widget background: collapse the cover to a tiny bitmap so
-     * detail is destroyed, then upscale with bilinear filtering for a smooth wash of the album's
-     * colours. API-agnostic (no RenderScript / RenderEffect), and the result stays small. */
+    /** Frosted blur for the tall-widget background. Downscale to a small working size (cheap, and
+     * already drops fine detail), then run a few separable box-blur passes — three boxes approximate
+     * a Gaussian — for a smooth wash of the album's colours without the blocky low-frequency banding
+     * a bilinear-upscaled 24px thumbnail produced. API-agnostic (no RenderScript / RenderEffect, so
+     * it works on API 29+), and the result stays small. The Image view upscales the wash to fill. */
     private fun blurArtwork(bitmap: Bitmap): Bitmap {
-        val tiny = Bitmap.createScaledBitmap(bitmap, 24, 24, true)
-        return Bitmap.createScaledBitmap(tiny, 256, 256, true)
+        val work = Bitmap.createScaledBitmap(bitmap, BLUR_WORK_PX, BLUR_WORK_PX, true)
+        val out = if (work.isMutable) work else work.copy(Bitmap.Config.ARGB_8888, true)
+        boxBlur(out, radius = BLUR_RADIUS, passes = BLUR_PASSES)
+        return out
+    }
+
+    /** In-place separable box blur: [passes] horizontal+vertical sweeps over the pixel buffer, each
+     *  averaging a (2·[radius]+1)-wide window via a running sum so cost is independent of radius. */
+    private fun boxBlur(bitmap: Bitmap, radius: Int, passes: Int) {
+        val w = bitmap.width
+        val h = bitmap.height
+        val a = IntArray(w * h)
+        val b = IntArray(w * h)
+        bitmap.getPixels(a, 0, w, 0, 0, w, h)
+        repeat(passes) {
+            boxBlurPass(a, b, w, h, radius, horizontal = true)
+            boxBlurPass(b, a, h, w, radius, horizontal = false)
+        }
+        bitmap.setPixels(a, 0, w, 0, 0, w, h)
+    }
+
+    /**
+     * One box-blur sweep, reading [src] and writing [dst]. For [horizontal] sweeps [len] is the row
+     * width and [lines] the row count; for vertical sweeps they swap (columns walked with a stride),
+     * which lets the same running-sum loop serve both directions. Edge samples are clamped.
+     */
+    private fun boxBlurPass(src: IntArray, dst: IntArray, len: Int, lines: Int, r: Int, horizontal: Boolean) {
+        val div = r * 2 + 1
+        for (line in 0 until lines) {
+            // Horizontal: element i sits at line*len + i (stride 1). Vertical: at i*len + line
+            // (stride len). Fold that into a base + step so one loop handles both.
+            val base = if (horizontal) line * len else line
+            val step = if (horizontal) 1 else len
+            var sa = 0; var sr = 0; var sg = 0; var sb = 0
+            for (i in -r..r) {
+                val c = src[base + i.coerceIn(0, len - 1) * step]
+                sa += (c ushr 24) and 0xff; sr += (c ushr 16) and 0xff
+                sg += (c ushr 8) and 0xff; sb += c and 0xff
+            }
+            for (i in 0 until len) {
+                dst[base + i * step] =
+                    ((sa / div) shl 24) or ((sr / div) shl 16) or ((sg / div) shl 8) or (sb / div)
+                val add = src[base + (i + r + 1).coerceIn(0, len - 1) * step]
+                val rem = src[base + (i - r).coerceIn(0, len - 1) * step]
+                sa += ((add ushr 24) and 0xff) - ((rem ushr 24) and 0xff)
+                sr += ((add ushr 16) and 0xff) - ((rem ushr 16) and 0xff)
+                sg += ((add ushr 8) and 0xff) - ((rem ushr 8) and 0xff)
+                sb += (add and 0xff) - (rem and 0xff)
+            }
+        }
     }
 
     /**
@@ -281,7 +336,7 @@ private fun WidgetBody(
         when {
             !data.hasMedia -> EmptyState(compact, openPlayer)
             compact -> CompactContent(data, showToggles, showIcon, iconColors, openPlayer)
-            else -> FullContent(data, showToggles, openPlayer)
+            else -> FullContent(data, showToggles, iconColors, openPlayer)
         }
 
         // Tall layouts pin the sharp cover thumbnail to the top-right, with the app icon badged on
@@ -344,7 +399,7 @@ private fun AppIcon(iconColors: IconColors, size: Dp) {
 /** Tall layout: title/artist stacked at the bottom with the transport row beneath. */
 @Composable
 @UnstableApi
-private fun FullContent(data: NowPlayingWidgetData, showToggles: Boolean, openPlayer: Action) {
+private fun FullContent(data: NowPlayingWidgetData, showToggles: Boolean, iconColors: IconColors, openPlayer: Action) {
     Column(
         modifier = GlanceModifier.fillMaxSize().padding(16.dp),
         verticalAlignment = Alignment.Vertical.Bottom,
@@ -362,7 +417,7 @@ private fun FullContent(data: NowPlayingWidgetData, showToggles: Boolean, openPl
             modifier = GlanceModifier.clickable(openPlayer),
         )
         Spacer(GlanceModifier.height(10.dp))
-        Controls(data, showToggles, compact = false)
+        Controls(data, showToggles, iconColors, compact = false)
     }
 }
 
@@ -393,7 +448,7 @@ private fun CompactContent(
             )
         }
         Spacer(GlanceModifier.width(8.dp))
-        Controls(data, showToggles, compact = true)
+        Controls(data, showToggles, iconColors, compact = true)
         // Single-row form has no top corner, so the icon goes inline at the end (only when wide
         // enough — a 4x1; a 3x1 omits it entirely).
         if (showIcon) {
@@ -426,7 +481,7 @@ private fun EmptyState(compact: Boolean, openPlayer: Action) {
 
 @Composable
 @UnstableApi
-private fun Controls(data: NowPlayingWidgetData, showToggles: Boolean, compact: Boolean) {
+private fun Controls(data: NowPlayingWidgetData, showToggles: Boolean, iconColors: IconColors, compact: Boolean) {
     val iconSize = if (compact) 34.dp else 40.dp
     val playSize = if (compact) 40.dp else 48.dp
     val gap = if (compact) 2.dp else 6.dp
@@ -436,7 +491,7 @@ private fun Controls(data: NowPlayingWidgetData, showToggles: Boolean, compact: 
                 res = R.drawable.ic_widget_shuffle,
                 onClick = actionRunCallback<ToggleShuffleAction>(),
                 active = data.shuffleEnabled,
-                highlightWhenActive = true,
+                activeColor = iconColors.background,
                 size = iconSize,
             )
             Spacer(GlanceModifier.width(gap))
@@ -456,7 +511,7 @@ private fun Controls(data: NowPlayingWidgetData, showToggles: Boolean, compact: 
                 res = if (data.repeatMode == Player.REPEAT_MODE_ONE) R.drawable.ic_widget_repeat_one else R.drawable.ic_widget_repeat,
                 onClick = actionRunCallback<CycleRepeatAction>(),
                 active = data.repeatMode != Player.REPEAT_MODE_OFF,
-                highlightWhenActive = true,
+                activeColor = iconColors.background,
                 size = iconSize,
             )
         }
@@ -468,26 +523,25 @@ private fun IconButton(
     res: Int,
     onClick: Action,
     active: Boolean = true,
-    highlightWhenActive: Boolean = false,
+    activeColor: Color? = null,
     size: Dp = 40.dp,
 ) {
+    // Toggles (shuffle/repeat) pass an [activeColor] — the album's M3 accent, matching the app-icon
+    // disc — and tint the glyph with it when engaged; off reads as dimmed white. Transport buttons
+    // pass no colour and stay plain white. (An engaged toggle used to sit on a translucent disc.)
+    val tint = when {
+        active && activeColor != null -> activeColor
+        active -> Color.White
+        else -> Color(0x80FFFFFF)
+    }
     Box(
         modifier = GlanceModifier.size(size).clickable(onClick),
         contentAlignment = Alignment.Center,
     ) {
-        // Subtle translucent disc behind an engaged toggle (shuffle/repeat) so "on" reads clearly.
-        if (highlightWhenActive && active) {
-            Box(
-                modifier = GlanceModifier
-                    .size(size)
-                    .background(ImageProvider(R.drawable.widget_highlight)),
-                content = {},
-            )
-        }
         Image(
             provider = ImageProvider(res),
             contentDescription = null,
-            colorFilter = ColorFilter.tint(ColorProvider(if (active) Color.White else Color(0x80FFFFFF))),
+            colorFilter = ColorFilter.tint(ColorProvider(tint)),
             modifier = GlanceModifier.size(size).padding(6.dp),
         )
     }
