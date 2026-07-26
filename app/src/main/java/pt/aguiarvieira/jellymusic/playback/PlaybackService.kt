@@ -42,6 +42,7 @@ import kotlinx.coroutines.guava.future
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.jellyfin.sdk.model.api.PlayMethod
+import pt.aguiarvieira.jellymusic.BuildConfig
 import pt.aguiarvieira.jellymusic.MainActivity
 import pt.aguiarvieira.jellymusic.data.settings.QueueStore
 import pt.aguiarvieira.jellymusic.data.settings.SettingsStore
@@ -198,13 +199,17 @@ class PlaybackService : MediaLibraryService() {
     }
 
     /**
-     * DIAGNOSTIC (temporary): appends a timestamped line to <externalFilesDir>/underruns.log so
-     * underruns can be captured with the device **fully disconnected** — no live adb session, which
+     * DIAGNOSTIC (debug builds only): appends a timestamped line to <externalFilesDir>/underruns.log
+     * so underruns can be captured with the device **fully disconnected** — no live adb session, which
      * keeps the phone charging/awake and would mask the very low-power state we're hunting. Reproduce
      * unplugged, then pull afterwards (debug build id has the `.debug` suffix):
      *   adb pull /sdcard/Android/data/pt.aguiarvieira.jellymusic.debug/files/underruns.log
+     *
+     * The log grows without bound, so it must never run in release — [underrunLogger] is only
+     * attached in debug builds (see [buildPlayer]) and this is a second guard on the write itself.
      */
     private fun recordDiagnostic(line: String) {
+        if (!BuildConfig.DEBUG) return
         serviceScope.launch(Dispatchers.IO) {
             runCatching {
                 val stamp = java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.US)
@@ -362,8 +367,24 @@ class PlaybackService : MediaLibraryService() {
                 it.addListener(modeListener)
                 it.addListener(widgetListener)
                 it.addListener(gainListener)
-                it.addAnalyticsListener(underrunLogger)
+                // Diagnostic only — see [underrunLogger]. Keep it out of release builds entirely.
+                if (BuildConfig.DEBUG) it.addAnalyticsListener(underrunLogger)
             }
+    }
+
+    /**
+     * Detaches every listener [buildPlayer] attached. All of them read the `player` *field*, which by
+     * the time a replaced player is released already points at its successor — so any late callback
+     * from the dying player would be applied to the live one (e.g. an `onIsPlayingChanged(false)`
+     * cancelling the new player's progress heartbeat). Cheap to do, and it removes the dependency on
+     * exactly what media3 dispatches during `release()`.
+     */
+    private fun detachListeners(target: ExoPlayer) {
+        target.removeListener(reporterListener)
+        target.removeListener(modeListener)
+        target.removeListener(widgetListener)
+        target.removeListener(gainListener)
+        if (BuildConfig.DEBUG) target.removeAnalyticsListener(underrunLogger)
     }
 
     /**
@@ -392,6 +413,7 @@ class PlaybackService : MediaLibraryService() {
         player = fresh
         usingFloatOutput = floatOutput
         mediaSession.setPlayer(fresh)
+        detachListeners(old)
         old.release()
     }
 

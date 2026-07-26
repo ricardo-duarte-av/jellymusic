@@ -92,6 +92,13 @@ interface DownloadDao {
         now: Long,
     )
 
+    /**
+     * Every track id filed under an album, in any state. Removing an album must clean up partially
+     * downloaded tracks too — [completedTracksForAlbum] would leave their `.part` files on disk.
+     */
+    @Query("SELECT trackId FROM track_downloads WHERE albumId = :albumId")
+    suspend fun trackIdsForAlbum(albumId: String): List<String>
+
     @Query("DELETE FROM track_downloads WHERE trackId = :trackId")
     suspend fun deleteTrack(trackId: String)
 

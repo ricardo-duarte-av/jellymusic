@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Backup rules for API 29-30 (see data_extraction_rules.xml for API 31+; the two must stay in sync).
+
+  The critical exclusion is the credential store. CredentialStore keeps the Jellyfin access token in
+  EncryptedSharedPreferences, whose master key lives in the Android Keystore and is NOT backed up.
+  Restoring the encrypted prefs file onto a device that has no matching key leaves a file that cannot
+  be decrypted, and EncryptedSharedPreferences.create() throws on first access — which happens during
+  session restore on the startup path, i.e. the app would crash on first launch after a restore.
+  Excluding it means the user simply signs in again.
+
+  The rest is excluded because it is either session-scoped, large, or holds absolute file paths:
+  - the play queue belongs to a signed-in session,
+  - jellymusic.db stores absolute paths into files/downloads and files/artwork,
+  - those two directories are bulk media that should never ride a cloud backup.
+
+  Deliberately still backed up: jellymusic_settings (library choice, audio quality, ReplayGain,
+  sort order) — small, portable, and the part worth carrying to a new device.
+-->
+<full-backup-content>
+    <exclude domain="sharedpref" path="jellymusic_credentials.xml" />
+    <exclude domain="file" path="datastore/jellymusic_queue.preferences_pb" />
+    <exclude domain="file" path="downloads" />
+    <exclude domain="file" path="artwork" />
+    <exclude domain="database" path="jellymusic.db" />
+</full-backup-content>
