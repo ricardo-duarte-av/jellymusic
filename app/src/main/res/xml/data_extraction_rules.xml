@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Backup / device-transfer rules for API 31+ (see backup_rules.xml for API 29-30; keep them in sync).
+
+  Same exclusions for both transports, and for the same reasons — see backup_rules.xml for the full
+  rationale. In short: the EncryptedSharedPreferences credential store cannot survive a restore
+  (its Keystore master key doesn't travel, so the file becomes undecryptable and crashes startup),
+  the queue is session-scoped, and the download database plus its two media directories are bulk data
+  full of absolute paths. Downloads are re-fetched on the new device rather than restored half-wired:
+  excluding the database and the files together keeps that state coherent.
+
+  Deliberately still backed up: jellymusic_settings (library choice, audio quality, ReplayGain,
+  sort order).
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="jellymusic_credentials.xml" />
+        <exclude domain="file" path="datastore/jellymusic_queue.preferences_pb" />
+        <exclude domain="file" path="downloads" />
+        <exclude domain="file" path="artwork" />
+        <exclude domain="database" path="jellymusic.db" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="jellymusic_credentials.xml" />
+        <exclude domain="file" path="datastore/jellymusic_queue.preferences_pb" />
+        <exclude domain="file" path="downloads" />
+        <exclude domain="file" path="artwork" />
+        <exclude domain="database" path="jellymusic.db" />
+    </device-transfer>
+</data-extraction-rules>

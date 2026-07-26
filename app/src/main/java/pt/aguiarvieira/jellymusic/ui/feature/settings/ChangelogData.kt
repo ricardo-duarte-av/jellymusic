@@ -16,6 +16,23 @@ data class ChangelogVersion(
 /** Newest first. Unreleased (version = null) always on top. */
 val CHANGELOG: List<ChangelogVersion> = listOf(
     ChangelogVersion(
+        version = null,
+        date = null,
+        changes = listOf(
+            "Restoring the app from a phone backup no longer leaves it unable to open — it now asks " +
+                "you to sign in again instead.",
+            "Downloads no longer slow the rest of the app down while they run.",
+            "Removing a downloaded album or playlist is now much faster, and no longer leaves " +
+                "partially downloaded files behind.",
+            "A download that can't be saved properly is now reported as failed instead of showing as " +
+                "complete and silently streaming.",
+            "A downloaded album whose cover failed to save now re-downloads it, instead of showing a " +
+                "placeholder for good.",
+            "Starting a long playlist is now quicker.",
+            "The app no longer closes if playback can't be started.",
+        ),
+    ),
+    ChangelogVersion(
         version = "0.1.71",
         date = "24/07/2026",
         changes = listOf(

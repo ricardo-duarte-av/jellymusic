@@ -53,21 +53,31 @@ class MusicDownloadManager @Inject constructor(
         get() = File(context.filesDir, "downloads").apply { mkdirs() }
 
     init {
-        // Keep the completed-download map current for playback resolution.
+        // Keep the completed-download map current for playback resolution. The on-disk check happens
+        // here, on IO, and only when the row set changes — see [localFileUri].
         scope.launch {
             dao.observeCompletedTracks().collect { rows ->
-                completedRows = rows.filter { it.filePath != null }.associateBy { it.trackId }
+                completedRows = rows
+                    .filter { row -> row.filePath?.let { File(it).exists() } == true }
+                    .associateBy { it.trackId }
             }
         }
         // Pick up anything left pending by a previous session.
         scheduleWork()
     }
 
-    /** Absolute `file://` URI for a completed, still-present download, else null. */
-    fun localFileUri(trackId: String): String? {
-        val path = completedRows[trackId]?.filePath ?: return null
-        return if (File(path).exists()) "file://$path" else null
-    }
+    /**
+     * Absolute `file://` URI for a completed, still-present download, else null.
+     *
+     * A pure in-memory lookup: this sits on the hot path of [MediaItemTree.trackMediaItem], which
+     * runs once per track on the main thread when a queue is built, so a 300-track playlist used to
+     * mean 300 blocking `File.exists()` stats before the first note. Existence is instead verified on
+     * IO when [completedRows] is rebuilt. The window where a file vanishes without the DB row going
+     * with it is only reachable by something outside the app deleting it, and the cost of being
+     * wrong is a failed load that falls back to streaming.
+     */
+    fun localFileUri(trackId: String): String? =
+        completedRows[trackId]?.filePath?.let { "file://$it" }
 
     /** The actual format of a completed local download (for reporting what's being played), else null. */
     fun localFormat(trackId: String): StreamSettings? {
@@ -249,8 +259,11 @@ class MusicDownloadManager @Inject constructor(
     fun removeAlbum(albumId: String) {
         scope.launch {
             dao.deleteAlbum(albumId)
-            // Delete every track file we hold for this album, then drop the rows.
-            dao.completedTracks().filter { it.albumId == albumId }.forEach { deleteFilesFor(it.trackId) }
+            // Delete every track file we hold for this album, then drop the rows. Scoped by the
+            // indexed albumId query rather than by loading the whole completed-download table and
+            // filtering in memory, and covering every state so an album removed mid-download doesn't
+            // strand its `.part` files.
+            deleteFilesFor(dao.trackIdsForAlbum(albumId))
             dao.deleteTracksForAlbum(albumId)
             artworkCache.delete(albumId)
         }
@@ -269,14 +282,14 @@ class MusicDownloadManager @Inject constructor(
             val albumIds = dao.downloadedAlbumIds().toSet()
             // Tracks still claimed by another remaining playlist group.
             val stillReferenced = dao.playlists().flatMap { it.trackIds }.toSet()
-            entity.trackIds.forEach { trackId ->
-                val track = dao.getTrack(trackId) ?: return@forEach
+            val orphaned = entity.trackIds.filter { trackId ->
+                val track = dao.getTrack(trackId) ?: return@filter false
                 val inDownloadedAlbum = track.albumId != null && track.albumId in albumIds
-                if (!inDownloadedAlbum && trackId !in stillReferenced) {
-                    deleteFilesFor(trackId)
-                    dao.deleteTrack(trackId)
-                }
+                !inDownloadedAlbum && trackId !in stillReferenced
             }
+            // One directory scan for the whole group rather than one per track.
+            deleteFilesFor(orphaned)
+            orphaned.forEach { dao.deleteTrack(it) }
         }
     }
 
@@ -348,7 +361,21 @@ class MusicDownloadManager @Inject constructor(
             .enqueueUniqueWork(DownloadWorker.FAVORITE_WORK_NAME, ExistingWorkPolicy.REPLACE, request)
     }
 
-    private fun deleteFilesFor(trackId: String) {
-        downloadsDir.listFiles { f -> f.name.startsWith("$trackId.") }?.forEach { it.delete() }
+    private fun deleteFilesFor(trackId: String) = deleteFilesFor(listOf(trackId))
+
+    /**
+     * Deletes every file belonging to [trackIds] (the audio file under whichever extension it landed
+     * on, plus any leftover `.part`) in a single pass over the downloads directory.
+     *
+     * The per-track form used to scan the whole directory each time, so removing an album or playlist
+     * was one full listing per member — quadratic in the size of the download library.
+     */
+    private fun deleteFilesFor(trackIds: Collection<String>) {
+        if (trackIds.isEmpty()) return
+        val targets = trackIds.toSet()
+        downloadsDir.listFiles()?.forEach { file ->
+            // Files are named "<trackId>.<ext>"; match on the id ahead of the first dot.
+            if (file.name.substringBefore('.') in targets) file.delete()
+        }
     }
 }

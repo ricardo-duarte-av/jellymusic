@@ -3,6 +3,7 @@ package pt.aguiarvieira.jellymusic.data.download
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import pt.aguiarvieira.jellymusic.core.util.Logx
@@ -58,21 +59,18 @@ class DownloadProcessor @Inject constructor(
         }
     }
 
-    private suspend fun process(entity: TrackDownloadEntity) {
-        val now = System.currentTimeMillis()
-        val settings = if (entity.transcoded) {
-            StreamSettings(
-                transcode = true,
-                codec = entity.codec?.let { runCatching { AudioCodec.valueOf(it) }.getOrNull() } ?: AudioCodec.OPUS,
-                maxBitrateKbps = entity.bitrateKbps ?: 320,
-            )
-        } else {
-            StreamSettings(transcode = false)
-        }
+    /**
+     * Downloads one track. Every step here blocks — the HTTP read, the file write, the Room writes —
+     * and [DownloadWorker] runs `doWork` on `Dispatchers.Default` (CoroutineWorker's default), which
+     * is the CPU-bound pool shared with the rest of the app. Confine the whole thing to IO so a
+     * download can't occupy a Default worker thread for the length of a file.
+     */
+    private suspend fun process(entity: TrackDownloadEntity): Unit = withContext(Dispatchers.IO) {
+        val settings = settingsFor(entity)
         val url = urlBuilder.audioStreamUrl(entity.trackId, settings)
         if (url == null) {
-            dao.updateProgress(entity.trackId, DownloadState.FAILED.name, 0, 0, null, now)
-            return
+            dao.updateProgress(entity.trackId, DownloadState.FAILED.name, 0, 0, null, System.currentTimeMillis())
+            return@withContext
         }
 
         val ext = if (entity.transcoded) settings.codec.container else "audio"
@@ -86,42 +84,19 @@ class DownloadProcessor @Inject constructor(
         }
         try {
             val total = connection.contentLengthLong.coerceAtLeast(0L)
-            dao.updateProgress(entity.trackId, DownloadState.DOWNLOADING.name, 0, total, null, now)
+            dao.updateProgress(
+                entity.trackId, DownloadState.DOWNLOADING.name, 0, total, null, System.currentTimeMillis(),
+            )
 
-            connection.inputStream.use { input ->
-                partFile.outputStream().use { output ->
-                    val buffer = ByteArray(BUFFER_SIZE)
-                    var written = 0L
-                    var lastEmit = System.currentTimeMillis()
-                    while (true) {
-                        // Bail out if the user removed this download mid-flight.
-                        if (dao.getTrack(entity.trackId) == null) {
-                            partFile.delete()
-                            return
-                        }
-                        val read = input.read(buffer)
-                        if (read < 0) break
-                        output.write(buffer, 0, read)
-                        written += read
-                        val nowMs = System.currentTimeMillis()
-                        if (nowMs - lastEmit >= PROGRESS_EMIT_INTERVAL_MS) {
-                            dao.updateProgress(entity.trackId, DownloadState.DOWNLOADING.name, written, total, null, nowMs)
-                            lastEmit = nowMs
-                        }
-                    }
-                    output.flush()
-                    if (outFile.exists()) outFile.delete()
-                    partFile.renameTo(outFile)
-                    dao.updateProgress(
-                        entity.trackId,
-                        DownloadState.COMPLETED.name,
-                        written,
-                        if (total > 0) total else written,
-                        outFile.absolutePath,
-                        System.currentTimeMillis(),
-                    )
-                }
+            val written = connection.inputStream.use { input ->
+                partFile.outputStream().use { output -> copyTracking(entity, input, output, total) }
             }
+            if (written == null) {
+                // Removed by the user mid-flight; its row is already gone, so just drop the scratch file.
+                partFile.delete()
+                return@withContext
+            }
+            publish(entity, partFile, outFile, written, total)
         } catch (c: CancellationException) {
             // A stopped worker (execution-time limit / lost constraints) cancels the coroutine
             // mid-download; re-queue the track so a later run resumes it. Persist under NonCancellable
@@ -140,5 +115,79 @@ class DownloadProcessor @Inject constructor(
         } finally {
             connection.disconnect()
         }
+    }
+
+    /** The format a download was requested in — the transcode settings frozen onto its row, or direct play. */
+    private fun settingsFor(entity: TrackDownloadEntity): StreamSettings =
+        if (entity.transcoded) {
+            StreamSettings(
+                transcode = true,
+                codec = entity.codec?.let { runCatching { AudioCodec.valueOf(it) }.getOrNull() } ?: AudioCodec.OPUS,
+                maxBitrateKbps = entity.bitrateKbps ?: 320,
+            )
+        } else {
+            StreamSettings(transcode = false)
+        }
+
+    /**
+     * Streams [input] into [output], publishing progress to Room on a [PROGRESS_EMIT_INTERVAL_MS]
+     * tick. Returns the number of bytes written, or null if the user removed the download mid-flight.
+     *
+     * The progress write and the "was this cancelled?" check deliberately share one tick. Both used to
+     * run per 64KB buffer, which meant a SQLite query for every chunk — hundreds for a single FLAC.
+     * At 300ms the abort still feels instant while costing a fraction of the queries.
+     */
+    private suspend fun copyTracking(
+        entity: TrackDownloadEntity,
+        input: java.io.InputStream,
+        output: java.io.OutputStream,
+        total: Long,
+    ): Long? {
+        val buffer = ByteArray(BUFFER_SIZE)
+        var written = 0L
+        var lastEmit = System.currentTimeMillis()
+        var read = input.read(buffer)
+        while (read >= 0) {
+            output.write(buffer, 0, read)
+            written += read
+            val nowMs = System.currentTimeMillis()
+            if (nowMs - lastEmit >= PROGRESS_EMIT_INTERVAL_MS) {
+                if (dao.getTrack(entity.trackId) == null) return null
+                dao.updateProgress(entity.trackId, DownloadState.DOWNLOADING.name, written, total, null, nowMs)
+                lastEmit = nowMs
+            }
+            read = input.read(buffer)
+        }
+        output.flush()
+        return written
+    }
+
+    /**
+     * Moves the finished scratch file into its final name and marks the row COMPLETED.
+     *
+     * The rename must be checked: claiming COMPLETED after a rename that didn't happen persists a
+     * filePath resolving to nothing, and the track would render as downloaded forever while silently
+     * streaming instead. Failing here surfaces as an ordinary per-track failure.
+     */
+    private suspend fun publish(
+        entity: TrackDownloadEntity,
+        partFile: File,
+        outFile: File,
+        written: Long,
+        total: Long,
+    ) {
+        if (outFile.exists()) outFile.delete()
+        if (!partFile.renameTo(outFile)) {
+            partFile.delete()
+            error("Could not move ${partFile.name} into place as ${outFile.name}")
+        }
+        dao.updateProgress(
+            entity.trackId,
+            DownloadState.COMPLETED.name,
+            written,
+            if (total > 0) total else written,
+            outFile.absolutePath,
+            System.currentTimeMillis(),
+        )
     }
 }

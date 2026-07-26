@@ -2,6 +2,7 @@ package pt.aguiarvieira.jellymusic.playback
 
 import android.content.ComponentName
 import android.content.Context
+import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
@@ -133,9 +134,18 @@ class PlaybackConnection @Inject constructor(
         val future = MediaController.Builder(context, token).buildAsync()
         future.addListener(
             {
-                controller = future.get().apply { addListener(listener) }
-                updateState()
-                restoreQueueIfEmpty()
+                // This runs on the main thread, so a failed connection must not propagate: future.get()
+                // rethrows the failure as an ExecutionException out of a bare Runnable, which is an
+                // uncaught main-thread exception. The service can genuinely fail to bind (background
+                // start restrictions, ForegroundServiceStartNotAllowedException), and every method here
+                // already no-ops on a null controller — so degrade to "no playback" instead of crashing.
+                runCatching { future.get() }
+                    .onSuccess {
+                        controller = it.apply { addListener(listener) }
+                        updateState()
+                        restoreQueueIfEmpty()
+                    }
+                    .onFailure { Log.w(TAG, "MediaController failed to connect; playback unavailable", it) }
             },
             ContextCompat.getMainExecutor(context),
         )
@@ -375,6 +385,10 @@ class PlaybackConnection @Inject constructor(
             c.prepare()
             // Leave paused; the user presses play to resume.
         }
+    }
+
+    private companion object {
+        const val TAG = "PlaybackConnection"
     }
 
     private fun rebuildQueue(c: MediaController) {

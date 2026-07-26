@@ -30,7 +30,15 @@ class ArtworkCache @Inject constructor(
     suspend fun cache(itemId: String, remoteUrl: String?): String? = withContext(Dispatchers.IO) {
         if (remoteUrl.isNullOrBlank()) return@withContext null
         val out = fileFor(itemId)
-        if (out.exists()) return@withContext out.absolutePath
+        // A non-empty file is a real cover; a zero-length one is the debris of an interrupted write
+        // and must not be treated as a hit, or the item would show a broken cover forever (this file
+        // path is baked into artworkPath in Room and rendered as file://…, so nothing else would ever
+        // re-fetch it). Drop it and download again.
+        if (out.exists()) {
+            if (out.length() > 0) return@withContext out.absolutePath
+            out.delete()
+        }
+        val tmp = File(dir, "$itemId.tmp")
         runCatching {
             val connection = (URL(remoteUrl).openConnection() as HttpURLConnection).apply {
                 connectTimeout = 15_000
@@ -38,14 +46,19 @@ class ArtworkCache @Inject constructor(
                 instanceFollowRedirects = true
             }
             try {
-                val tmp = File(dir, "$itemId.tmp")
                 connection.inputStream.use { input -> tmp.outputStream().use { input.copyTo(it) } }
                 if (out.exists()) out.delete()
-                tmp.renameTo(out)
+                // Report success only when the cover is in place under its final name — returning a
+                // path for a rename that didn't happen is what poisons the cache in the first place.
+                check(tmp.renameTo(out)) { "Could not move artwork for $itemId into place" }
             } finally {
                 connection.disconnect()
             }
             out.absolutePath
+        }.also {
+            // Nothing reads the scratch file after this point; leaving it behind on failure just
+            // accumulates orphan .tmp files in filesDir/artwork.
+            tmp.delete()
         }.getOrNull()
     }
 
