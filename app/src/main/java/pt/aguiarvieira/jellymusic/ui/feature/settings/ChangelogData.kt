@@ -16,8 +16,8 @@ data class ChangelogVersion(
 /** Newest first. Unreleased (version = null) always on top. */
 val CHANGELOG: List<ChangelogVersion> = listOf(
     ChangelogVersion(
-        version = null,
-        date = null,
+        version = "0.1.72",
+        date = "26/07/2026",
         changes = listOf(
             "Restoring the app from a phone backup no longer leaves it unable to open — it now asks " +
                 "you to sign in again instead.",
