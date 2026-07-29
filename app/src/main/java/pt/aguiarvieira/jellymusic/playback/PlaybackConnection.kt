@@ -27,8 +27,6 @@ import pt.aguiarvieira.jellymusic.data.download.MusicDownloadManager
 import pt.aguiarvieira.jellymusic.data.jellyfin.StreamUrlBuilder
 import pt.aguiarvieira.jellymusic.data.settings.QueueStore
 import pt.aguiarvieira.jellymusic.data.settings.SettingsStore
-import pt.aguiarvieira.jellymusic.domain.model.PersistedQueue
-import pt.aguiarvieira.jellymusic.domain.model.QueueTrack
 import pt.aguiarvieira.jellymusic.domain.model.StreamSettings
 import pt.aguiarvieira.jellymusic.domain.model.Track
 import pt.aguiarvieira.jellymusic.domain.model.toTrack
@@ -109,7 +107,6 @@ class PlaybackConnection @Inject constructor(
     // Rebuild the queue list only when the timeline or current item changes (not on position ticks).
     private var lastQueueCount = -1
     private var lastQueueCurrent = -1
-    private var wasPlaying = false
 
     @Volatile
     private var streamSettings: StreamSettings = StreamSettings()
@@ -250,7 +247,6 @@ class PlaybackConnection @Inject constructor(
         c.clearMediaItems()
         lastQueueCount = -1
         lastQueueCurrent = -1
-        wasPlaying = false
         scope.launch { queueStore.clear() }
     }
 
@@ -327,14 +323,9 @@ class PlaybackConnection @Inject constructor(
             lastQueueCurrent = c.currentMediaItemIndex
             rebuildQueue(c)
         }
-        // Persist the queue on structural changes (add/remove/track transition) and when playback
-        // pauses — that's exactly what restoring a resume point needs. No periodic mid-track writes:
-        // during steady playback the foreground service keeps the process alive, so there's nothing
-        // to survive, and rewriting the whole queue JSON every few seconds was the app's biggest
-        // avoidable disk-and-battery cost.
-        val justPaused = !c.isPlaying && wasPlaying
-        wasPlaying = c.isPlaying
-        if (c.mediaItemCount > 0 && (queueChanged || justPaused)) persistQueue(c)
+        // Persisting the queue is deliberately NOT done here: this class only exists while app UI is
+        // alive, and Android Auto drives the same player without it. PlaybackService owns the writes
+        // so a queue picked in the car is saved too — see its queuePersistenceListener.
     }
 
     private fun updateProgress(c: MediaController) {
@@ -348,29 +339,6 @@ class PlaybackConnection @Inject constructor(
             positionMs = c.currentPosition.coerceAtLeast(0L),
             durationMs = duration.coerceAtLeast(0L),
         )
-    }
-
-    private fun persistQueue(c: MediaController) {
-        val snapshot = PersistedQueue(
-            items = (0 until c.mediaItemCount).map { i ->
-                val item = c.getMediaItemAt(i)
-                val md = item.mediaMetadata
-                QueueTrack(
-                    id = item.mediaId.removePrefix("track/"),
-                    title = md.title?.toString().orEmpty(),
-                    artist = md.artist?.toString().orEmpty(),
-                    album = md.albumTitle?.toString(),
-                    albumId = StreamSettingsExtras.albumIdFrom(md.extras),
-                    artistId = StreamSettingsExtras.artistIdFrom(md.extras),
-                    artworkUrl = md.artworkUri?.toString(),
-                    durationMs = md.durationMs,
-                    normalizationGainDb = StreamSettingsExtras.gainDbFrom(md.extras),
-                )
-            },
-            index = c.currentMediaItemIndex.coerceAtLeast(0),
-            positionMs = c.currentPosition.coerceAtLeast(0L),
-        )
-        scope.launch { queueStore.save(snapshot) }
     }
 
     /** After connecting, if nothing is queued, restore the persisted queue (paused). */

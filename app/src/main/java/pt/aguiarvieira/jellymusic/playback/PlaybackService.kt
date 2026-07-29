@@ -41,11 +41,15 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.guava.future
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import org.jellyfin.sdk.model.api.PlayMethod
 import pt.aguiarvieira.jellymusic.BuildConfig
 import pt.aguiarvieira.jellymusic.MainActivity
 import pt.aguiarvieira.jellymusic.data.settings.QueueStore
 import pt.aguiarvieira.jellymusic.data.settings.SettingsStore
+import pt.aguiarvieira.jellymusic.domain.model.PersistedQueue
+import pt.aguiarvieira.jellymusic.domain.model.QueueTrack
 import pt.aguiarvieira.jellymusic.domain.model.toTrack
 import androidx.glance.appwidget.updateAll
 import pt.aguiarvieira.jellymusic.widget.NowPlayingWidget
@@ -69,6 +73,9 @@ private const val CMD_CYCLE_REPEAT = "pt.aguiarvieira.jellymusic.CYCLE_REPEAT"
  * node (Albums) safely under the ~1MB transaction limit.
  */
 private const val MAX_CHILDREN_PER_NODE = 500
+
+/** Upper bound on the blocking final queue write in [PlaybackService.onDestroy]. */
+private const val QUEUE_SAVE_TIMEOUT_MS = 1_000L
 
 /** Browse nodes whose contents depend on the selected library; re-queried when it changes. */
 private val LIBRARY_SCOPED_BROWSE_NODES = listOf(
@@ -269,6 +276,74 @@ class PlaybackService : MediaLibraryService() {
         }
     }
 
+    /**
+     * Persists the play queue on every change, whoever caused it.
+     *
+     * This has to live in the service, not in the app-side [PlaybackConnection]: Android Auto drives
+     * this same player with no app UI alive, so with persistence on the UI side a queue picked in the
+     * car was never written. Both restore paths — [onPlaybackResumption] on reconnect and the app's
+     * restore-on-launch — then replayed whatever the phone had saved last, making an Auto selection
+     * look like a throwaway session.
+     */
+    private val queuePersistenceListener = object : Player.Listener {
+        override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) =
+            persistQueueIfChanged()
+
+        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) = persistQueueIfChanged()
+
+        // Pausing is exactly when the resume point matters, and the position has moved since the last
+        // structural change — so save it even though the queue itself is untouched.
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            if (!isPlaying) persistQueue()
+        }
+    }
+
+    private var lastPersistedCount = -1
+    private var lastPersistedIndex = -1
+
+    /** Saves only on a real structural change; timeline events fire far more often than that. */
+    private fun persistQueueIfChanged() {
+        if (player.mediaItemCount == lastPersistedCount && player.currentMediaItemIndex == lastPersistedIndex) return
+        persistQueue()
+    }
+
+    private fun persistQueue() {
+        val snapshot = queueSnapshot() ?: return
+        lastPersistedCount = player.mediaItemCount
+        lastPersistedIndex = player.currentMediaItemIndex
+        serviceScope.launch { queueStore.save(snapshot) }
+    }
+
+    /**
+     * The current queue as a persistable snapshot, or null when there is nothing worth saving.
+     *
+     * An empty player never overwrites a stored queue: clearing is an explicit user action that wipes
+     * the store itself (see [PlaybackConnection.stop]), while a player is also transiently empty during
+     * teardown and while a restore is being loaded in.
+     */
+    private fun queueSnapshot(): PersistedQueue? {
+        val count = player.mediaItemCount
+        if (count == 0) return null
+        return PersistedQueue(
+            items = (0 until count).map { i ->
+                val md = player.getMediaItemAt(i).mediaMetadata
+                QueueTrack(
+                    id = player.getMediaItemAt(i).mediaId.removePrefix("track/"),
+                    title = md.title?.toString().orEmpty(),
+                    artist = md.artist?.toString().orEmpty(),
+                    album = md.albumTitle?.toString(),
+                    albumId = StreamSettingsExtras.albumIdFrom(md.extras),
+                    artistId = StreamSettingsExtras.artistIdFrom(md.extras),
+                    artworkUrl = md.artworkUri?.toString(),
+                    durationMs = md.durationMs,
+                    normalizationGainDb = StreamSettingsExtras.gainDbFrom(md.extras),
+                )
+            },
+            index = player.currentMediaItemIndex.coerceAtLeast(0),
+            positionMs = player.currentPosition.coerceAtLeast(0L),
+        )
+    }
+
     /** The custom buttons (expanded-notification overflow + Android Auto), reflecting current state. */
     private fun mediaButtonPreferences(): List<CommandButton> = listOf(
         CommandButton.Builder(
@@ -367,6 +442,7 @@ class PlaybackService : MediaLibraryService() {
                 it.addListener(modeListener)
                 it.addListener(widgetListener)
                 it.addListener(gainListener)
+                it.addListener(queuePersistenceListener)
                 // Diagnostic only — see [underrunLogger]. Keep it out of release builds entirely.
                 if (BuildConfig.DEBUG) it.addAnalyticsListener(underrunLogger)
             }
@@ -384,6 +460,7 @@ class PlaybackService : MediaLibraryService() {
         target.removeListener(modeListener)
         target.removeListener(widgetListener)
         target.removeListener(gainListener)
+        target.removeListener(queuePersistenceListener)
         if (BuildConfig.DEBUG) target.removeAnalyticsListener(underrunLogger)
     }
 
@@ -529,6 +606,13 @@ class PlaybackService : MediaLibraryService() {
 
     override fun onDestroy() {
         reportedItemId?.let { playbackReporter.reportStop(it, player.currentPosition) }
+        // Final snapshot before teardown, so the stored resume point is the position we actually
+        // stopped at rather than the last structural change. Bounded and blocking on purpose:
+        // [serviceScope] is cancelled just below and the process often dies right after, so a
+        // fire-and-forget write here would usually not land.
+        queueSnapshot()?.let { snapshot ->
+            runBlocking { withTimeoutOrNull(QUEUE_SAVE_TIMEOUT_MS) { queueStore.save(snapshot) } }
+        }
         mediaSession.release()
         player.release()
         serviceScope.cancel()

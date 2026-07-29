@@ -16,6 +16,17 @@ data class ChangelogVersion(
 /** Newest first. Unreleased (version = null) always on top. */
 val CHANGELOG: List<ChangelogVersion> = listOf(
     ChangelogVersion(
+        version = "0.1.73",
+        date = "29/07/2026",
+        changes = listOf(
+            "Music picked in Android Auto now sticks: disconnecting from the car and opening the app " +
+                "keeps the album or playlist you chose while driving, instead of jumping back to " +
+                "whatever was playing before.",
+            "The resume position is now saved when playback stops, so picking up where you left off " +
+                "is more accurate.",
+        ),
+    ),
+    ChangelogVersion(
         version = "0.1.72",
         date = "26/07/2026",
         changes = listOf(
