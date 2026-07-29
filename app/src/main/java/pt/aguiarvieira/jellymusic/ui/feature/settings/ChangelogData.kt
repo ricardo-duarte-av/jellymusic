@@ -16,8 +16,8 @@ data class ChangelogVersion(
 /** Newest first. Unreleased (version = null) always on top. */
 val CHANGELOG: List<ChangelogVersion> = listOf(
     ChangelogVersion(
-        version = null,
-        date = null,
+        version = "0.1.74",
+        date = "29/07/2026",
         changes = listOf(
             "Album colours now match everywhere: the now-playing screen, the widget, the notification " +
                 "in the notification shade and the Android Auto player all pick the same colour from " +
