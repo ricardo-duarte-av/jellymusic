@@ -22,6 +22,12 @@ val CHANGELOG: List<ChangelogVersion> = listOf(
             "Album colours now match everywhere: the now-playing screen, the widget, the notification " +
                 "in the notification shade and the Android Auto player all pick the same colour from " +
                 "the cover, instead of each choosing its own.",
+            "The widget is now tinted with the album's colours throughout — the background, song " +
+                "title, artist and controls — instead of white text on a plain black wash.",
+            "Shuffle and repeat in the widget are now clearly visible when switched on; they could " +
+                "previously turn almost invisible against some album covers.",
+            "Fixed the album name showing in black, and so being hard to read in dark mode, on the " +
+                "album screen.",
         ),
     ),
     ChangelogVersion(

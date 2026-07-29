@@ -144,6 +144,13 @@ fun AlbumDetailScreen(
         // the fastExitFade backdrop. With it transparent, the backdrop below is the only fill and its
         // fade actually reveals the browse grid.
         containerColor = Color.Transparent,
+        // Must be set explicitly *because* the container is transparent. Scaffold defaults its
+        // contentColor to contentColorFor(containerColor), which has no match for Transparent and so
+        // falls back to the ambient LocalContentColor — and nothing in this app wraps the root in a
+        // Surface, so that ambient value is still Compose's default of Color.Black. Any Text here
+        // without an explicit colour (the album title in AlbumHeader) then rendered black-on-dark in
+        // dark mode. The body's backdrop below is colorScheme.surface, so onSurface is its pair.
+        contentColor = MaterialTheme.colorScheme.onSurface,
         // (1) No album name in the header — keeps space for the Settings action.
         topBar = {
             // Scaffold chrome, so it's not in the container transform's overlay — predictive back

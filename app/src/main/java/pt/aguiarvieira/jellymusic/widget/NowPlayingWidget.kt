@@ -61,19 +61,65 @@ import pt.aguiarvieira.jellymusic.MainActivity
 import pt.aguiarvieira.jellymusic.R
 import pt.aguiarvieira.jellymusic.ui.theme.AlbumSeed
 
-/** Circle background + glyph tint for the app-icon badge, both pulled from the album scheme. */
-private data class IconColors(val background: Color, val glyph: Color)
+/**
+ * Every colour the widget paints, resolved once per cover from the album's M3 scheme.
+ *
+ * The widget used to be album-coloured only on the app-icon badge, with everything else hardcoded
+ * white over a flat black scrim. Now the whole surface is themed, which is why the artwork is
+ * darkened by [scrim] — an album-tinted dark surface — rather than by plain black: the text and
+ * glyphs are the scheme's on-surface tones, so they want the scheme's surface underneath them.
+ */
+private data class WidgetColors(
+    /** Painted under the artwork, for the gap before art loads / when there is none. */
+    val base: Color,
+    /** Translucent wash over the artwork that everything else sits on. */
+    val scrim: Color,
+    val title: Color,
+    val subtitle: Color,
+    /** Transport glyphs, and an engaged shuffle/repeat toggle. */
+    val glyph: Color,
+    val glyphInactive: Color,
+    val accent: Color,
+    /** App-icon badge: filled disc + the note on it. */
+    val iconDisc: Color,
+    val iconGlyph: Color,
+)
 
-/** Neutral disc + white note, used when there's no art or no seed can be extracted. */
-private val FALLBACK_ICON_COLORS = IconColors(background = Color(0x33FFFFFF), glyph = Color.White)
+/** Neutral surface + white text, used when there's no art or no seed can be extracted. */
+private val FALLBACK_WIDGET_COLORS = WidgetColors(
+    base = Color(0xFF1C1B1F),
+    scrim = Color(0x99000000),
+    title = Color.White,
+    subtitle = Color(0xCCFFFFFF),
+    glyph = Color.White,
+    glyphInactive = Color(0x80FFFFFF),
+    accent = Color.White,
+    iconDisc = Color(0x33FFFFFF),
+    iconGlyph = Color.White,
+)
+
+/**
+ * How much of the album-tinted surface is laid over the artwork — the knob for "how much cover shows
+ * through". Raising it dims the artwork; lowering it costs text contrast.
+ *
+ * 0.76 is not arbitrary: it's the lowest value where the artist line (`onSurfaceVariant`, the weakest
+ * text on the widget) still clears WCAG AA 4.5:1 against the worst case — a white patch of cover
+ * showing through — measured across a spread of real seeds, where it lands at 5.0:1. The title clears
+ * comfortably above that. The previous flat-black 0.6 scrim only reached ~2.9:1 there, so a very
+ * light cover used to wash the artist name out.
+ */
+private const val SCRIM_ALPHA = 0.76f
+
+/** An engaged toggle's glyph reads at full strength; idle transport glyphs are dimmed. */
+private const val GLYPH_INACTIVE_ALPHA = 0.6f
 
 /** Everything the widget renders for one cover: [sharp] for the compact background + corner
- *  thumbnail, [blurred] for the tall layout's frosted background, and the [iconColors] derived from
- *  it. During a track change these hold pre-blended crossfade frames. Nulls when there's no artwork. */
+ *  thumbnail, [blurred] for the tall layout's frosted background, and the [colors] derived from it.
+ *  During a track change these hold pre-blended crossfade frames. Nulls when there's no artwork. */
 private data class WidgetArtwork(
     val sharp: Bitmap? = null,
     val blurred: Bitmap? = null,
-    val iconColors: IconColors = FALLBACK_ICON_COLORS,
+    val colors: WidgetColors = FALLBACK_WIDGET_COLORS,
 )
 
 /** Cover crossfade on track change: this many frames, this far apart (~270ms total). Glance has no
@@ -134,7 +180,7 @@ class NowPlayingWidget : GlanceAppWidget() {
                 val target = WidgetArtwork(
                     sharp = sharp,
                     blurred = sharp?.let(::blurArtwork),
-                    iconColors = albumIconColors(sharp),
+                    colors = albumWidgetColors(sharp),
                 )
                 val from = lastSettledArtwork
                 if (sharp != null && target.blurred != null) {
@@ -150,7 +196,7 @@ class NowPlayingWidget : GlanceAppWidget() {
                 value = target
                 lastSettledArtwork = target
             }
-            WidgetBody(data, artwork.sharp, artwork.blurred, artwork.iconColors)
+            WidgetBody(data, artwork.sharp, artwork.blurred, artwork.colors)
         }
     }
 
@@ -213,26 +259,42 @@ class NowPlayingWidget : GlanceAppWidget() {
     }
 
     /**
-     * Colours for the app-icon badge, derived from the current cover through the shared [AlbumSeed]
-     * pipeline and MaterialKolor's TonalSpot scheme — the same seed the now-playing screen, the shade
-     * notification and the Android Auto player use, so the badge can't drift to a different hue than
-     * the rest of the app.
+     * The widget's palette, derived from the current cover through the shared [AlbumSeed] pipeline and
+     * MaterialKolor's TonalSpot scheme — the same seed the now-playing screen, the shade notification
+     * and the Android Auto player use, so the widget can't drift to a different hue than the rest of
+     * the app.
      *
-     * The scheme is always built dark, unlike [AlbumTheme] which follows the system: the badge sits on
-     * the widget's own dark scrim over the artwork (see the `0x99000000` background below), not on the
-     * system surface, so a light readout here would be illegible regardless of the device theme.
-     * Falls back to a neutral disc + white note when there's no art or no seed can be extracted.
+     * The scheme is always built dark, unlike [AlbumTheme] which follows the system: the widget paints
+     * its own darkened surface over the artwork rather than sitting on the system's, so a light readout
+     * here would be illegible regardless of the device theme.
+     *
+     * [WidgetColors.accent] is `primary`, not `primaryContainer`: it tints an engaged toggle's *glyph*
+     * directly, and in a dark scheme primaryContainer is a tone-30 (dark) colour that all but vanished
+     * against the dark scrim. The badge still uses the primaryContainer / onPrimaryContainer pair,
+     * which is correct there because the disc is a filled surface rather than a glyph.
+     *
+     * Falls back to the neutral palette when there's no art or no seed can be extracted.
      */
-    private fun albumIconColors(bitmap: Bitmap?): IconColors {
-        bitmap ?: return FALLBACK_ICON_COLORS
-        val seed = AlbumSeed.from(bitmap) ?: return FALLBACK_ICON_COLORS
+    private fun albumWidgetColors(bitmap: Bitmap?): WidgetColors {
+        bitmap ?: return FALLBACK_WIDGET_COLORS
+        val seed = AlbumSeed.from(bitmap) ?: return FALLBACK_WIDGET_COLORS
         val scheme = dynamicColorScheme(
             seedColor = seed,
             isDark = true,
             isAmoled = false,
             style = PaletteStyle.TonalSpot,
         )
-        return IconColors(background = scheme.primaryContainer, glyph = scheme.onPrimaryContainer)
+        return WidgetColors(
+            base = scheme.surface,
+            scrim = scheme.surface.copy(alpha = SCRIM_ALPHA),
+            title = scheme.onSurface,
+            subtitle = scheme.onSurfaceVariant,
+            glyph = scheme.onSurface,
+            glyphInactive = scheme.onSurfaceVariant.copy(alpha = GLYPH_INACTIVE_ALPHA),
+            accent = scheme.primary,
+            iconDisc = scheme.primaryContainer,
+            iconGlyph = scheme.onPrimaryContainer,
+        )
     }
 
     private suspend fun loadArtwork(context: Context, uri: String): Bitmap? {
@@ -281,7 +343,7 @@ private fun WidgetBody(
     data: NowPlayingWidgetData,
     artwork: Bitmap?,
     blurredArtwork: Bitmap?,
-    iconColors: IconColors,
+    colors: WidgetColors,
 ) {
     val context = LocalContext.current
     val size = LocalSize.current
@@ -313,7 +375,7 @@ private fun WidgetBody(
         modifier = GlanceModifier
             .fillMaxSize()
             .cornerRadius(if (compact) 16.dp else 24.dp)
-            .background(Color(0xFF1C1B1F)),
+            .background(colors.base),
     ) {
         if (background != null) {
             Image(
@@ -323,25 +385,26 @@ private fun WidgetBody(
                 modifier = GlanceModifier.fillMaxSize(),
             )
         }
-        // Scrim so text/controls stay legible over any artwork; also the "tap body → open player"
-        // surface behind the content.
+        // Album-tinted scrim: darkens the artwork so the scheme's on-surface text/controls stay
+        // legible over any cover, and doubles as the "tap body → open player" surface behind the
+        // content.
         Box(
             modifier = GlanceModifier
                 .fillMaxSize()
-                .background(Color(0x99000000))
+                .background(colors.scrim)
                 .clickable(openPlayer),
         ) {}
 
         when {
-            !data.hasMedia -> EmptyState(compact, openPlayer)
-            compact -> CompactContent(data, showToggles, showIcon, iconColors, openPlayer)
-            else -> FullContent(data, showToggles, iconColors, openPlayer)
+            !data.hasMedia -> EmptyState(compact, colors, openPlayer)
+            compact -> CompactContent(data, showToggles, showIcon, colors, openPlayer)
+            else -> FullContent(data, showToggles, colors, openPlayer)
         }
 
         // Tall layouts pin the sharp cover thumbnail to the top-right, with the app icon badged on
         // top of it (the compact form places the icon inline at the end of the row instead — see
         // CompactContent).
-        if (!compact) CornerArtwork(artwork, iconColors)
+        if (!compact) CornerArtwork(artwork, colors)
     }
 }
 
@@ -352,13 +415,13 @@ private fun WidgetBody(
  * when there's no artwork; the icon always shows.
  */
 @Composable
-private fun CornerArtwork(artwork: Bitmap?, iconColors: IconColors) {
+private fun CornerArtwork(artwork: Bitmap?, colors: WidgetColors) {
     // App icon in the widget's top-left corner.
     Box(
         modifier = GlanceModifier.fillMaxSize().padding(10.dp),
         contentAlignment = Alignment.TopStart,
     ) {
-        AppIcon(iconColors, 44.dp)
+        AppIcon(colors, 44.dp)
     }
     // Album-art thumbnail in the widget's top-right corner.
     if (artwork != null) {
@@ -378,18 +441,18 @@ private fun CornerArtwork(artwork: Bitmap?, iconColors: IconColors) {
 
 /** The launcher music-note glyph on a circular album-coloured disc: disc = background, note = glyph. */
 @Composable
-private fun AppIcon(iconColors: IconColors, size: Dp) {
+private fun AppIcon(colors: WidgetColors, size: Dp) {
     Box(
         modifier = GlanceModifier
             .size(size)
             .cornerRadius(size / 2)
-            .background(iconColors.background),
+            .background(colors.iconDisc),
         contentAlignment = Alignment.Center,
     ) {
         Image(
             provider = ImageProvider(R.drawable.ic_launcher_foreground),
             contentDescription = "JellyMusic",
-            colorFilter = ColorFilter.tint(ColorProvider(iconColors.glyph)),
+            colorFilter = ColorFilter.tint(ColorProvider(colors.iconGlyph)),
             modifier = GlanceModifier.size(size),
         )
     }
@@ -398,25 +461,25 @@ private fun AppIcon(iconColors: IconColors, size: Dp) {
 /** Tall layout: title/artist stacked at the bottom with the transport row beneath. */
 @Composable
 @UnstableApi
-private fun FullContent(data: NowPlayingWidgetData, showToggles: Boolean, iconColors: IconColors, openPlayer: Action) {
+private fun FullContent(data: NowPlayingWidgetData, showToggles: Boolean, colors: WidgetColors, openPlayer: Action) {
     Column(
         modifier = GlanceModifier.fillMaxSize().padding(16.dp),
         verticalAlignment = Alignment.Vertical.Bottom,
     ) {
         Text(
             text = data.title.ifEmpty { "Unknown title" },
-            style = TextStyle(color = ColorProvider(Color.White), fontSize = 15.sp, fontWeight = FontWeight.Bold),
+            style = TextStyle(color = ColorProvider(colors.title), fontSize = 15.sp, fontWeight = FontWeight.Bold),
             maxLines = 1,
             modifier = GlanceModifier.clickable(openPlayer),
         )
         Text(
             text = data.artist,
-            style = TextStyle(color = ColorProvider(Color(0xCCFFFFFF)), fontSize = 13.sp),
+            style = TextStyle(color = ColorProvider(colors.subtitle), fontSize = 13.sp),
             maxLines = 1,
             modifier = GlanceModifier.clickable(openPlayer),
         )
         Spacer(GlanceModifier.height(10.dp))
-        Controls(data, showToggles, iconColors, compact = false)
+        Controls(data, showToggles, colors, compact = false)
     }
 }
 
@@ -427,7 +490,7 @@ private fun CompactContent(
     data: NowPlayingWidgetData,
     showToggles: Boolean,
     showIcon: Boolean,
-    iconColors: IconColors,
+    colors: WidgetColors,
     openPlayer: Action,
 ) {
     Row(
@@ -437,41 +500,41 @@ private fun CompactContent(
         Column(modifier = GlanceModifier.defaultWeight().clickable(openPlayer)) {
             Text(
                 text = data.title.ifEmpty { "Unknown title" },
-                style = TextStyle(color = ColorProvider(Color.White), fontSize = 13.sp, fontWeight = FontWeight.Bold),
+                style = TextStyle(color = ColorProvider(colors.title), fontSize = 13.sp, fontWeight = FontWeight.Bold),
                 maxLines = 1,
             )
             Text(
                 text = data.artist,
-                style = TextStyle(color = ColorProvider(Color(0xCCFFFFFF)), fontSize = 11.sp),
+                style = TextStyle(color = ColorProvider(colors.subtitle), fontSize = 11.sp),
                 maxLines = 1,
             )
         }
         Spacer(GlanceModifier.width(8.dp))
-        Controls(data, showToggles, iconColors, compact = true)
+        Controls(data, showToggles, colors, compact = true)
         // Single-row form has no top corner, so the icon goes inline at the end (only when wide
         // enough — a 4x1; a 3x1 omits it entirely).
         if (showIcon) {
             Spacer(GlanceModifier.width(8.dp))
-            AppIcon(iconColors, 22.dp)
+            AppIcon(colors, 22.dp)
         }
     }
 }
 
 @Composable
-private fun EmptyState(compact: Boolean, openPlayer: Action) {
+private fun EmptyState(compact: Boolean, colors: WidgetColors, openPlayer: Action) {
     Column(
         modifier = GlanceModifier.fillMaxSize().padding(16.dp).clickable(openPlayer),
         verticalAlignment = if (compact) Alignment.Vertical.CenterVertically else Alignment.Vertical.Bottom,
     ) {
         Text(
             text = "Nothing playing",
-            style = TextStyle(color = ColorProvider(Color.White), fontSize = 15.sp, fontWeight = FontWeight.Bold),
+            style = TextStyle(color = ColorProvider(colors.title), fontSize = 15.sp, fontWeight = FontWeight.Bold),
             maxLines = 1,
         )
         if (!compact) {
             Text(
                 text = "Tap to open JellyMusic",
-                style = TextStyle(color = ColorProvider(Color(0xCCFFFFFF)), fontSize = 13.sp),
+                style = TextStyle(color = ColorProvider(colors.subtitle), fontSize = 13.sp),
                 maxLines = 1,
             )
         }
@@ -480,7 +543,7 @@ private fun EmptyState(compact: Boolean, openPlayer: Action) {
 
 @Composable
 @UnstableApi
-private fun Controls(data: NowPlayingWidgetData, showToggles: Boolean, iconColors: IconColors, compact: Boolean) {
+private fun Controls(data: NowPlayingWidgetData, showToggles: Boolean, colors: WidgetColors, compact: Boolean) {
     val iconSize = if (compact) 34.dp else 40.dp
     val playSize = if (compact) 40.dp else 48.dp
     val gap = if (compact) 2.dp else 6.dp
@@ -489,28 +552,31 @@ private fun Controls(data: NowPlayingWidgetData, showToggles: Boolean, iconColor
             IconButton(
                 res = R.drawable.ic_widget_shuffle,
                 onClick = actionRunCallback<ToggleShuffleAction>(),
+                colors = colors,
                 active = data.shuffleEnabled,
-                activeColor = iconColors.background,
+                accented = true,
                 size = iconSize,
             )
             Spacer(GlanceModifier.width(gap))
         }
-        IconButton(res = R.drawable.ic_widget_previous, onClick = actionRunCallback<PreviousAction>(), size = iconSize)
+        IconButton(res = R.drawable.ic_widget_previous, onClick = actionRunCallback<PreviousAction>(), colors = colors, size = iconSize)
         Spacer(GlanceModifier.width(gap))
         IconButton(
             res = if (data.isPlaying) R.drawable.ic_widget_pause else R.drawable.ic_widget_play,
             onClick = actionRunCallback<TogglePlayPauseAction>(),
+            colors = colors,
             size = playSize,
         )
         Spacer(GlanceModifier.width(gap))
-        IconButton(res = R.drawable.ic_widget_next, onClick = actionRunCallback<NextAction>(), size = iconSize)
+        IconButton(res = R.drawable.ic_widget_next, onClick = actionRunCallback<NextAction>(), colors = colors, size = iconSize)
         if (showToggles) {
             Spacer(GlanceModifier.width(gap))
             IconButton(
                 res = if (data.repeatMode == Player.REPEAT_MODE_ONE) R.drawable.ic_widget_repeat_one else R.drawable.ic_widget_repeat,
                 onClick = actionRunCallback<CycleRepeatAction>(),
+                colors = colors,
                 active = data.repeatMode != Player.REPEAT_MODE_OFF,
-                activeColor = iconColors.background,
+                accented = true,
                 size = iconSize,
             )
         }
@@ -521,17 +587,18 @@ private fun Controls(data: NowPlayingWidgetData, showToggles: Boolean, iconColor
 private fun IconButton(
     res: Int,
     onClick: Action,
+    colors: WidgetColors,
     active: Boolean = true,
-    activeColor: Color? = null,
+    accented: Boolean = false,
     size: Dp = 40.dp,
 ) {
-    // Toggles (shuffle/repeat) pass an [activeColor] — the album's M3 accent, matching the app-icon
-    // disc — and tint the glyph with it when engaged; off reads as dimmed white. Transport buttons
-    // pass no colour and stay plain white. (An engaged toggle used to sit on a translucent disc.)
+    // Toggles (shuffle/repeat) are [accented]: engaged, they take the album's M3 accent; disengaged
+    // they dim like everything else. Transport buttons are never accented and read as the plain
+    // on-surface glyph. (An engaged toggle used to sit on a translucent disc.)
     val tint = when {
-        active && activeColor != null -> activeColor
-        active -> Color.White
-        else -> Color(0x80FFFFFF)
+        active && accented -> colors.accent
+        active -> colors.glyph
+        else -> colors.glyphInactive
     }
     Box(
         modifier = GlanceModifier.size(size).clickable(onClick),
