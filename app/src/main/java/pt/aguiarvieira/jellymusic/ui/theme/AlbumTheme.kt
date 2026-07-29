@@ -14,7 +14,6 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.palette.graphics.Palette
 import coil3.imageLoader
 import coil3.request.ImageRequest
 import coil3.request.SuccessResult
@@ -67,19 +66,14 @@ private fun rememberAlbumSeed(artworkUrl: String?): Color? {
     return seed
 }
 
-/** Loads the cover (software bitmap) and picks a representative seed color via Palette. */
+/** Loads the cover (software bitmap) and picks its seed color via the shared [AlbumSeed] pipeline. */
 private suspend fun extractSeed(context: Context, url: String): Color? =
     withContext(Dispatchers.Default) {
         val request = ImageRequest.Builder(context)
             .data(url)
-            .allowHardware(false) // Palette needs to read pixels off a software bitmap.
+            .allowHardware(false) // Seeding needs to read pixels off a software bitmap.
             .build()
         val bitmap = (context.imageLoader.execute(request) as? SuccessResult)?.image?.toBitmap()
             ?: return@withContext null
-        val palette = Palette.from(bitmap).generate()
-        val rgb = palette.vibrantSwatch?.rgb
-            ?: palette.dominantSwatch?.rgb
-            ?: palette.mutedSwatch?.rgb
-            ?: return@withContext null
-        Color(rgb)
+        AlbumSeed.from(bitmap)
     }

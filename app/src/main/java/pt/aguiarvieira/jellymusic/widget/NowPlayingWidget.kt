@@ -49,7 +49,6 @@ import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
-import androidx.palette.graphics.Palette
 import com.materialkolor.PaletteStyle
 import com.materialkolor.dynamicColorScheme
 import coil3.imageLoader
@@ -60,6 +59,7 @@ import coil3.toBitmap
 import kotlinx.coroutines.delay
 import pt.aguiarvieira.jellymusic.MainActivity
 import pt.aguiarvieira.jellymusic.R
+import pt.aguiarvieira.jellymusic.ui.theme.AlbumSeed
 
 /** Circle background + glyph tint for the app-icon badge, both pulled from the album scheme. */
 private data class IconColors(val background: Color, val glyph: Color)
@@ -213,22 +213,21 @@ class NowPlayingWidget : GlanceAppWidget() {
     }
 
     /**
-     * Colours for the app-icon badge, derived from the current cover the same way the app themes its
-     * album/player surfaces: a Palette seed fed through MaterialKolor's TonalSpot scheme (matching the
-     * in-app tint, so the icon reflects the album's real hue rather than a rotated one). We build a
-     * dark scheme (the widget always sits on a dark scrim) and take the primaryContainer / on-pair so
-     * the note stays legible on its disc. Falls back to a neutral disc + white note when there's no
-     * art or no seed can be extracted.
+     * Colours for the app-icon badge, derived from the current cover through the shared [AlbumSeed]
+     * pipeline and MaterialKolor's TonalSpot scheme — the same seed the now-playing screen, the shade
+     * notification and the Android Auto player use, so the badge can't drift to a different hue than
+     * the rest of the app.
+     *
+     * The scheme is always built dark, unlike [AlbumTheme] which follows the system: the badge sits on
+     * the widget's own dark scrim over the artwork (see the `0x99000000` background below), not on the
+     * system surface, so a light readout here would be illegible regardless of the device theme.
+     * Falls back to a neutral disc + white note when there's no art or no seed can be extracted.
      */
     private fun albumIconColors(bitmap: Bitmap?): IconColors {
         bitmap ?: return FALLBACK_ICON_COLORS
-        val palette = Palette.from(bitmap).generate()
-        val rgb = palette.vibrantSwatch?.rgb
-            ?: palette.dominantSwatch?.rgb
-            ?: palette.mutedSwatch?.rgb
-            ?: return FALLBACK_ICON_COLORS
+        val seed = AlbumSeed.from(bitmap) ?: return FALLBACK_ICON_COLORS
         val scheme = dynamicColorScheme(
-            seedColor = Color(rgb),
+            seedColor = seed,
             isDark = true,
             isAmoled = false,
             style = PaletteStyle.TonalSpot,

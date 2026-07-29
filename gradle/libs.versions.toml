@@ -35,7 +35,6 @@ securityCrypto = "1.1.0"
 jellyfin = "1.8.11"
 coil = "3.5.0"
 materialKolor = "2.0.0"
-palette = "1.0.0"
 coroutines = "1.11.0"
 serialization = "1.11.0"
 
@@ -110,10 +109,11 @@ slf4j-api = { group = "org.slf4j", name = "slf4j-api", version = "2.0.18" }
 coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref = "coil" }
 coil-network-okhttp = { group = "io.coil-kt.coil3", name = "coil-network-okhttp", version.ref = "coil" }
 
-# Per-album dynamic M3 theming: MaterialKolor builds a ColorScheme from a seed color
-# (Material Color Utilities port); Palette extracts the seed from the album bitmap.
+# Per-album dynamic M3 theming: MaterialKolor builds a ColorScheme from a seed color, and its
+# transitive material-color-utilities supplies the Celebi quantizer + Score used to pick that seed
+# from the album bitmap — the same pipeline the system uses for the shade / Android Auto player, so
+# all four surfaces agree. (androidx.palette was dropped: it scored saturation-first and disagreed.)
 material-kolor = { group = "com.materialkolor", name = "material-kolor", version.ref = "materialKolor" }
-androidx-palette = { group = "androidx.palette", name = "palette-ktx", version.ref = "palette" }
 
 # Coroutines / serialization
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
