@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import pt.aguiarvieira.jellymusic.domain.model.Lyrics
 import pt.aguiarvieira.jellymusic.domain.model.StreamSettings
 import pt.aguiarvieira.jellymusic.domain.model.Track
 import pt.aguiarvieira.jellymusic.domain.model.TrackAudioInfo
@@ -21,6 +22,13 @@ import pt.aguiarvieira.jellymusic.data.download.FavoriteDownloadSyncManager
 import pt.aguiarvieira.jellymusic.domain.repository.MusicRepository
 import pt.aguiarvieira.jellymusic.playback.PlaybackConnection
 import javax.inject.Inject
+
+/** Lyrics availability for the current track: still fetching, none published, or here they are. */
+sealed interface LyricsState {
+    data object Loading : LyricsState
+    data object None : LyricsState
+    data class Available(val lyrics: Lyrics) : LyricsState
+}
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
@@ -83,6 +91,25 @@ class PlaybackViewModel @Inject constructor(
                 }
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /**
+     * Lyrics for the current track, refetched whenever the track changes. Kept out of
+     * [PlaybackUiState] because it is a UI-only concern the playback service knows nothing about.
+     */
+    val lyrics: StateFlow<LyricsState> =
+        connection.state
+            .map { it.trackId }
+            .distinctUntilChanged()
+            .mapLatest { trackId ->
+                if (trackId == null) {
+                    LyricsState.None
+                } else {
+                    musicRepository.getLyrics(trackId).getOrNull()
+                        ?.let { LyricsState.Available(it) }
+                        ?: LyricsState.None
+                }
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LyricsState.Loading)
 
     fun play(tracks: List<Track>, startIndex: Int) = connection.playTracks(tracks, startIndex)
     fun playShuffled(tracks: List<Track>) = connection.playTracksShuffled(tracks)

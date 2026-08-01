@@ -18,7 +18,17 @@ val CHANGELOG: List<ChangelogVersion> = listOf(
     ChangelogVersion(
         version = null,
         date = null,
-        changes = emptyList(),
+        changes = listOf(
+            "Lyrics! Songs whose lyrics are on the server now show them in the now-playing screen, " +
+                "between the song details and the progress bar.",
+            "Timed lyrics follow along with the music: the line being sung is highlighted in the " +
+                "album's own colour and scrolls itself into view, including after you drag the " +
+                "progress bar.",
+            "Tap the lyrics to read them full-screen — the cover shrinks into the corner with the " +
+                "song details beside it. Tap again to go back.",
+            "Removed the three-colour strip above the album cover in the now-playing screen, and " +
+                "tightened the gap between the cover and the song title.",
+        ),
     ),
     ChangelogVersion(
         version = "0.1.75",

@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.Flow
 import pt.aguiarvieira.jellymusic.domain.model.Album
 import pt.aguiarvieira.jellymusic.domain.model.AlbumSort
 import pt.aguiarvieira.jellymusic.domain.model.Artist
+import pt.aguiarvieira.jellymusic.domain.model.Lyrics
 import pt.aguiarvieira.jellymusic.domain.model.Playlist
 import pt.aguiarvieira.jellymusic.domain.model.SearchResults
 import pt.aguiarvieira.jellymusic.domain.model.Track
@@ -56,6 +57,12 @@ interface MusicRepository {
 
     /** Original audio-stream details (codec/sample rate/bit depth/bitrate) for a track. */
     suspend fun getTrackAudioInfo(trackId: String): Result<TrackAudioInfo?>
+
+    /**
+     * The track's lyrics, or `null` when the server has none for it (a 404, which is the common
+     * case and not an error). May be plain text or synchronized — see [Lyrics.synced].
+     */
+    suspend fun getLyrics(trackId: String): Result<Lyrics?>
 
     suspend fun getAlbumTracks(albumId: String): Result<List<Track>>
     suspend fun getArtistAlbums(artistId: String): Result<List<Album>>

@@ -1,15 +1,19 @@
 package pt.aguiarvieira.jellymusic.ui.feature.player
 
-import androidx.compose.foundation.background
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -32,6 +36,7 @@ import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -58,6 +63,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.lerp
+import androidx.compose.ui.util.lerp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
@@ -71,10 +78,9 @@ import pt.aguiarvieira.jellymusic.ui.components.NOW_PLAYING_ART_KEY
 import pt.aguiarvieira.jellymusic.ui.components.nowPlayingContainerTransform
 import pt.aguiarvieira.jellymusic.ui.components.sharedElementArt
 import pt.aguiarvieira.jellymusic.ui.theme.AlbumTheme
-import pt.aguiarvieira.jellymusic.ui.theme.LocalDynamicColorEnabled
 import kotlin.math.abs
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun FullPlayerScreen(
     onCollapse: () -> Unit,
@@ -87,8 +93,23 @@ fun FullPlayerScreen(
     val qualityLabel by viewModel.qualityLabel.collectAsStateWithLifecycle()
     val queue by viewModel.queue.collectAsStateWithLifecycle()
     val isFavorite by viewModel.isFavorite.collectAsStateWithLifecycle()
+    val lyricsState by viewModel.lyrics.collectAsStateWithLifecycle()
 
     var showQueue by remember { mutableStateOf(false) }
+
+    // Tapping the lyrics box shrinks the cover into the corner and gives the lyrics the rest of the
+    // screen. Reset whenever the incoming track has no lyrics — there'd be nothing to read.
+    var lyricsExpanded by remember { mutableStateOf(false) }
+    val lyrics = (lyricsState as? LyricsState.Available)?.lyrics
+    LaunchedEffect(lyrics == null) { if (lyrics == null) lyricsExpanded = false }
+
+    // Drives the whole header morph (cover size and position, metadata placement, top spacing).
+    val headerFraction by animateFloatAsState(
+        targetValue = if (lyricsExpanded) 1f else 0f,
+        animationSpec = MaterialTheme.motionScheme.slowSpatialSpec(),
+        label = "lyricsHeaderMorph",
+    )
+    val compactHeader = headerFraction > 0.5f
 
     AlbumTheme(artworkUrl = state.artworkUri) {
     // Container transform: this whole screen grows out of (and collapses back into) the mini player
@@ -117,124 +138,170 @@ fun FullPlayerScreen(
             )
         },
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-        ) {
-            // 3-colour banner of the M3 roles (primary / secondary / tertiary) generated from the
-            // album art by AlbumTheme, shown when dynamic color is on.
-            if (LocalDynamicColorEnabled.current) {
-                AlbumColorBanner(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 32.dp),
-                )
-            }
             Column(
                 modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .padding(horizontal = 32.dp),
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(horizontal = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
             ) {
-                ArtworkImage(
-                    url = state.artworkUri,
-                    contentDescription = state.title,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(1f)
-                        .sharedElementArt(NOW_PLAYING_ART_KEY),
-                    shape = MaterialTheme.shapes.extraLarge,
+                // With no lyrics on screen the cover sits centred between the bars, as before. With
+                // lyrics it rides near the top, and collapses right up to it once they're expanded.
+                Spacer(Modifier.weight(lerp(if (lyrics != null) 0.18f else 1f, 0.02f, headerFraction)))
+
+                NowPlayingHeader(
+                    fraction = headerFraction,
+                    modifier = Modifier.fillMaxWidth(),
+                    art = {
+                        ArtworkImage(
+                            url = state.artworkUri,
+                            contentDescription = state.title,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .sharedElementArt(NOW_PLAYING_ART_KEY),
+                            // A 28dp radius reads as a lozenge once the cover is thumbnail-sized, so
+                            // tighten the corners as it shrinks.
+                            shape = RoundedCornerShape(lerp(28.dp, 12.dp, headerFraction)),
+                        )
+                    },
+                    metadata = {
+                        Column(
+                            horizontalAlignment = if (compactHeader) Alignment.Start else Alignment.CenterHorizontally,
+                        ) {
+                            val textAlign = if (compactHeader) TextAlign.Start else TextAlign.Center
+                            // Track title and album both jump to the album detail screen; artist jumps to the
+                            // artist detail screen. Each is tappable only when the id is known.
+                            val albumTarget = state.albumId
+                            Text(
+                                text = state.title,
+                                style = if (compactHeader) {
+                                    MaterialTheme.typography.titleLargeEmphasized
+                                } else {
+                                    MaterialTheme.typography.headlineSmallEmphasized
+                                },
+                                textAlign = textAlign,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.clickableTo(
+                                    enabled = albumTarget != null,
+                                    onClick = {
+                                        albumTarget?.let {
+                                            onNavigateToAlbum(it, state.album.orEmpty(), state.artworkUri)
+                                        }
+                                    },
+                                ),
+                            )
+                            state.album?.takeIf { it.isNotBlank() }?.let { album ->
+                                Text(
+                                    text = album,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = textAlign,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier
+                                        .padding(top = 2.dp)
+                                        .clickableTo(
+                                            enabled = albumTarget != null,
+                                            onClick = {
+                                                albumTarget?.let { onNavigateToAlbum(it, album, state.artworkUri) }
+                                            },
+                                        ),
+                                )
+                            }
+                            val artistTarget = state.artistId
+                            Text(
+                                text = state.artist,
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = textAlign,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier
+                                    .padding(top = 2.dp)
+                                    .clickableTo(
+                                        enabled = artistTarget != null,
+                                        onClick = { artistTarget?.let { onNavigateToArtist(it, state.artist) } },
+                                    ),
+                            )
+                            // Quality and source are detail for browsing, not for reading along —
+                            // they fold away to leave the lyrics as much room as possible.
+                            AnimatedVisibility(
+                                visible = !compactHeader,
+                                enter = fadeIn() + expandVertically(),
+                                exit = fadeOut() + shrinkVertically(),
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    // File quality: original details, "original → transcoded" when streaming
+                                    // transcode is on, or just the transcoded format when playing a
+                                    // downloaded transcoded file.
+                                    qualityLabel?.let {
+                                        Text(
+                                            text = it,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            textAlign = TextAlign.Center,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.padding(top = 6.dp),
+                                        )
+                                    }
+                                    // Source: playing from a local download vs streaming from the server.
+                                    if (state.hasMedia) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.padding(top = 4.dp),
+                                        ) {
+                                            Icon(
+                                                imageVector = if (state.isLocal) {
+                                                    Icons.Filled.Save
+                                                } else {
+                                                    Icons.Filled.CloudQueue
+                                                },
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(14.dp),
+                                            )
+                                            Spacer(Modifier.width(4.dp))
+                                            Text(
+                                                text = buildString {
+                                                    append(if (state.isLocal) "Downloaded" else "Streaming")
+                                                    // Append this track's ReplayGain value when the server
+                                                    // has scanned it.
+                                                    state.normalizationGainDb?.let {
+                                                        append("  ·  ReplayGain %+.1f dB".format(it))
+                                                    }
+                                                },
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
                 )
 
-                Spacer(Modifier.height(32.dp))
-
-                // Track title and album both jump to the album detail screen; artist jumps to the
-                // artist detail screen. Each is tappable only when the id is known.
-                val albumTarget = state.albumId
-                Text(
-                    text = state.title,
-                    style = MaterialTheme.typography.headlineSmallEmphasized,
-                    textAlign = TextAlign.Center,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.clickableTo(
-                        enabled = albumTarget != null,
-                        onClick = { albumTarget?.let { onNavigateToAlbum(it, state.album.orEmpty(), state.artworkUri) } },
-                    ),
-                )
-                state.album?.takeIf { it.isNotBlank() }?.let { album ->
-                    Text(
-                        text = album,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                // The gap the removed colour banner and the tightened cover spacing gave back: with
+                // lyrics it's the reading area, without them it's the same empty breathing room the
+                // screen has always had above the seek bar.
+                if (lyrics != null) {
+                    Spacer(Modifier.height(12.dp))
+                    LyricsPanel(
+                        lyrics = lyrics,
+                        progress = viewModel.progress,
+                        isPlaying = state.isPlaying,
+                        expanded = lyricsExpanded,
+                        onToggleExpanded = { lyricsExpanded = !lyricsExpanded },
                         modifier = Modifier
-                            .padding(top = 2.dp)
-                            .clickableTo(
-                                enabled = albumTarget != null,
-                                onClick = { albumTarget?.let { onNavigateToAlbum(it, album, state.artworkUri) } },
-                            ),
+                            .fillMaxWidth()
+                            .weight(1f),
                     )
+                    Spacer(Modifier.height(12.dp))
+                } else {
+                    Spacer(Modifier.weight(1f))
                 }
-                val artistTarget = state.artistId
-                Text(
-                    text = state.artist,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .padding(top = 2.dp)
-                        .clickableTo(
-                            enabled = artistTarget != null,
-                            onClick = { artistTarget?.let { onNavigateToArtist(it, state.artist) } },
-                        ),
-                )
-                // File quality: original details, "original → transcoded" when streaming transcode is on,
-                // or just the transcoded format when playing a downloaded transcoded file.
-                qualityLabel?.let {
-                    Text(
-                        text = it,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(top = 6.dp),
-                    )
-                }
-                // Source: playing from a local download vs streaming from the server.
-                if (state.hasMedia) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(top = 4.dp),
-                    ) {
-                        Icon(
-                            imageVector = if (state.isLocal) Icons.Filled.Save else Icons.Filled.CloudQueue,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(14.dp),
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        Text(
-                            text = buildString {
-                                append(if (state.isLocal) "Downloaded" else "Streaming")
-                                // Append this track's ReplayGain value when the server has scanned it.
-                                state.normalizationGainDb?.let { append("  ·  ReplayGain %+.1f dB".format(it)) }
-                            },
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(24.dp))
 
                 // Collects the position flow internally so only the seek bar recomposes as it advances.
                 PlayerSeekBar(progress = viewModel.progress, onSeek = viewModel::seekTo)
@@ -296,9 +363,10 @@ fun FullPlayerScreen(
                         )
                     }
                 }
+
+                Spacer(Modifier.height(16.dp))
             }
         }
-    }
 
         if (showQueue) {
             // Start hidden and allow only Hidden/Expanded — the replacement for the old
@@ -461,30 +529,6 @@ private fun PlayerSeekBar(
             text = formatTime(p.durationMs),
             style = MaterialTheme.typography.labelMedium,
         )
-    }
-}
-
-/**
- * A thin full-width strip of the three key M3 roles (primary / secondary / tertiary) generated from
- * the album art by [AlbumTheme]. With the TonalSpot palette these track the cover's hue: primary at
- * the source hue, secondary a muted variant, tertiary a +60° shift.
- */
-@Composable
-private fun AlbumColorBanner(modifier: Modifier = Modifier) {
-    val scheme = MaterialTheme.colorScheme
-    Row(
-        modifier = modifier
-            .height(12.dp)
-            .clip(MaterialTheme.shapes.small),
-    ) {
-        listOf(scheme.primary, scheme.secondary, scheme.tertiary).forEach { color ->
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .background(color),
-            )
-        }
     }
 }
 

@@ -6,6 +6,8 @@ import pt.aguiarvieira.jellymusic.data.jellyfin.StreamUrlBuilder
 import pt.aguiarvieira.jellymusic.domain.model.Album
 import pt.aguiarvieira.jellymusic.domain.model.AlbumSort
 import pt.aguiarvieira.jellymusic.domain.model.Artist
+import pt.aguiarvieira.jellymusic.domain.model.LyricLine
+import pt.aguiarvieira.jellymusic.domain.model.Lyrics
 import pt.aguiarvieira.jellymusic.domain.model.MusicLibrary
 import pt.aguiarvieira.jellymusic.domain.model.Playlist
 import pt.aguiarvieira.jellymusic.domain.model.SearchResults
@@ -33,6 +35,7 @@ import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.exception.InvalidStatusException
 import org.jellyfin.sdk.api.operations.ArtistsApi
 import org.jellyfin.sdk.api.operations.ItemsApi
+import org.jellyfin.sdk.api.operations.LyricsApi
 import org.jellyfin.sdk.api.operations.PlaylistsApi
 import org.jellyfin.sdk.api.operations.UserLibraryApi
 import org.jellyfin.sdk.model.api.BaseItemKind
@@ -52,6 +55,10 @@ import javax.inject.Singleton
 private const val ALBUM_PAGE_SIZE = 100
 private const val SEARCH_LIMIT = 40
 private const val HTTP_UNAUTHORIZED = 401
+private const val HTTP_NOT_FOUND = 404
+
+/** Jellyfin reports every duration in 100-nanosecond ticks. */
+private const val TICKS_PER_MS = 10_000L
 
 // Cap for the Android Auto "smart" home rows (Recently Played / Most Played / Recently Added). A car
 // browse should surface a handful of quick picks, not the whole catalogue — and it keeps the node
@@ -247,6 +254,30 @@ class MusicRepositoryImpl @Inject constructor(
                 bitrateKbps = it.bitRate?.let { bps -> bps / 1000 },
                 channels = it.channels,
             )
+        }
+    }
+
+    override suspend fun getLyrics(trackId: String): Result<Lyrics?> = query { api ->
+        val dto = try {
+            LyricsApi(api).getLyrics(UUID.fromString(trackId)).content
+        } catch (e: InvalidStatusException) {
+            // Most tracks simply have no lyrics file; the server answers 404 for those. That's an
+            // empty result, not a failure, so don't surface it as one.
+            if (e.status == HTTP_NOT_FOUND) return@query null else throw e
+        }
+        val lines = dto.lyrics.map { line ->
+            LyricLine(
+                text = line.text.orEmpty().trim(),
+                // Jellyfin reports line starts in ticks (100 ns), like every other duration it sends.
+                startMs = line.start?.let { it / TICKS_PER_MS },
+            )
+        }
+        if (lines.isEmpty() || lines.all { it.text.isEmpty() }) {
+            null
+        } else {
+            // Only treat lyrics as synchronized when *every* line is timed — a partially timed file
+            // would leave the highlight jumping over the untimed gaps.
+            Lyrics(lines = lines, synced = lines.all { it.startMs != null })
         }
     }
 
