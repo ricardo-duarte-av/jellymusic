@@ -53,6 +53,9 @@ fun ChangelogScreen(onBack: () -> Unit) {
 
 @Composable
 private fun ChangelogSection(entry: ChangelogVersion) {
+    // Right after a release the Unreleased bucket sits empty until the next commit fills it — don't
+    // render a bare heading with nothing under it.
+    if (entry.changes.isEmpty()) return
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),

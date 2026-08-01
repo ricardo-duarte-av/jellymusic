@@ -18,6 +18,11 @@ val CHANGELOG: List<ChangelogVersion> = listOf(
     ChangelogVersion(
         version = null,
         date = null,
+        changes = emptyList(),
+    ),
+    ChangelogVersion(
+        version = "0.1.75",
+        date = "01/08/2026",
         changes = listOf(
             "The previous button now restarts the current song if it's more than 5 seconds in, and " +
                 "only jumps to the previous song before that — in the widget, the player screen, the " +
