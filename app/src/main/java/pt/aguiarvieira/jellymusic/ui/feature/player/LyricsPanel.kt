@@ -1,6 +1,8 @@
 package pt.aguiarvieira.jellymusic.ui.feature.player
 
 import android.os.SystemClock
+import android.util.Log
+import pt.aguiarvieira.jellymusic.BuildConfig
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
@@ -247,13 +249,24 @@ private suspend fun LazyListState.centreOn(index: Int) {
         withFrameNanos { }
     }
 
-    // Scroll by the distance actually measured between the line's middle and the box's middle,
-    // rather than asking the list to place the item at a computed offset. Reading real geometry is
-    // what keeps this honest whatever the content padding, item heights and offset conventions turn
-    // out to be — and animateScrollBy clamps at the list's own ends by itself, which is what leaves
-    // the opening lines resting high and the closing lines resting low.
+    // Scroll by the distance actually measured between the line's middle and the box's middle.
+    // Item offsets are in the viewport's own coordinate space, whose origin is viewportStartOffset —
+    // and that goes *negative* by the content padding, because the padded area is still visible. So
+    // the line's position within the box is its offset measured from there, not from zero. Skipping
+    // that correction left every line exactly one padding's worth too low, which at this text size
+    // is very nearly one line: the sung line kept landing last in the box instead of centred.
     val item = layoutInfo.visibleItemsInfo.firstOrNull { it.index == index } ?: return
-    val delta = (item.offset + item.size / 2) - viewport / 2
+    val itemCentreInBox = item.offset - layoutInfo.viewportStartOffset + item.size / 2
+    val delta = itemCentreInBox - viewport / 2
+    if (BuildConfig.DEBUG) {
+        Log.d(
+            TAG,
+            "centre line=$index viewport=$viewport start=${layoutInfo.viewportStartOffset} " +
+                "itemOffset=${item.offset} itemSize=${item.size} centreInBox=$itemCentreInBox delta=$delta",
+        )
+    }
+    // animateScrollBy clamps at the list's own ends, which is what leaves the opening lines resting
+    // high and the closing lines resting low instead of dragging empty space in to force them centre.
     if (delta != 0) animateScrollBy(delta.toFloat())
 }
 
@@ -277,6 +290,8 @@ private fun Modifier.fadingEdges(fadeHeight: Dp): Modifier = this
             blendMode = BlendMode.DstIn,
         )
     }
+
+private const val TAG = "LyricsPanel"
 
 /** Sentinel "distance" for unsynced lyrics, where no line is the current one. */
 private const val UNSYNCED_DISTANCE = Int.MIN_VALUE
