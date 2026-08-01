@@ -1,5 +1,6 @@
 package pt.aguiarvieira.jellymusic.ui.feature.detail
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -68,6 +69,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import pt.aguiarvieira.jellymusic.domain.model.Album
 import pt.aguiarvieira.jellymusic.domain.model.Track
 import pt.aguiarvieira.jellymusic.domain.model.TrackDownloadStatus
@@ -114,6 +117,12 @@ fun AlbumDetailScreen(
     val trackStatuses by downloadsViewModel.trackStatuses.collectAsStateWithLifecycle()
     val transcodeDefault by downloadsViewModel.transcodeDefault.collectAsStateWithLifecycle()
     var pendingDownload by remember { mutableStateOf<DownloadTarget?>(null) }
+    // Only the *identity* of the playing track matters here (it tints that track's card), so map it
+    // out of the playback state rather than collecting the whole thing — otherwise every transport
+    // change (play/pause, buffering) would recompose this screen.
+    val playingTrackId by remember(playbackViewModel) {
+        playbackViewModel.state.map { it.trackId }.distinctUntilChanged()
+    }.collectAsStateWithLifecycle(initialValue = null)
 
     DownloadDialogs(
         target = pendingDownload,
@@ -212,6 +221,7 @@ fun AlbumDetailScreen(
                         albumId = viewModel.albumId,
                         tracks = state.value,
                         heroArtworkUrl = heroArt,
+                        playingTrackId = playingTrackId,
                         onPlay = playbackViewModel::play,
                         onShufflePlay = playbackViewModel::playShuffled,
                         trackStatuses = trackStatuses,
@@ -233,6 +243,8 @@ private fun AlbumTrackList(
     albumId: String,
     tracks: List<Track>,
     heroArtworkUrl: String?,
+    /** Id of the track playing right now (from any screen), tinted tertiary in the list. */
+    playingTrackId: String?,
     onPlay: (List<Track>, Int) -> Unit,
     onShufflePlay: (List<Track>) -> Unit,
     trackStatuses: Map<String, TrackDownloadStatus>,
@@ -314,6 +326,7 @@ private fun AlbumTrackList(
                     section = section,
                     allTracks = tracks,
                     trackStatuses = trackStatuses,
+                    playingTrackId = playingTrackId,
                     onPlay = onPlay,
                     onRequestDownload = onRequestDownload,
                     onRemoveTrack = onRemoveTrack,
@@ -329,6 +342,7 @@ private fun AlbumTrackList(
                     onDownload = { onRequestDownload(track) },
                     onRemoveLocal = { onRemoveTrack(track.id) },
                     onToggleFavorite = { onToggleTrackFavorite(track) },
+                    playing = track.id == playingTrackId,
                 )
             }
         }
@@ -380,6 +394,7 @@ private fun DiscCard(
     section: DiscSection,
     allTracks: List<Track>,
     trackStatuses: Map<String, TrackDownloadStatus>,
+    playingTrackId: String?,
     onPlay: (List<Track>, Int) -> Unit,
     onRequestDownload: (Track) -> Unit,
     onRemoveTrack: (String) -> Unit,
@@ -410,6 +425,7 @@ private fun DiscCard(
                 onRemoveLocal = { onRemoveTrack(track.id) },
                 onToggleFavorite = { onToggleTrackFavorite(track) },
                 containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                playing = track.id == playingTrackId,
             )
         }
         Spacer(Modifier.height(4.dp))
@@ -496,10 +512,30 @@ private fun TrackCard(
     onRemoveLocal: (() -> Unit)? = null,
     onToggleFavorite: (() -> Unit)? = null,
     containerColor: Color = MaterialTheme.colorScheme.surfaceContainer,
+    playing: Boolean = false,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     val hasMenu = onDownload != null || onRemoveLocal != null || onToggleFavorite != null
     val canRemove = downloadStatus?.isComplete == true || downloadStatus?.isActive == true
+
+    // The playing track wears the album's tertiary accent (AlbumTheme derives it from the cover), so
+    // it stands out from the neutral tonal ladder the other cards sit on. Animated so it slides into
+    // place when the track changes rather than popping.
+    val container by animateColorAsState(
+        targetValue = if (playing) MaterialTheme.colorScheme.tertiaryContainer else containerColor,
+        label = "trackCardContainer",
+    )
+    val onContainer = if (playing) {
+        MaterialTheme.colorScheme.onTertiaryContainer
+    } else {
+        MaterialTheme.colorScheme.onSurface
+    }
+    // Secondary lines (artist, codec/ReplayGain, duration) — muted against whichever container wins.
+    val onContainerVariant = if (playing) {
+        MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.75f)
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
 
     Box {
         Card(
@@ -511,7 +547,7 @@ private fun TrackCard(
                     onLongClick = if (hasMenu) ({ menuOpen = true }) else null,
                 ),
             shape = RoundedCornerShape(8.dp),
-            colors = CardDefaults.cardColors(containerColor = containerColor),
+            colors = CardDefaults.cardColors(containerColor = container, contentColor = onContainer),
         ) {
             Column {
                 Row(
@@ -524,7 +560,7 @@ private fun TrackCard(
                         Text(
                             text = track.trackNumber?.toString() ?: "•",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = onContainerVariant,
                         )
                     }
                     Spacer(Modifier.width(8.dp))
@@ -539,7 +575,7 @@ private fun TrackCard(
                             Text(
                                 text = it,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = onContainerVariant,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
@@ -549,7 +585,7 @@ private fun TrackCard(
                             Text(
                                 text = it,
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = onContainerVariant,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
@@ -564,7 +600,7 @@ private fun TrackCard(
                                 Text(
                                     text = formatDuration(ms),
                                     style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    color = onContainerVariant,
                                     modifier = Modifier.padding(start = 6.dp),
                                 )
                             }

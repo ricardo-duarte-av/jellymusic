@@ -22,6 +22,10 @@ val CHANGELOG: List<ChangelogVersion> = listOf(
             "The previous button now restarts the current song if it's more than 5 seconds in, and " +
                 "only jumps to the previous song before that — in the widget, the player screen, the " +
                 "notification and Android Auto.",
+            "The track playing right now is highlighted on the album screen, tinted with the album's " +
+                "own accent colour.",
+            "The play/pause button now shows an animated spinner while a song is buffering, in both " +
+                "the now-playing screen and the mini player.",
         ),
     ),
     ChangelogVersion(

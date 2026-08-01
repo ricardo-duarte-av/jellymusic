@@ -24,8 +24,6 @@ import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudQueue
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.Save
@@ -268,10 +266,10 @@ fun FullPlayerScreen(
                         )
                     }
                     FilledIconButton(onClick = viewModel::togglePlayPause, modifier = Modifier.size(72.dp)) {
-                        Icon(
-                            imageVector = if (state.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                            contentDescription = if (state.isPlaying) "Pause" else "Play",
-                            modifier = Modifier.size(40.dp),
+                        PlayPauseButtonContent(
+                            isPlaying = state.isPlaying,
+                            isBuffering = state.isBuffering,
+                            size = 40.dp,
                         )
                     }
                     IconButton(onClick = viewModel::next, modifier = Modifier.size(56.dp)) {

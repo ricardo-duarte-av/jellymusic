@@ -12,10 +12,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -167,9 +163,10 @@ fun MiniPlayer(
                     }
                 }
                 IconButton(onClick = viewModel::togglePlayPause) {
-                    Icon(
-                        imageVector = if (state.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                        contentDescription = if (state.isPlaying) "Pause" else "Play",
+                    PlayPauseButtonContent(
+                        isPlaying = state.isPlaying,
+                        isBuffering = state.isBuffering,
+                        size = 24.dp,
                     )
                 }
             }

@@ -38,6 +38,12 @@ enum class RepeatMode { OFF, ALL, ONE }
 data class PlaybackUiState(
     val hasMedia: Boolean = false,
     val isPlaying: Boolean = false,
+    /**
+     * True while the player is stalled buffering *and* meant to be playing — the third transport
+     * state the play/pause button renders as a spinner. Gated on playWhenReady so a track paused
+     * mid-buffer still shows a play icon (the user asked for it to stop).
+     */
+    val isBuffering: Boolean = false,
     val trackId: String? = null,
     val title: String = "",
     val artist: String = "",
@@ -304,6 +310,7 @@ class PlaybackConnection @Inject constructor(
         _state.value = PlaybackUiState(
             hasMedia = c.currentMediaItem != null,
             isPlaying = c.isPlaying,
+            isBuffering = c.playbackState == Player.STATE_BUFFERING && c.playWhenReady,
             trackId = c.currentMediaItem?.mediaId?.removePrefix("track/"),
             title = metadata.title?.toString().orEmpty(),
             artist = metadata.artist?.toString().orEmpty(),
