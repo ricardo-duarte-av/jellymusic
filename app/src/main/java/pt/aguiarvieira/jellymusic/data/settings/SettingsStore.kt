@@ -56,6 +56,14 @@ class SettingsStore @Inject constructor(
         prefs[KEY_DYNAMIC_ALBUM_THEME] ?: true
     }
 
+    /**
+     * Whether the now-playing screen fetches and shows lyrics. Defaults off: most libraries carry
+     * lyrics for few tracks, and the box costs the cover some height wherever they do exist.
+     */
+    val lyricsEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_LYRICS_ENABLED] ?: false
+    }
+
     /** Whether the user's favourites are auto-downloaded for offline listening. Defaults off. */
     val downloadFavorites: Flow<Boolean> = context.dataStore.data.map { prefs ->
         prefs[KEY_DOWNLOAD_FAVORITES] ?: false
@@ -114,6 +122,10 @@ class SettingsStore @Inject constructor(
         context.dataStore.edit { it[KEY_DYNAMIC_ALBUM_THEME] = enabled }
     }
 
+    suspend fun setLyricsEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[KEY_LYRICS_ENABLED] = enabled }
+    }
+
     suspend fun setDownloadFavorites(enabled: Boolean) {
         context.dataStore.edit { it[KEY_DOWNLOAD_FAVORITES] = enabled }
     }
@@ -146,6 +158,7 @@ class SettingsStore @Inject constructor(
         val KEY_REPLAYGAIN_ENABLED = booleanPreferencesKey("replaygain_enabled")
         val KEY_REPLAYGAIN_PREAMP_DB = floatPreferencesKey("replaygain_preamp_db")
         val KEY_DYNAMIC_ALBUM_THEME = booleanPreferencesKey("dynamic_album_theme")
+        val KEY_LYRICS_ENABLED = booleanPreferencesKey("lyrics_enabled")
         val KEY_DOWNLOAD_FAVORITES = booleanPreferencesKey("download_favorites")
         val KEY_DOWNLOAD_FAVORITES_METERED = booleanPreferencesKey("download_favorites_metered")
         val KEY_ALBUM_SORT = stringPreferencesKey("album_sort")

@@ -1,8 +1,6 @@
 package pt.aguiarvieira.jellymusic.ui.feature.player
 
 import android.os.SystemClock
-import android.util.Log
-import pt.aguiarvieira.jellymusic.BuildConfig
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
@@ -268,13 +266,6 @@ private suspend fun LazyListState.centreOn(index: Int, animate: Boolean) {
     val item = layoutInfo.visibleItemsInfo.firstOrNull { it.index == index } ?: return
     val itemCentreInBox = item.offset - layoutInfo.viewportStartOffset + item.size / 2
     val delta = itemCentreInBox - viewport / 2
-    if (BuildConfig.DEBUG) {
-        Log.d(
-            TAG,
-            "centre line=$index viewport=$viewport start=${layoutInfo.viewportStartOffset} " +
-                "itemOffset=${item.offset} itemSize=${item.size} centreInBox=$itemCentreInBox delta=$delta",
-        )
-    }
     // Both scroll primitives clamp at the list's own ends, which is what leaves the opening lines
     // resting high and the closing lines resting low instead of dragging empty space in to force
     // them centre.
@@ -302,8 +293,6 @@ private fun Modifier.fadingEdges(fadeHeight: Dp): Modifier = this
             blendMode = BlendMode.DstIn,
         )
     }
-
-private const val TAG = "LyricsPanel"
 
 /** Sentinel "distance" for unsynced lyrics, where no line is the current one. */
 private const val UNSYNCED_DISTANCE = Int.MIN_VALUE

@@ -59,6 +59,7 @@ fun SettingsScreen(
 ) {
     val settings by viewModel.streamSettings.collectAsStateWithLifecycle()
     val dynamicTheme by viewModel.dynamicAlbumTheme.collectAsStateWithLifecycle()
+    val lyricsEnabled by viewModel.lyricsEnabled.collectAsStateWithLifecycle()
     val replayGain by viewModel.replayGainSettings.collectAsStateWithLifecycle()
     val downloadFavorites by viewModel.downloadFavorites.collectAsStateWithLifecycle()
     val downloadFavoritesOnMetered by viewModel.downloadFavoritesOnMetered.collectAsStateWithLifecycle()
@@ -102,6 +103,22 @@ fun SettingsScreen(
                     )
                 }
                 Switch(checked = dynamicTheme, onCheckedChange = viewModel::setDynamicAlbumTheme)
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Lyrics", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        text = "Show lyrics on the now-playing screen for songs that have them. " +
+                            "Off leaves the cover its full size.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(checked = lyricsEnabled, onCheckedChange = viewModel::setLyricsEnabled)
             }
 
             // Recovery for a corrupt cached cover: wipes Coil's image cache so artwork re-fetches.

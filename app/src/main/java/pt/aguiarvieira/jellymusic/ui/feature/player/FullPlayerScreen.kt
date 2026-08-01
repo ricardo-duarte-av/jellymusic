@@ -157,14 +157,15 @@ fun FullPlayerScreen(
         },
     ) { padding ->
             Column(
+                // Horizontal padding is applied per child rather than here, so the cover can run
+                // closer to the edges than the controls do when there is no lyrics box.
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(padding)
-                    .padding(horizontal = 24.dp),
+                    .padding(padding),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-              // Everything above the seek bar, measured as one region so the cover can be capped
-              // against its height rather than swallowing it.
+                // Everything above the seek bar, measured as one region so the cover can be capped
+                // against its height rather than swallowing it.
                 NowPlayingBody(
                     state = state,
                     qualityLabel = qualityLabel,
@@ -181,12 +182,16 @@ fun FullPlayerScreen(
                 )
 
                 // Collects the position flow internally so only the seek bar recomposes as it advances.
-                PlayerSeekBar(progress = viewModel.progress, onSeek = viewModel::seekTo)
+                Column(modifier = Modifier.padding(horizontal = PLAYER_PADDING)) {
+                    PlayerSeekBar(progress = viewModel.progress, onSeek = viewModel::seekTo)
+                }
 
                 Spacer(Modifier.height(24.dp))
 
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = PLAYER_PADDING),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceEvenly,
                 ) {
@@ -307,7 +312,12 @@ private fun NowPlayingBody(
 
             NowPlayingHeader(
                 fraction = headerFraction,
-                modifier = Modifier.fillMaxWidth(),
+                // Width is what limits the cover on a phone, not height — so with no lyrics box to
+                // make room for, letting it run closer to the screen edges is what makes it bigger.
+                // The controls below keep the wider padding either way.
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = if (lyrics != null) PLAYER_PADDING else COVER_PADDING_NO_LYRICS),
                 maxArtSize = maxArtSize,
                 art = {
                     ArtworkImage(
@@ -324,6 +334,10 @@ private fun NowPlayingBody(
                 metadata = {
                     Column(
                         horizontalAlignment = if (compactHeader) Alignment.Start else Alignment.CenterHorizontally,
+                        // The header runs wide so the cover can; the text stays at the normal inset.
+                        modifier = Modifier.padding(
+                            horizontal = if (lyrics != null) 0.dp else PLAYER_PADDING - COVER_PADDING_NO_LYRICS,
+                        ),
                     ) {
                         val textAlign = if (compactHeader) TextAlign.Start else TextAlign.Center
                         // Track title and album both jump to the album detail screen; artist jumps to the
@@ -453,6 +467,7 @@ private fun NowPlayingBody(
                     onToggleExpanded = onToggleLyrics,
                     modifier = Modifier
                         .fillMaxWidth()
+                        .padding(horizontal = PLAYER_PADDING)
                         .weight(1f),
                 )
                 Spacer(Modifier.height(4.dp))
@@ -625,6 +640,12 @@ private fun Modifier.clickableTo(enabled: Boolean, onClick: () -> Unit): Modifie
  * lines, enough to read along rather than just hint that lyrics exist.
  */
 private const val COVER_SHARE_WITH_LYRICS = 0.5f
+
+/** Side padding for the player's content: metadata, the lyrics box, the seek bar and the controls. */
+private val PLAYER_PADDING = 24.dp
+
+/** Tighter side padding for the cover alone when no lyrics box is competing for the space. */
+private val COVER_PADDING_NO_LYRICS = 8.dp
 
 private const val SEEK_SETTLE_GRACE_MS = 1_000L
 

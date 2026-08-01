@@ -19,8 +19,11 @@ val CHANGELOG: List<ChangelogVersion> = listOf(
         version = null,
         date = null,
         changes = listOf(
-            "Lyrics! Songs whose lyrics are on the server now show them in the now-playing screen, " +
-                "between the song details and the progress bar.",
+            "Lyrics! Songs whose lyrics are on the server can now show them in the now-playing " +
+                "screen, between the song details and the progress bar. Switch it on in " +
+                "Settings → Lyrics; it starts off.",
+            "With lyrics switched off the album cover is drawn a little larger, using the space the " +
+                "lyrics box would have taken.",
             "Timed lyrics follow along with the music: the line being sung is highlighted in the " +
                 "album's own colour and keeps itself in the middle of the box, including after you " +
                 "drag the progress bar. The opening and closing lines rest near the top and bottom " +

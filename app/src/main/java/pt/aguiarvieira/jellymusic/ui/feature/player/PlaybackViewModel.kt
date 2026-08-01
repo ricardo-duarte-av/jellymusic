@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
@@ -19,6 +20,7 @@ import pt.aguiarvieira.jellymusic.domain.model.StreamSettings
 import pt.aguiarvieira.jellymusic.domain.model.Track
 import pt.aguiarvieira.jellymusic.domain.model.TrackAudioInfo
 import pt.aguiarvieira.jellymusic.data.download.FavoriteDownloadSyncManager
+import pt.aguiarvieira.jellymusic.data.settings.SettingsStore
 import pt.aguiarvieira.jellymusic.domain.repository.MusicRepository
 import pt.aguiarvieira.jellymusic.playback.PlaybackConnection
 import javax.inject.Inject
@@ -36,6 +38,7 @@ class PlaybackViewModel @Inject constructor(
     private val connection: PlaybackConnection,
     private val musicRepository: MusicRepository,
     private val favoriteSyncManager: FavoriteDownloadSyncManager,
+    settingsStore: SettingsStore,
 ) : ViewModel() {
 
     val state = connection.state
@@ -97,10 +100,13 @@ class PlaybackViewModel @Inject constructor(
      * [PlaybackUiState] because it is a UI-only concern the playback service knows nothing about.
      */
     val lyrics: StateFlow<LyricsState> =
-        connection.state
-            .map { it.trackId }
+        combine(
+            connection.state.map { it.trackId }.distinctUntilChanged(),
+            settingsStore.lyricsEnabled,
+        ) { trackId, enabled -> trackId.takeIf { enabled } }
             .distinctUntilChanged()
             .mapLatest { trackId ->
+                // Null covers both "nothing playing" and "lyrics switched off" — no fetch either way.
                 if (trackId == null) {
                     LyricsState.None
                 } else {

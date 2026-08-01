@@ -31,6 +31,9 @@ class SettingsViewModel @Inject constructor(
     val dynamicAlbumTheme = settingsStore.dynamicAlbumTheme
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
 
+    val lyricsEnabled = settingsStore.lyricsEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
     val downloadFavorites = settingsStore.downloadFavorites
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
@@ -47,6 +50,10 @@ class SettingsViewModel @Inject constructor(
 
     fun setDynamicAlbumTheme(enabled: Boolean) {
         viewModelScope.launch { settingsStore.setDynamicAlbumTheme(enabled) }
+    }
+
+    fun setLyricsEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsStore.setLyricsEnabled(enabled) }
     }
 
     fun setDownloadFavorites(enabled: Boolean) {
