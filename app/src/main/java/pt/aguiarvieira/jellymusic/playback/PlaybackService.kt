@@ -77,6 +77,13 @@ private const val MAX_CHILDREN_PER_NODE = 500
 /** Upper bound on the blocking final queue write in [PlaybackService.onDestroy]. */
 private const val QUEUE_SAVE_TIMEOUT_MS = 1_000L
 
+/**
+ * How deep into a track "previous" still means *previous track*. Past this point every previous
+ * button — widget, player screen, notification, Android Auto, headset — restarts the current track
+ * instead. Media3's default is 3s; 5s is the familiar behaviour from most music players.
+ */
+private const val MAX_SEEK_TO_PREVIOUS_MS = 5_000L
+
 /** Browse nodes whose contents depend on the selected library; re-queried when it changes. */
 private val LIBRARY_SCOPED_BROWSE_NODES = listOf(
     MediaItemTree.ROOT_ID,
@@ -430,6 +437,10 @@ class PlaybackService : MediaLibraryService() {
                 /* handleAudioFocus = */ true,
             )
             .setHandleAudioBecomingNoisy(true)
+            // Threshold for Player.seekToPrevious(): below it "previous" steps back a track, above it
+            // it restarts the current one. Every previous button in the app goes through
+            // seekToPrevious(), so setting it here is what makes them all behave the same.
+            .setMaxSeekToPreviousPositionMs(MAX_SEEK_TO_PREVIOUS_MS)
             // Hold a partial wake lock (+ Wi-Fi lock) *while playing* so the CPU/radio can't doze mid-
             // track with the screen off and starve the audio pipeline — the classic screen-off stutter.
             // media3 acquires these only during active playback and releases them on pause/stop, so idle

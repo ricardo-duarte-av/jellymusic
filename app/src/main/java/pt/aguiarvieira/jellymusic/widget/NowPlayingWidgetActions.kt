@@ -80,7 +80,9 @@ class NextAction : ActionCallback {
 @UnstableApi
 class PreviousAction : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
-        withController(context, "previous") { it.seekToPreviousMediaItem() }
+        // seekToPrevious(), not seekToPreviousMediaItem(): past the session's
+        // maxSeekToPreviousPosition this restarts the current track instead of skipping back.
+        withController(context, "previous") { it.seekToPrevious() }
     }
 }
 

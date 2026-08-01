@@ -16,6 +16,15 @@ data class ChangelogVersion(
 /** Newest first. Unreleased (version = null) always on top. */
 val CHANGELOG: List<ChangelogVersion> = listOf(
     ChangelogVersion(
+        version = null,
+        date = null,
+        changes = listOf(
+            "The previous button now restarts the current song if it's more than 5 seconds in, and " +
+                "only jumps to the previous song before that — in the widget, the player screen, the " +
+                "notification and Android Auto.",
+        ),
+    ),
+    ChangelogVersion(
         version = "0.1.74",
         date = "29/07/2026",
         changes = listOf(

@@ -254,8 +254,14 @@ class PlaybackConnection @Inject constructor(
         controller?.seekToNextMediaItem()
     }
 
+    /**
+     * Back button: restarts the current track once playback is past the session's
+     * maxSeekToPreviousPosition, and only steps to the previous track before that — the standard
+     * music-player behaviour. [Player.seekToPrevious] is what implements the split; going straight to
+     * seekToPreviousMediaItem() would always skip.
+     */
     fun previous() {
-        controller?.seekToPreviousMediaItem()
+        controller?.seekToPrevious()
     }
 
     fun seekTo(positionMs: Long) {
