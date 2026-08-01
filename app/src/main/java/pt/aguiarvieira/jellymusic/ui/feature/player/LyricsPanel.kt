@@ -8,6 +8,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,6 +31,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,6 +47,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.StateFlow
 import pt.aguiarvieira.jellymusic.domain.model.Lyrics
 import pt.aguiarvieira.jellymusic.playback.PlaybackProgress
@@ -70,7 +74,8 @@ fun LyricsPanel(
     onToggleExpanded: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val activeIndex by rememberActiveLineIndex(lyrics, progress, isPlaying)
+    val activeLine = rememberActiveLineIndex(lyrics, progress, isPlaying)
+    val activeIndex = activeLine.value
     val listState = rememberLazyListState()
 
     // Following the song fights the user when they're reading ahead, so hold off auto-scrolling for
@@ -84,23 +89,28 @@ fun LyricsPanel(
         }
     }
 
-    // Re-centring is keyed on the line index, so it covers both ordinary playback and the user
-    // dragging the seek bar — a seek changes the active line, which lands here like any other.
-    LaunchedEffect(activeIndex, expanded) {
+    // Following the song: keyed on the line index, so it covers ordinary playback and the user
+    // dragging the seek bar alike — a seek changes the active line, which lands here like any other.
+    LaunchedEffect(activeIndex) {
         if (activeIndex < 0) return@LaunchedEffect
-        // Centring needs a measured viewport, and it needs the *settled* one: expanding grows this
-        // box over the whole morph, so centring against a half-grown viewport would leave the line
-        // sitting off-centre once it finished. Wait for two frames at the same height. In the
-        // ordinary case (no morph running) that's already true, so this costs a frame.
-        var previous = -1
-        while (true) {
-            val height = listState.layoutInfo.viewportSize.height
-            if (height > 0 && height == previous) break
-            previous = height
-            withFrameNanos { }
-        }
+        // First composition may not have measured the box yet; there is nothing to centre against.
+        snapshotFlow { listState.layoutInfo.viewportSize.height }.first { it > 0 }
         if (SystemClock.elapsedRealtime() - lastDragAtMs < USER_SCROLL_GRACE_MS) return@LaunchedEffect
-        listState.centreOn(activeIndex)
+        listState.centreOn(activeIndex, animate = true)
+    }
+
+    // Expanding and collapsing resizes this box over the whole morph. Re-centre on every height it
+    // passes through, so the sung line stays pinned to the middle as the box grows and shrinks —
+    // and is therefore already centred the instant the mini box arrives, rather than inheriting
+    // wherever the full-screen scroll position happened to leave it. Instant, not animated: these
+    // are per-frame corrections during an animation, not a scroll of their own.
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.layoutInfo.viewportSize.height }
+            .distinctUntilChanged()
+            .collect { height ->
+                val line = activeLine.value
+                if (height > 0 && line >= 0) listState.centreOn(line, animate = false)
+            }
     }
 
     // Collapsed, a faint surface marks the lyrics out as a distinct, tappable box; expanded, it
@@ -231,7 +241,7 @@ private fun rememberActiveLineIndex(
  * Scrolls [index] to the vertical middle of the viewport. Long jumps (a seek across the song) snap
  * rather than animate — animating hundreds of lines would take longer than the listener's patience.
  */
-private suspend fun LazyListState.centreOn(index: Int) {
+private suspend fun LazyListState.centreOn(index: Int, animate: Boolean) {
     // viewportSize is the box itself; the viewportStart/End pair spans the content padding too, so
     // it is not interchangeable with it. Fall back only if the box hasn't reported a size yet.
     val viewport = layoutInfo.viewportSize.height.takeIf { it > 0 }
@@ -265,9 +275,11 @@ private suspend fun LazyListState.centreOn(index: Int) {
                 "itemOffset=${item.offset} itemSize=${item.size} centreInBox=$itemCentreInBox delta=$delta",
         )
     }
-    // animateScrollBy clamps at the list's own ends, which is what leaves the opening lines resting
-    // high and the closing lines resting low instead of dragging empty space in to force them centre.
-    if (delta != 0) animateScrollBy(delta.toFloat())
+    // Both scroll primitives clamp at the list's own ends, which is what leaves the opening lines
+    // resting high and the closing lines resting low instead of dragging empty space in to force
+    // them centre.
+    if (delta == 0) return
+    if (animate) animateScrollBy(delta.toFloat()) else scrollBy(delta.toFloat())
 }
 
 /**
