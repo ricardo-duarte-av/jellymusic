@@ -1,7 +1,8 @@
 package pt.aguiarvieira.jellymusic.ui.feature.player
 
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -62,14 +63,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.util.lerp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
+import pt.aguiarvieira.jellymusic.domain.model.Lyrics
 import pt.aguiarvieira.jellymusic.playback.PlaybackProgress
+import pt.aguiarvieira.jellymusic.playback.PlaybackUiState
 import pt.aguiarvieira.jellymusic.playback.QueueItem
 import pt.aguiarvieira.jellymusic.playback.RepeatMode
 import pt.aguiarvieira.jellymusic.ui.components.ArtworkImage
@@ -103,12 +108,25 @@ fun FullPlayerScreen(
     val lyrics = (lyricsState as? LyricsState.Available)?.lyrics
     LaunchedEffect(lyrics == null) { if (lyrics == null) lyricsExpanded = false }
 
-    // Drives the whole header morph (cover size and position, metadata placement, top spacing).
-    val headerFraction by animateFloatAsState(
-        targetValue = if (lyricsExpanded) 1f else 0f,
-        animationSpec = MaterialTheme.motionScheme.slowSpatialSpec(),
-        label = "lyricsHeaderMorph",
-    )
+    // Drives the whole header morph (cover size and position, metadata placement, top spacing). An
+    // Animatable rather than animateFloatAsState because the back gesture below scrubs it directly.
+    val morph = remember { Animatable(0f) }
+    val morphSpec = MaterialTheme.motionScheme.slowSpatialSpec<Float>()
+    LaunchedEffect(lyricsExpanded) { morph.animateTo(if (lyricsExpanded) 1f else 0f, morphSpec) }
+
+    // First back collapses the lyrics rather than leaving the player: the reverse morph follows the
+    // finger, so releasing mid-swipe rewinds it and completing the gesture carries it home.
+    PredictiveBackHandler(enabled = lyricsExpanded) { backEvents ->
+        try {
+            backEvents.collect { event -> morph.snapTo(1f - event.progress) }
+            lyricsExpanded = false // The LaunchedEffect above settles the remaining distance to 0.
+        } catch (cancelled: CancellationException) {
+            morph.animateTo(1f, morphSpec)
+            throw cancelled
+        }
+    }
+
+    val headerFraction = morph.value
     val compactHeader = headerFraction > 0.5f
 
     AlbumTheme(artworkUrl = state.artworkUri) {
@@ -145,163 +163,22 @@ fun FullPlayerScreen(
                     .padding(horizontal = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                // With no lyrics on screen the cover sits centred between the bars, as before. With
-                // lyrics it rides near the top, and collapses right up to it once they're expanded.
-                Spacer(Modifier.weight(lerp(if (lyrics != null) 0.18f else 1f, 0.02f, headerFraction)))
-
-                NowPlayingHeader(
-                    fraction = headerFraction,
-                    modifier = Modifier.fillMaxWidth(),
-                    art = {
-                        ArtworkImage(
-                            url = state.artworkUri,
-                            contentDescription = state.title,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .sharedElementArt(NOW_PLAYING_ART_KEY),
-                            // A 28dp radius reads as a lozenge once the cover is thumbnail-sized, so
-                            // tighten the corners as it shrinks.
-                            shape = RoundedCornerShape(lerp(28.dp, 12.dp, headerFraction)),
-                        )
-                    },
-                    metadata = {
-                        Column(
-                            horizontalAlignment = if (compactHeader) Alignment.Start else Alignment.CenterHorizontally,
-                        ) {
-                            val textAlign = if (compactHeader) TextAlign.Start else TextAlign.Center
-                            // Track title and album both jump to the album detail screen; artist jumps to the
-                            // artist detail screen. Each is tappable only when the id is known.
-                            val albumTarget = state.albumId
-                            Text(
-                                text = state.title,
-                                style = if (compactHeader) {
-                                    MaterialTheme.typography.titleLargeEmphasized
-                                } else {
-                                    MaterialTheme.typography.headlineSmallEmphasized
-                                },
-                                textAlign = textAlign,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.clickableTo(
-                                    enabled = albumTarget != null,
-                                    onClick = {
-                                        albumTarget?.let {
-                                            onNavigateToAlbum(it, state.album.orEmpty(), state.artworkUri)
-                                        }
-                                    },
-                                ),
-                            )
-                            state.album?.takeIf { it.isNotBlank() }?.let { album ->
-                                Text(
-                                    text = album,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    textAlign = textAlign,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier
-                                        .padding(top = 2.dp)
-                                        .clickableTo(
-                                            enabled = albumTarget != null,
-                                            onClick = {
-                                                albumTarget?.let { onNavigateToAlbum(it, album, state.artworkUri) }
-                                            },
-                                        ),
-                                )
-                            }
-                            val artistTarget = state.artistId
-                            Text(
-                                text = state.artist,
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = textAlign,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier
-                                    .padding(top = 2.dp)
-                                    .clickableTo(
-                                        enabled = artistTarget != null,
-                                        onClick = { artistTarget?.let { onNavigateToArtist(it, state.artist) } },
-                                    ),
-                            )
-                            // Quality and source are detail for browsing, not for reading along —
-                            // they fold away to leave the lyrics as much room as possible.
-                            AnimatedVisibility(
-                                visible = !compactHeader,
-                                enter = fadeIn() + expandVertically(),
-                                exit = fadeOut() + shrinkVertically(),
-                            ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    // File quality: original details, "original → transcoded" when streaming
-                                    // transcode is on, or just the transcoded format when playing a
-                                    // downloaded transcoded file.
-                                    qualityLabel?.let {
-                                        Text(
-                                            text = it,
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            textAlign = TextAlign.Center,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                            modifier = Modifier.padding(top = 6.dp),
-                                        )
-                                    }
-                                    // Source: playing from a local download vs streaming from the server.
-                                    if (state.hasMedia) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier.padding(top = 4.dp),
-                                        ) {
-                                            Icon(
-                                                imageVector = if (state.isLocal) {
-                                                    Icons.Filled.Save
-                                                } else {
-                                                    Icons.Filled.CloudQueue
-                                                },
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                modifier = Modifier.size(14.dp),
-                                            )
-                                            Spacer(Modifier.width(4.dp))
-                                            Text(
-                                                text = buildString {
-                                                    append(if (state.isLocal) "Downloaded" else "Streaming")
-                                                    // Append this track's ReplayGain value when the server
-                                                    // has scanned it.
-                                                    state.normalizationGainDb?.let {
-                                                        append("  ·  ReplayGain %+.1f dB".format(it))
-                                                    }
-                                                },
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
+              // Everything above the seek bar, measured as one region so the cover can be capped
+              // against its height rather than swallowing it.
+                NowPlayingBody(
+                    state = state,
+                    qualityLabel = qualityLabel,
+                    lyrics = lyrics,
+                    progress = viewModel.progress,
+                    headerFraction = headerFraction,
+                    lyricsExpanded = lyricsExpanded,
+                    onToggleLyrics = { lyricsExpanded = !lyricsExpanded },
+                    onNavigateToAlbum = onNavigateToAlbum,
+                    onNavigateToArtist = onNavigateToArtist,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
                 )
-
-                // The gap the removed colour banner and the tightened cover spacing gave back: with
-                // lyrics it's the reading area, without them it's the same empty breathing room the
-                // screen has always had above the seek bar.
-                if (lyrics != null) {
-                    Spacer(Modifier.height(12.dp))
-                    LyricsPanel(
-                        lyrics = lyrics,
-                        progress = viewModel.progress,
-                        isPlaying = state.isPlaying,
-                        expanded = lyricsExpanded,
-                        onToggleExpanded = { lyricsExpanded = !lyricsExpanded },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f),
-                    )
-                    Spacer(Modifier.height(12.dp))
-                } else {
-                    Spacer(Modifier.weight(1f))
-                }
 
                 // Collects the position flow internally so only the seek bar recomposes as it advances.
                 PlayerSeekBar(progress = viewModel.progress, onSeek = viewModel::seekTo)
@@ -390,6 +267,199 @@ fun FullPlayerScreen(
             }
         }
     }
+    }
+}
+
+
+/**
+ * Everything between the top bar and the seek bar: the cover, the track metadata and — when the
+ * track has them — the lyrics.
+ *
+ * Measured as one region so the cover can be capped against its height. [headerFraction] runs the
+ * morph from "cover above centred metadata" to "corner thumbnail beside it"; see [NowPlayingHeader].
+ */
+@Composable
+private fun NowPlayingBody(
+    state: PlaybackUiState,
+    qualityLabel: String?,
+    lyrics: Lyrics?,
+    progress: StateFlow<PlaybackProgress>,
+    headerFraction: Float,
+    lyricsExpanded: Boolean,
+    onToggleLyrics: () -> Unit,
+    onNavigateToAlbum: (albumId: String, albumName: String, artworkUrl: String?) -> Unit,
+    onNavigateToArtist: (artistId: String, artistName: String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val compactHeader = headerFraction > 0.5f
+    BoxWithConstraints(modifier = modifier) {
+        // A full-width square cover leaves the lyrics a sliver on most phones, so when there
+        // are lyrics to read the cover gives up half the region for them.
+        val maxArtSize = if (lyrics != null) maxHeight * COVER_SHARE_WITH_LYRICS else Dp.Unspecified
+
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            // With no lyrics on screen the cover sits centred in the region, as before. With
+            // lyrics it rides near the top, and collapses right up to it once they're expanded.
+            Spacer(Modifier.weight(lerp(if (lyrics != null) 0.06f else 1f, 0.02f, headerFraction)))
+
+            NowPlayingHeader(
+                fraction = headerFraction,
+                modifier = Modifier.fillMaxWidth(),
+                maxArtSize = maxArtSize,
+                art = {
+                    ArtworkImage(
+                        url = state.artworkUri,
+                        contentDescription = state.title,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .sharedElementArt(NOW_PLAYING_ART_KEY),
+                        // A 28dp radius reads as a lozenge once the cover is thumbnail-sized, so
+                        // tighten the corners as it shrinks.
+                        shape = RoundedCornerShape(lerp(28.dp, 12.dp, headerFraction)),
+                    )
+                },
+                metadata = {
+                    Column(
+                        horizontalAlignment = if (compactHeader) Alignment.Start else Alignment.CenterHorizontally,
+                    ) {
+                        val textAlign = if (compactHeader) TextAlign.Start else TextAlign.Center
+                        // Track title and album both jump to the album detail screen; artist jumps to the
+                        // artist detail screen. Each is tappable only when the id is known.
+                        val albumTarget = state.albumId
+                        Text(
+                            text = state.title,
+                            style = if (compactHeader) {
+                                MaterialTheme.typography.titleLargeEmphasized
+                            } else {
+                                MaterialTheme.typography.headlineSmallEmphasized
+                            },
+                            textAlign = textAlign,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.clickableTo(
+                                enabled = albumTarget != null,
+                                onClick = {
+                                    albumTarget?.let {
+                                        onNavigateToAlbum(it, state.album.orEmpty(), state.artworkUri)
+                                    }
+                                },
+                            ),
+                        )
+                        state.album?.takeIf { it.isNotBlank() }?.let { album ->
+                            Text(
+                                text = album,
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = textAlign,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier
+                                    .padding(top = 2.dp)
+                                    .clickableTo(
+                                        enabled = albumTarget != null,
+                                        onClick = {
+                                            albumTarget?.let { onNavigateToAlbum(it, album, state.artworkUri) }
+                                        },
+                                    ),
+                            )
+                        }
+                        val artistTarget = state.artistId
+                        Text(
+                            text = state.artist,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = textAlign,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .padding(top = 2.dp)
+                                .clickableTo(
+                                    enabled = artistTarget != null,
+                                    onClick = { artistTarget?.let { onNavigateToArtist(it, state.artist) } },
+                                ),
+                        )
+                        // Quality and source are detail for browsing, not for reading along —
+                        // they fold away to leave the lyrics as much room as possible.
+                        AnimatedVisibility(
+                            visible = !compactHeader,
+                            enter = fadeIn() + expandVertically(),
+                            exit = fadeOut() + shrinkVertically(),
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                // File quality: original details, "original → transcoded" when streaming
+                                // transcode is on, or just the transcoded format when playing a
+                                // downloaded transcoded file.
+                                qualityLabel?.let {
+                                    Text(
+                                        text = it,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        textAlign = TextAlign.Center,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.padding(top = 6.dp),
+                                    )
+                                }
+                                // Source: playing from a local download vs streaming from the server.
+                                if (state.hasMedia) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.padding(top = 4.dp),
+                                    ) {
+                                        Icon(
+                                            imageVector = if (state.isLocal) {
+                                                Icons.Filled.Save
+                                            } else {
+                                                Icons.Filled.CloudQueue
+                                            },
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(14.dp),
+                                        )
+                                        Spacer(Modifier.width(4.dp))
+                                        Text(
+                                            text = buildString {
+                                                append(if (state.isLocal) "Downloaded" else "Streaming")
+                                                // Append this track's ReplayGain value when the server
+                                                // has scanned it.
+                                                state.normalizationGainDb?.let {
+                                                    append("  ·  ReplayGain %+.1f dB".format(it))
+                                                }
+                                            },
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+            )
+
+            // The gap the removed colour banner and the tightened cover spacing gave back: with
+            // lyrics it's the reading area, without them it's the same empty breathing room the
+            // screen has always had above the seek bar.
+            if (lyrics != null) {
+                Spacer(Modifier.height(12.dp))
+                LyricsPanel(
+                    lyrics = lyrics,
+                    progress = progress,
+                    isPlaying = state.isPlaying,
+                    expanded = lyricsExpanded,
+                    onToggleExpanded = onToggleLyrics,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                )
+                Spacer(Modifier.height(4.dp))
+            } else {
+                Spacer(Modifier.weight(1f))
+            }
+        }
     }
 }
 
@@ -548,6 +618,13 @@ private fun Modifier.clickableTo(enabled: Boolean, onClick: () -> Unit): Modifie
     } else {
         this
     }
+
+/**
+ * Share of the space above the seek bar the cover may take when the track has lyrics. The rest
+ * carries the title/artist and the lyrics box — at half the region the box holds three or four
+ * lines, enough to read along rather than just hint that lyrics exist.
+ */
+private const val COVER_SHARE_WITH_LYRICS = 0.5f
 
 private const val SEEK_SETTLE_GRACE_MS = 1_000L
 

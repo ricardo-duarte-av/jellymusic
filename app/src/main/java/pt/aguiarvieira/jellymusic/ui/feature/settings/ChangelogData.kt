@@ -25,7 +25,8 @@ val CHANGELOG: List<ChangelogVersion> = listOf(
                 "album's own colour and scrolls itself into view, including after you drag the " +
                 "progress bar.",
             "Tap the lyrics to read them full-screen — the cover shrinks into the corner with the " +
-                "song details beside it. Tap again to go back.",
+                "song details beside it. Tap again, or swipe back, to return; the swipe rewinds " +
+                "the animation under your finger, so letting go halfway leaves it open.",
             "Removed the three-colour strip above the album cover in the now-playing screen, and " +
                 "tightened the gap between the cover and the song title.",
         ),

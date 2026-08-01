@@ -4,9 +4,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.isSpecified
 import androidx.compose.ui.util.lerp
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
@@ -25,6 +28,7 @@ import kotlin.math.roundToInt
 fun NowPlayingHeader(
     fraction: Float,
     modifier: Modifier = Modifier,
+    maxArtSize: Dp = Dp.Unspecified,
     art: @Composable () -> Unit,
     metadata: @Composable () -> Unit,
 ) {
@@ -36,10 +40,15 @@ fun NowPlayingHeader(
         val gap = COLLAPSED_GAP.roundToPx()
         val stackGap = STACKED_GAP.roundToPx()
 
-        // The cover is always square and always anchored at the top-left; only its size changes, so
-        // shrinking it is what moves it "into the corner".
-        val artSize = lerp(width.toFloat(), width * COLLAPSED_ART_FRACTION, fraction).roundToInt()
+        // Full width by default, but the caller can cap it to keep the lyrics box worth reading —
+        // an uncapped square cover eats most of a tall screen on its own.
+        val fullArt = if (maxArtSize.isSpecified) min(width, maxArtSize.roundToPx()) else width
+        // The cover is always square; only its size and horizontal position change, and shrinking it
+        // to the left edge is what moves it "into the corner".
+        val artSize = lerp(fullArt.toFloat(), width * COLLAPSED_ART_FRACTION, fraction).roundToInt()
         val artPlaceable = artMeasurables.first().measure(Constraints.fixed(artSize, artSize))
+        // Centred while stacked (it may be narrower than the header), flush left once beside the text.
+        val artX = (((width - artSize) / 2) * (1f - fraction)).roundToInt()
 
         // Metadata takes the full width while stacked, and whatever the thumbnail leaves once beside it.
         val metaWidth = lerp(width.toFloat(), (width - artSize - gap).toFloat(), fraction)
@@ -63,7 +72,7 @@ fun NowPlayingHeader(
         ).roundToInt()
 
         layout(width, height) {
-            artPlaceable.place(0, 0)
+            artPlaceable.place(artX, 0)
             metaPlaceable.place(metaX, metaY)
         }
     }
