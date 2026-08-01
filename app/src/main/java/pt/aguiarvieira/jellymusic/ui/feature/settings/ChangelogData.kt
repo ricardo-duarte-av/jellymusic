@@ -18,6 +18,11 @@ val CHANGELOG: List<ChangelogVersion> = listOf(
     ChangelogVersion(
         version = null,
         date = null,
+        changes = emptyList(),
+    ),
+    ChangelogVersion(
+        version = "0.1.76",
+        date = "01/08/2026",
         changes = listOf(
             "Lyrics! Songs whose lyrics are on the server can now show them in the now-playing " +
                 "screen, between the song details and the progress bar. Switch it on in " +
