@@ -5,6 +5,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -199,7 +200,10 @@ private fun rememberActiveLineIndex(
     val p by progress.collectAsStateWithLifecycle()
     return produceState(lyrics.activeLineAt(p.positionMs), lyrics, p, isPlaying) {
         val anchoredAt = SystemClock.elapsedRealtime()
-        while (true) {
+        // Runs until there is no next line to wait for: either playback is stopped, the lyrics
+        // aren't timed, or the last line has been reached. All three settle on a final index.
+        var following = true
+        while (following) {
             val now = if (isPlaying) {
                 p.positionMs + (SystemClock.elapsedRealtime() - anchoredAt)
             } else {
@@ -207,9 +211,16 @@ private fun rememberActiveLineIndex(
             }
             val index = lyrics.activeLineAt(now)
             value = index
-            if (!isPlaying || !lyrics.synced) break
-            val nextStart = lyrics.lines.getOrNull(index + 1)?.startMs ?: break
-            delay((nextStart - now).coerceAtLeast(MIN_LYRIC_TICK_MS))
+            val nextStart = if (isPlaying && lyrics.synced) {
+                lyrics.lines.getOrNull(index + 1)?.startMs
+            } else {
+                null
+            }
+            if (nextStart == null) {
+                following = false
+            } else {
+                delay((nextStart - now).coerceAtLeast(MIN_LYRIC_TICK_MS))
+            }
         }
     }
 }
@@ -219,24 +230,31 @@ private fun rememberActiveLineIndex(
  * rather than animate — animating hundreds of lines would take longer than the listener's patience.
  */
 private suspend fun LazyListState.centreOn(index: Int) {
-    val info = layoutInfo
-    // viewportSize is the box itself. The viewportStart/End pair is *not* interchangeable with it —
-    // that range spans the content padding too, so using it here pushed the "centred" line a whole
-    // half-box too low and parked it against the bottom edge.
-    val viewport = info.viewportSize.height
+    // viewportSize is the box itself; the viewportStart/End pair spans the content padding too, so
+    // it is not interchangeable with it. Fall back only if the box hasn't reported a size yet.
+    val viewport = layoutInfo.viewportSize.height.takeIf { it > 0 }
+        ?: (layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset)
     if (viewport <= 0) return
-    val itemHeight = info.visibleItemsInfo.firstOrNull { it.index == index }?.size
-        ?: info.visibleItemsInfo.firstOrNull()?.size
-        ?: 0
-    // A negative scroll offset places the item that far below the top of the box. The list clamps at
-    // its own ends, which is what lets the opening lines sit high and the closing lines sit low
-    // rather than dragging half a box of emptiness into view to force them centre.
-    val offset = -((viewport - itemHeight) / 2).coerceAtLeast(0)
-    val visible = info.visibleItemsInfo
+
+    val visible = layoutInfo.visibleItemsInfo
     val isNearby = visible.isNotEmpty() &&
         index >= visible.first().index - SNAP_DISTANCE_LINES &&
         index <= visible.last().index + SNAP_DISTANCE_LINES
-    if (isNearby) animateScrollToItem(index, offset) else scrollToItem(index, offset)
+    if (!isNearby) {
+        // Too far to animate across (a seek to the other end of the song). Jump it into view first;
+        // the measured correction below then closes whatever distance that left.
+        scrollToItem(index)
+        withFrameNanos { }
+    }
+
+    // Scroll by the distance actually measured between the line's middle and the box's middle,
+    // rather than asking the list to place the item at a computed offset. Reading real geometry is
+    // what keeps this honest whatever the content padding, item heights and offset conventions turn
+    // out to be — and animateScrollBy clamps at the list's own ends by itself, which is what leaves
+    // the opening lines resting high and the closing lines resting low.
+    val item = layoutInfo.visibleItemsInfo.firstOrNull { it.index == index } ?: return
+    val delta = (item.offset + item.size / 2) - viewport / 2
+    if (delta != 0) animateScrollBy(delta.toFloat())
 }
 
 /**
