@@ -22,8 +22,9 @@ val CHANGELOG: List<ChangelogVersion> = listOf(
             "Lyrics! Songs whose lyrics are on the server now show them in the now-playing screen, " +
                 "between the song details and the progress bar.",
             "Timed lyrics follow along with the music: the line being sung is highlighted in the " +
-                "album's own colour and scrolls itself into view, including after you drag the " +
-                "progress bar.",
+                "album's own colour and keeps itself in the middle of the box, including after you " +
+                "drag the progress bar. The opening and closing lines rest near the top and bottom " +
+                "instead of dragging empty space into view.",
             "Tap the lyrics to read them full-screen — the cover shrinks into the corner with the " +
                 "song details beside it. Tap again, or swipe back, to return; the swipe rewinds " +
                 "the animation under your finger, so letting go halfway leaves it open.",

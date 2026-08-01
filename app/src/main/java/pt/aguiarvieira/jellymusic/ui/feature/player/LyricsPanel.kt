@@ -8,7 +8,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -92,7 +91,7 @@ fun LyricsPanel(
         // ordinary case (no morph running) that's already true, so this costs a frame.
         var previous = -1
         while (true) {
-            val height = listState.layoutInfo.let { it.viewportEndOffset - it.viewportStartOffset }
+            val height = listState.layoutInfo.viewportSize.height
             if (height > 0 && height == previous) break
             previous = height
             withFrameNanos { }
@@ -109,21 +108,21 @@ fun LyricsPanel(
     )
     val container = MaterialTheme.colorScheme.surfaceContainerHighest
 
-    BoxWithConstraints(
+    Box(
         modifier = modifier
             .clip(MaterialTheme.shapes.large)
             .background(container.copy(alpha = containerAlpha))
             .clickable(onClick = onToggleExpanded),
     ) {
-        // Synced lyrics park the active line in the middle of the box, so the list needs half a
-        // box of slack at each end for the first and last lines to reach it.
-        val edgePadding = if (lyrics.synced) maxHeight / 2 else 8.dp
         LazyColumn(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .fadingEdges(FADE_HEIGHT),
-            contentPadding = PaddingValues(vertical = edgePadding),
+            // Just enough slack to clear the fade at each end — no more. Padding the list by half a
+            // box would let the first and last lines reach dead centre, but only by scrolling a
+            // screenful of nothing in to do it; better they rest near the edge they belong to.
+            contentPadding = PaddingValues(vertical = FADE_HEIGHT + 4.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
@@ -221,11 +220,17 @@ private fun rememberActiveLineIndex(
  */
 private suspend fun LazyListState.centreOn(index: Int) {
     val info = layoutInfo
-    val viewport = info.viewportEndOffset - info.viewportStartOffset
+    // viewportSize is the box itself. The viewportStart/End pair is *not* interchangeable with it —
+    // that range spans the content padding too, so using it here pushed the "centred" line a whole
+    // half-box too low and parked it against the bottom edge.
+    val viewport = info.viewportSize.height
     if (viewport <= 0) return
     val itemHeight = info.visibleItemsInfo.firstOrNull { it.index == index }?.size
         ?: info.visibleItemsInfo.firstOrNull()?.size
         ?: 0
+    // A negative scroll offset places the item that far below the top of the box. The list clamps at
+    // its own ends, which is what lets the opening lines sit high and the closing lines sit low
+    // rather than dragging half a box of emptiness into view to force them centre.
     val offset = -((viewport - itemHeight) / 2).coerceAtLeast(0)
     val visible = info.visibleItemsInfo
     val isNearby = visible.isNotEmpty() &&
