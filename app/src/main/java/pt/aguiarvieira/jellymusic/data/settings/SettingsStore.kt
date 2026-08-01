@@ -43,6 +43,21 @@ class SettingsStore @Inject constructor(
         )
     }
 
+    /**
+     * Transcode preferences for **downloads**, independent of [streamSettings]. Downloads normally
+     * run on Wi-Fi and are kept, so the trade-off is storage rather than bandwidth: a user may well
+     * want original (or high-bitrate) files on device while still streaming a small transcode.
+     * Defaults to off (original files).
+     */
+    val downloadSettings: Flow<StreamSettings> = context.dataStore.data.map { prefs ->
+        StreamSettings(
+            transcode = prefs[KEY_DOWNLOAD_TRANSCODE] ?: false,
+            codec = prefs[KEY_DOWNLOAD_CODEC]?.let { runCatching { AudioCodec.valueOf(it) }.getOrNull() }
+                ?: AudioCodec.OPUS,
+            maxBitrateKbps = prefs[KEY_DOWNLOAD_BITRATE] ?: 320,
+        )
+    }
+
     /** ReplayGain (loudness-normalization) playback preferences. Defaults to enabled, 0 dB preamp. */
     val replayGainSettings: Flow<ReplayGainSettings> = context.dataStore.data.map { prefs ->
         ReplayGainSettings(
@@ -110,6 +125,18 @@ class SettingsStore @Inject constructor(
         context.dataStore.edit { it[KEY_STREAM_BITRATE] = kbps }
     }
 
+    suspend fun setDownloadTranscode(enabled: Boolean) {
+        context.dataStore.edit { it[KEY_DOWNLOAD_TRANSCODE] = enabled }
+    }
+
+    suspend fun setDownloadCodec(codec: AudioCodec) {
+        context.dataStore.edit { it[KEY_DOWNLOAD_CODEC] = codec.name }
+    }
+
+    suspend fun setDownloadBitrate(kbps: Int) {
+        context.dataStore.edit { it[KEY_DOWNLOAD_BITRATE] = kbps }
+    }
+
     suspend fun setReplayGainEnabled(enabled: Boolean) {
         context.dataStore.edit { it[KEY_REPLAYGAIN_ENABLED] = enabled }
     }
@@ -155,6 +182,9 @@ class SettingsStore @Inject constructor(
         val KEY_STREAM_TRANSCODE = booleanPreferencesKey("stream_transcode")
         val KEY_STREAM_CODEC = stringPreferencesKey("stream_codec")
         val KEY_STREAM_BITRATE = intPreferencesKey("stream_bitrate_kbps")
+        val KEY_DOWNLOAD_TRANSCODE = booleanPreferencesKey("download_transcode")
+        val KEY_DOWNLOAD_CODEC = stringPreferencesKey("download_codec")
+        val KEY_DOWNLOAD_BITRATE = intPreferencesKey("download_bitrate_kbps")
         val KEY_REPLAYGAIN_ENABLED = booleanPreferencesKey("replaygain_enabled")
         val KEY_REPLAYGAIN_PREAMP_DB = floatPreferencesKey("replaygain_preamp_db")
         val KEY_DYNAMIC_ALBUM_THEME = booleanPreferencesKey("dynamic_album_theme")

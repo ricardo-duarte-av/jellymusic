@@ -305,8 +305,13 @@ class MusicDownloadManager @Inject constructor(
         // Don't re-queue a track that's already downloaded/queued.
         val existing = dao.getTrack(track.id)
         if (existing != null && existing.state != DownloadState.FAILED.name) return
-        // Transcode reuses the current streaming codec/bitrate; only the on/off flag is per-download.
-        val settings = if (transcode) settingsStore.streamSettings.first().copy(transcode = true) else StreamSettings(transcode = false)
+        // The codec/bitrate come from the download transcode settings (independent of streaming);
+        // only the on/off flag is per-download, so the dialog can override it either way.
+        val settings = if (transcode) {
+            settingsStore.downloadSettings.first().copy(transcode = true)
+        } else {
+            StreamSettings(transcode = false)
+        }
         dao.upsertTrack(
             TrackDownloadEntity(
                 trackId = track.id,

@@ -25,6 +25,9 @@ class SettingsViewModel @Inject constructor(
     val streamSettings = settingsStore.streamSettings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), StreamSettings())
 
+    val downloadSettings = settingsStore.downloadSettings
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), StreamSettings())
+
     val replayGainSettings = settingsStore.replayGainSettings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ReplayGainSettings())
 
@@ -81,6 +84,18 @@ class SettingsViewModel @Inject constructor(
 
     fun setBitrate(kbps: Int) {
         viewModelScope.launch { settingsStore.setStreamBitrate(kbps) }
+    }
+
+    fun setDownloadTranscode(enabled: Boolean) {
+        viewModelScope.launch { settingsStore.setDownloadTranscode(enabled) }
+    }
+
+    fun setDownloadCodec(codec: AudioCodec) {
+        viewModelScope.launch { settingsStore.setDownloadCodec(codec) }
+    }
+
+    fun setDownloadBitrate(kbps: Int) {
+        viewModelScope.launch { settingsStore.setDownloadBitrate(kbps) }
     }
 
     /** Wipes Coil's entire image cache (memory + disk), then invokes [onCleared] on completion. */

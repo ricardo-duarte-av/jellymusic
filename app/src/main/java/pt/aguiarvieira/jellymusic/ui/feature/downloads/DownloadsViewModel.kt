@@ -17,6 +17,7 @@ import pt.aguiarvieira.jellymusic.data.download.MusicDownloadManager
 import pt.aguiarvieira.jellymusic.data.settings.SettingsStore
 import pt.aguiarvieira.jellymusic.domain.model.AlbumDownloadStatus
 import pt.aguiarvieira.jellymusic.domain.model.DownloadState
+import pt.aguiarvieira.jellymusic.domain.model.StreamSettings
 import pt.aguiarvieira.jellymusic.domain.model.Track
 import pt.aguiarvieira.jellymusic.domain.model.TrackDownloadStatus
 import javax.inject.Inject
@@ -82,11 +83,13 @@ class DownloadsViewModel @Inject constructor(
     val downloadedTracks: StateFlow<List<TrackDownloadEntity>> =
         dao.observeTracks().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    /** Default transcode choice for the download dialog, mirroring the current streaming setting. */
-    val transcodeDefault: StateFlow<Boolean> =
-        settingsStore.streamSettings
-            .map { it.transcode }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+    /**
+     * The Offline > download transcode settings: seeds the download dialog's switch and tells the
+     * user which format a transcoded download would land in.
+     */
+    val downloadSettings: StateFlow<StreamSettings> =
+        settingsStore.downloadSettings
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), StreamSettings())
 
     fun isMetered(): Boolean = networkMonitor.isActiveNetworkMetered()
 

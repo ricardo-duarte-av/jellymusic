@@ -106,7 +106,7 @@ fun BrowseShell(
     val albumItems = viewModel.albumsPaging.collectAsLazyPagingItems()
     val albumStatuses by downloadsViewModel.albumStatuses.collectAsStateWithLifecycle()
     val playlistStatuses by downloadsViewModel.playlistStatuses.collectAsStateWithLifecycle()
-    val transcodeDefault by downloadsViewModel.transcodeDefault.collectAsStateWithLifecycle()
+    val downloadSettings by downloadsViewModel.downloadSettings.collectAsStateWithLifecycle()
     var pendingDownload by remember { mutableStateOf<DownloadTarget?>(null) }
     var selectedTab by rememberSaveable { mutableStateOf(BrowseTab.ALBUMS) }
     // How the last tab change happened, so the content transition can differ: a swipe slides
@@ -312,7 +312,7 @@ fun BrowseShell(
 
     DownloadDialogs(
         target = pendingDownload,
-        transcodeDefault = transcodeDefault,
+        downloadSettings = downloadSettings,
         isMetered = downloadsViewModel::isMetered,
         onConfirm = { target, transcode ->
             when (target) {

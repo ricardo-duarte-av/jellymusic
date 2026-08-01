@@ -60,6 +60,7 @@ fun SettingsScreen(
     val settings by viewModel.streamSettings.collectAsStateWithLifecycle()
     val dynamicTheme by viewModel.dynamicAlbumTheme.collectAsStateWithLifecycle()
     val lyricsEnabled by viewModel.lyricsEnabled.collectAsStateWithLifecycle()
+    val downloadSettings by viewModel.downloadSettings.collectAsStateWithLifecycle()
     val replayGain by viewModel.replayGainSettings.collectAsStateWithLifecycle()
     val downloadFavorites by viewModel.downloadFavorites.collectAsStateWithLifecycle()
     val downloadFavoritesOnMetered by viewModel.downloadFavoritesOnMetered.collectAsStateWithLifecycle()
@@ -261,6 +262,57 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.primary,
             )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Transcode downloads", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        text = if (downloadSettings.transcode) {
+                            "Downloads are converted to save space on the device."
+                        } else {
+                            "Download the original files. Set separately from streaming, so you can " +
+                                "keep good quality offline while streaming smaller."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(checked = downloadSettings.transcode, onCheckedChange = viewModel::setDownloadTranscode)
+            }
+
+            if (downloadSettings.transcode) {
+                Text("Codec", style = MaterialTheme.typography.labelLarge)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    AudioCodec.entries.forEach { codec ->
+                        FilterChip(
+                            selected = downloadSettings.codec == codec,
+                            onClick = { viewModel.setDownloadCodec(codec) },
+                            label = { Text(codec.label) },
+                        )
+                    }
+                }
+
+                Text("Max bitrate", style = MaterialTheme.typography.labelLarge)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    STREAM_BITRATE_OPTIONS.forEach { kbps ->
+                        FilterChip(
+                            selected = downloadSettings.maxBitrateKbps == kbps,
+                            onClick = { viewModel.setDownloadBitrate(kbps) },
+                            label = { Text("$kbps kbps") },
+                        )
+                    }
+                }
+            }
+
+            Text(
+                text = "Applies to new downloads — files already on the device keep the format they " +
+                    "were downloaded in.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,

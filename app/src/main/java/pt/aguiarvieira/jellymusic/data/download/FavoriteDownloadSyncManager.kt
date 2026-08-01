@@ -63,7 +63,7 @@ class FavoriteDownloadSyncManager @Inject constructor(
             return
         }
 
-        val transcode = settingsStore.streamSettings.first().transcode
+        val transcode = settingsStore.downloadSettings.first().transcode
         val desired = LinkedHashMap<String, Track>()
         favoriteTracks.forEach { desired[it.id] = it }
 

@@ -88,7 +88,7 @@ fun SearchScreen(
     val trackStatuses by downloadsViewModel.trackStatuses.collectAsStateWithLifecycle()
     val albumStatuses by downloadsViewModel.albumStatuses.collectAsStateWithLifecycle()
     val playlistStatuses by downloadsViewModel.playlistStatuses.collectAsStateWithLifecycle()
-    val transcodeDefault by downloadsViewModel.transcodeDefault.collectAsStateWithLifecycle()
+    val downloadSettings by downloadsViewModel.downloadSettings.collectAsStateWithLifecycle()
     var pendingDownload by remember { mutableStateOf<DownloadTarget?>(null) }
     val focusRequester = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
@@ -187,7 +187,7 @@ fun SearchScreen(
 
     DownloadDialogs(
         target = pendingDownload,
-        transcodeDefault = transcodeDefault,
+        downloadSettings = downloadSettings,
         isMetered = downloadsViewModel::isMetered,
         onConfirm = { target, transcode ->
             when (target) {

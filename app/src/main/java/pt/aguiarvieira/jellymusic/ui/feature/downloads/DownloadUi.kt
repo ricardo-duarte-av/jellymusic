@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import pt.aguiarvieira.jellymusic.domain.model.AlbumDownloadStatus
 import pt.aguiarvieira.jellymusic.domain.model.DownloadState
+import pt.aguiarvieira.jellymusic.domain.model.StreamSettings
 import pt.aguiarvieira.jellymusic.domain.model.Track
 import pt.aguiarvieira.jellymusic.domain.model.TrackDownloadStatus
 
@@ -59,13 +60,13 @@ sealed interface DownloadTarget {
 @Composable
 fun DownloadDialogs(
     target: DownloadTarget?,
-    transcodeDefault: Boolean,
+    downloadSettings: StreamSettings,
     isMetered: () -> Boolean,
     onConfirm: (DownloadTarget, Boolean) -> Unit,
     onDismiss: () -> Unit,
 ) {
     if (target == null) return
-    var transcode by remember(target) { mutableStateOf(transcodeDefault) }
+    var transcode by remember(target) { mutableStateOf(downloadSettings.transcode) }
     var showWarning by remember(target) { mutableStateOf(false) }
 
     if (showWarning) {
@@ -97,7 +98,12 @@ fun DownloadDialogs(
                     Column(modifier = Modifier.weight(1f)) {
                         Text("Transcode", style = MaterialTheme.typography.bodyLarge)
                         Text(
-                            text = if (transcode) "Smaller, converted files" else "Original files",
+                            text = if (transcode) {
+                                "Smaller files: ${downloadSettings.codec.label}, " +
+                                    "max ${downloadSettings.maxBitrateKbps} kbps"
+                            } else {
+                                "Original files"
+                            },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

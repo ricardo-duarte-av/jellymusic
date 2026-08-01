@@ -115,7 +115,7 @@ fun AlbumDetailScreen(
     val isFavorite by viewModel.isFavorite.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
     val trackStatuses by downloadsViewModel.trackStatuses.collectAsStateWithLifecycle()
-    val transcodeDefault by downloadsViewModel.transcodeDefault.collectAsStateWithLifecycle()
+    val downloadSettings by downloadsViewModel.downloadSettings.collectAsStateWithLifecycle()
     var pendingDownload by remember { mutableStateOf<DownloadTarget?>(null) }
     // Only the *identity* of the playing track matters here (it tints that track's card), so map it
     // out of the playback state rather than collecting the whole thing — otherwise every transport
@@ -126,7 +126,7 @@ fun AlbumDetailScreen(
 
     DownloadDialogs(
         target = pendingDownload,
-        transcodeDefault = transcodeDefault,
+        downloadSettings = downloadSettings,
         isMetered = downloadsViewModel::isMetered,
         onConfirm = { target, transcode ->
             if (target is DownloadTarget.TrackItem) {
@@ -674,12 +674,12 @@ fun PlaylistDetailScreen(
     val isFavorite by viewModel.isFavorite.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
     val trackStatuses by downloadsViewModel.trackStatuses.collectAsStateWithLifecycle()
-    val transcodeDefault by downloadsViewModel.transcodeDefault.collectAsStateWithLifecycle()
+    val downloadSettings by downloadsViewModel.downloadSettings.collectAsStateWithLifecycle()
     var pendingDownload by remember { mutableStateOf<DownloadTarget?>(null) }
 
     DownloadDialogs(
         target = pendingDownload,
-        transcodeDefault = transcodeDefault,
+        downloadSettings = downloadSettings,
         isMetered = downloadsViewModel::isMetered,
         onConfirm = { target, transcode ->
             if (target is DownloadTarget.TrackItem) {

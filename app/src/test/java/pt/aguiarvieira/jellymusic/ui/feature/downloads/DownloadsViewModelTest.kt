@@ -39,7 +39,7 @@ class DownloadsViewModelTest {
         every { dao.observeTracks() } returns flowOf(tracks)
         every { dao.observeAlbums() } returns flowOf(albums)
         every { dao.observePlaylists() } returns flowOf(playlists)
-        every { settingsStore.streamSettings } returns flowOf(StreamSettings())
+        every { settingsStore.downloadSettings } returns flowOf(StreamSettings())
         return DownloadsViewModel(downloadManager, networkMonitor, dao, settingsStore)
     }
 
