@@ -18,6 +18,11 @@ val CHANGELOG: List<ChangelogVersion> = listOf(
     ChangelogVersion(
         version = null,
         date = null,
+        changes = emptyList(),
+    ),
+    ChangelogVersion(
+        version = "0.1.77",
+        date = "01/08/2026",
         changes = listOf(
             "Downloads no longer follow the streaming transcode setting. Settings → Offline has a " +
                 "new \"Transcode downloads\" switch with its own codec and bitrate, so you can keep " +
