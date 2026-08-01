@@ -60,6 +60,18 @@ jobs:
           : "${PASSWORD:?SCREENSHOT_PASSWORD secret is not set}"
           echo "Credentials present."
 
+      # The runner image no longer ships ImageMagick, so the PNG → JPG conversion below
+      # needs it installed explicitly. Done early so a failure here doesn't waste the
+      # emulator run.
+      - name: Install ImageMagick
+        run: |
+          set -euo pipefail
+          if command -v magick >/dev/null 2>&1 || command -v convert >/dev/null 2>&1; then
+            echo "ImageMagick already present."; exit 0
+          fi
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq imagemagick
+
       # KVM is required for a hardware-accelerated (fast, non-flaky) emulator on Linux.
       - name: Enable KVM
         run: |
@@ -237,6 +249,8 @@ jobs:
           # Promote the generated PNGs onto the curated JPGs the README embeds, so the README
           # stays in sync automatically. The widget shot (widget.jpg) has no generated source
           # and is left untouched. Only maps captures that were actually produced this run.
+          # ImageMagick 7 dropped the `convert` alias; prefer `magick` when present.
+          IM=$(command -v magick || command -v convert)
           declare -A MAP=(
             [01-albums]=albumlist
             [04-album-detail]=albumview
@@ -247,7 +261,7 @@ jobs:
             png="screenshots/generated/${src}.png"
             jpg="screenshots/${MAP[$src]}.jpg"
             if [ -f "$png" ]; then
-              convert "$png" -quality 92 "$jpg"
+              "$IM" "$png" -quality 92 "$jpg"
               echo "Updated $jpg from $png"
             else
               echo "Skipping $jpg — $png was not produced this run"
