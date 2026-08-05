@@ -58,7 +58,13 @@ fun NowPlayingHeader(
             Constraints(maxWidth = metaWidth, maxHeight = Constraints.Infinity),
         )
 
-        val metaX = (fraction * (artSize + gap)).roundToInt()
+        // The metadata column wraps to its widest line, so short titles leave it narrower than the
+        // header — centre it while stacked (matching the cover) instead of letting it sit flush left.
+        val metaX = lerp(
+            ((width - metaPlaceable.width) / 2).toFloat(),
+            (artSize + gap).toFloat(),
+            fraction,
+        ).roundToInt()
         val metaY = lerp(
             (artSize + stackGap).toFloat(),
             ((artSize - metaPlaceable.height) / 2).coerceAtLeast(0).toFloat(),
