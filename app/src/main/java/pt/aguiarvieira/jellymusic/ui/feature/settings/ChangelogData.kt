@@ -18,6 +18,11 @@ val CHANGELOG: List<ChangelogVersion> = listOf(
     ChangelogVersion(
         version = null,
         date = null,
+        changes = emptyList(),
+    ),
+    ChangelogVersion(
+        version = "0.1.78",
+        date = "05/08/2026",
         changes = listOf(
             "Fixed the song title, album and artist sitting slightly off to the left under the " +
                 "cover in the now-playing screen when lyrics are off or unavailable.",
