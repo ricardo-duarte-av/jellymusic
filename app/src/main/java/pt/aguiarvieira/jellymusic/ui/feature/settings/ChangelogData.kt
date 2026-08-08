@@ -18,7 +18,13 @@ val CHANGELOG: List<ChangelogVersion> = listOf(
     ChangelogVersion(
         version = null,
         date = null,
-        changes = emptyList(),
+        changes = listOf(
+            "Playback can now be resumed after Android has closed the app in the background: the " +
+                "play button on a Bluetooth headset, a car, or the media player in the notification " +
+                "shade starts JellyMusic back up and picks up where you left off.",
+            "Android Auto now shows a \"Continue listening\" entry at the top of the browse list, " +
+                "and can offer to resume as soon as the car connects — no need to pick up the phone.",
+        ),
     ),
     ChangelogVersion(
         version = "0.1.78",

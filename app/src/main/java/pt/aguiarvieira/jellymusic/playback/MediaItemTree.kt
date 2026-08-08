@@ -7,12 +7,14 @@ import androidx.media3.common.MimeTypes
 import kotlinx.coroutines.flow.first
 import pt.aguiarvieira.jellymusic.data.download.MusicDownloadManager
 import pt.aguiarvieira.jellymusic.data.jellyfin.StreamUrlBuilder
+import pt.aguiarvieira.jellymusic.data.settings.QueueStore
 import pt.aguiarvieira.jellymusic.data.settings.SettingsStore
 import pt.aguiarvieira.jellymusic.domain.model.Album
 import pt.aguiarvieira.jellymusic.domain.model.Artist
 import pt.aguiarvieira.jellymusic.domain.model.Playlist
 import pt.aguiarvieira.jellymusic.domain.model.StreamSettings
 import pt.aguiarvieira.jellymusic.domain.model.Track
+import pt.aguiarvieira.jellymusic.domain.model.toTrack
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -51,11 +53,22 @@ class MediaItemTree @Inject constructor(
     private val settingsStore: SettingsStore,
     private val urlBuilder: StreamUrlBuilder,
     private val downloadManager: MusicDownloadManager,
+    private val queueStore: QueueStore,
 ) {
     fun rootItem(): MediaItem = browsable(ROOT_ID, "JellyMusic", MediaMetadata.MEDIA_TYPE_FOLDER_MIXED)
 
+    /**
+     * Root served to a browser that asked for the *recent* tree (`LibraryParams.isRecent`), i.e. the
+     * "continue where you left off" query Android Auto makes when the car connects. Its only child is
+     * [resumeItem]. See [PlaybackService.LibraryCallback.onGetLibraryRoot].
+     */
+    fun recentRootItem(): MediaItem =
+        browsable(RESUME_ROOT_ID, "JellyMusic", MediaMetadata.MEDIA_TYPE_FOLDER_MIXED)
+
     suspend fun getChildren(parentId: String): List<MediaItem> = when {
         parentId == ROOT_ID -> contentNodes()
+
+        parentId == RESUME_ROOT_ID -> listOfNotNull(resumeItem())
 
         parentId == RECENTLY_PLAYED_ID ->
             musicRepository.getRecentlyPlayedAlbums(libraryId()).getOrDefault(emptyList()).map { it.toMediaItem() }
@@ -112,8 +125,11 @@ class MediaItemTree @Inject constructor(
      * The per-library content menu shown both at the root and after picking a library: the four
      * play-history "smart" rows followed by the full A–Z catalogues. All entries read the currently
      * selected library via [libraryId], so the same nodes re-serve the newly picked library's items.
+     *
+     * "Continue listening" is prepended when there is a saved queue, so resuming after the app was
+     * killed is one tap even on a head unit that doesn't auto-resume on connect.
      */
-    private fun contentNodes(): List<MediaItem> = listOf(
+    private suspend fun contentNodes(): List<MediaItem> = listOfNotNull(resumeItem()) + listOf(
         browsable(RECENTLY_PLAYED_ID, "Recently Played", MediaMetadata.MEDIA_TYPE_FOLDER_ALBUMS),
         browsable(MOST_PLAYED_ID, "Most Played", MediaMetadata.MEDIA_TYPE_FOLDER_ALBUMS),
         browsable(RECENTLY_ADDED_ID, "Recently Added", MediaMetadata.MEDIA_TYPE_FOLDER_ALBUMS),
@@ -124,6 +140,30 @@ class MediaItemTree @Inject constructor(
     )
 
     /**
+     * The "Continue listening" entry: a single playable item standing in for the whole persisted
+     * queue, or null when nothing was ever played. Playing it is intercepted in
+     * [PlaybackService.LibraryCallback.onSetMediaItems], which swaps it for the full saved queue at
+     * its saved index/position — this item itself carries no URI.
+     *
+     * Built purely from [QueueStore], so it needs neither the network nor a restored Jellyfin
+     * session: it can be served the instant a cold Android Auto connection queries the tree.
+     */
+    suspend fun resumeItem(): MediaItem? {
+        val saved = queueStore.load()?.takeIf { it.items.isNotEmpty() } ?: return null
+        val track = saved.items.getOrNull(saved.index.coerceIn(0, saved.items.lastIndex)) ?: return null
+        val metadata = MediaMetadata.Builder()
+            .setTitle("Continue listening")
+            .setSubtitle(listOfNotNull(track.title.ifEmpty { null }, track.artist.ifEmpty { null }).joinToString(" — "))
+            .setArtist(track.artist.ifEmpty { null })
+            .setArtworkUri(track.artworkUrl?.toUri())
+            .setIsBrowsable(false)
+            .setIsPlayable(true)
+            .setMediaType(MediaMetadata.MEDIA_TYPE_MUSIC)
+            .build()
+        return MediaItem.Builder().setMediaId(RESUME_ITEM_ID).setMediaMetadata(metadata).build()
+    }
+
+    /**
      * Resolves browse items into fully playable ones for Android Auto. When a controller in another
      * process plays an item from the browse tree, Media3 delivers it back with only its [mediaId] and
      * metadata — the stream URI (localConfiguration) is stripped crossing the process boundary — so the
@@ -132,6 +172,9 @@ class MediaItemTree @Inject constructor(
      * - `track/<id>`    → the same item with its stream/local URI restored.
      * - `album/<id>`    → expanded into all the album's tracks (so tapping "play" on an album plays it).
      * - `playlist/<id>` → expanded into all the playlist's tracks.
+     * - [RESUME_ITEM_ID] → expanded into the whole persisted queue. (The resume *position* can only be
+     *   restored by `onSetMediaItems`, which intercepts this id before we get here; this is the
+     *   fallback for a controller that adds it instead of setting it.)
      *
      * Called from [PlaybackService]'s `onAddMediaItems`.
      */
@@ -140,6 +183,9 @@ class MediaItemTree @Inject constructor(
         return items.flatMap { item ->
             val id = item.mediaId
             when {
+                id == RESUME_ITEM_ID ->
+                    queueStore.load()?.items.orEmpty().map { trackMediaItem(it.toTrack(), settings) }
+
                 id.startsWith(TRACK_PREFIX) ->
                     listOf(resolveTrackUri(item, id.removePrefix(TRACK_PREFIX), settings))
 
@@ -323,6 +369,13 @@ class MediaItemTree @Inject constructor(
         const val PLAYLIST_PREFIX = "playlist/"
         const val ALBUM_LETTER_PREFIX = "album_letter/"
         const val ARTIST_LETTER_PREFIX = "artist_letter/"
+
+        /** Root of the "recent" tree Android Auto asks for on connect; child is [RESUME_ITEM_ID]. */
+        const val RESUME_ROOT_ID = "resume/root"
+
+        /** Stands in for the whole persisted queue; expanded when played (see [resumeItem]). */
+        const val RESUME_ITEM_ID = "resume/current"
+
         private const val NON_ALPHA_LETTER = "#"
         private const val CACHE_TTL_MS = 60_000L
     }

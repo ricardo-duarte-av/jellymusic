@@ -51,6 +51,24 @@
             </intent-filter>
         </service>
 
+        <!--
+          Required for playback resumption after the process is killed. Media3 only treats the
+          session as resumable (MediaSessionLegacyStub.canResumePlaybackOnStart) when a
+          *manifest-declared* receiver handles ACTION_MEDIA_BUTTON: without one it falls back to a
+          runtime-registered receiver, which dies with the process, and sets no persistent
+          media-button PendingIntent on the platform session. The effect was that a play command
+          from a car head unit / Bluetooth headset couldn't start the service at all, so
+          PlaybackService.onPlaybackResumption never ran and the user had to reach for the phone.
+          Exactly one receiver in the app may handle this action.
+        -->
+        <receiver
+            android:name="androidx.media3.session.MediaButtonReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MEDIA_BUTTON" />
+            </intent-filter>
+        </receiver>
+
         <!-- Home-screen now-playing widget (Glance). -->
         <receiver
             android:name=".widget.NowPlayingWidgetReceiver"

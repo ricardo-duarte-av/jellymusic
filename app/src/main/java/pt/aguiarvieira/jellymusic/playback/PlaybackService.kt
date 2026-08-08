@@ -96,6 +96,12 @@ private val LIBRARY_SCOPED_BROWSE_NODES = listOf(
     MediaItemTree.PLAYLISTS_ID,
 )
 
+/** Browse nodes carrying the "Continue listening" entry; re-queried when the saved track changes. */
+private val RESUME_BEARING_BROWSE_NODES = listOf(
+    MediaItemTree.ROOT_ID,
+    MediaItemTree.RESUME_ROOT_ID,
+)
+
 /**
  * The single [MediaLibraryService] that powers playback on the phone/tablet AND Android Auto. It
  * owns one [ExoPlayer] wrapped in a [MediaLibraryService.MediaLibrarySession]; the browse tree is
@@ -316,9 +322,20 @@ class PlaybackService : MediaLibraryService() {
 
     private fun persistQueue() {
         val snapshot = queueSnapshot() ?: return
+        val trackChanged = player.currentMediaItemIndex != lastPersistedIndex
         lastPersistedCount = player.mediaItemCount
         lastPersistedIndex = player.currentMediaItemIndex
-        serviceScope.launch { queueStore.save(snapshot) }
+        serviceScope.launch {
+            queueStore.save(snapshot)
+            // The "Continue listening" entry describes the saved track, so a connected browser
+            // (Android Auto) needs to re-read it when that track changes. Best-effort, with the same
+            // caveat as LIBRARY_SCOPED_BROWSE_NODES: Auto only re-queries nodes it's looking at.
+            if (trackChanged && ::mediaSession.isInitialized) {
+                RESUME_BEARING_BROWSE_NODES.forEach {
+                    mediaSession.notifyChildrenChanged(it, Int.MAX_VALUE, null)
+                }
+            }
+        }
     }
 
     /**
@@ -581,6 +598,10 @@ class PlaybackService : MediaLibraryService() {
                     reportedItemId?.let {
                         playbackReporter.reportProgress(it, lastPositionMs, isPaused = false, currentPlayMethod())
                     }
+                    // Keep the local resume point fresh too: the queue is otherwise only written on
+                    // structural changes, on pause and in onDestroy, so a kill *while playing* would
+                    // resume from wherever playback last paused. Piggybacks this existing tick.
+                    persistQueue()
                 }
             }
         } else {
@@ -613,6 +634,31 @@ class PlaybackService : MediaLibraryService() {
      */
     private suspend fun ensureSession() {
         if (clientProvider.session.value == null) authRepository.restoreSession()
+    }
+
+    /**
+     * The persisted queue rebuilt into playable items at its saved index/position, for every
+     * cold-resume entry point (see [LibraryCallback.onPlaybackResumption] and
+     * [LibraryCallback.onSetMediaItems]). Throws when there is nothing saved, which is how media3
+     * expects "not resumable" to be reported.
+     *
+     * When [isForPlayback] is false the caller only renders metadata, so build just the current item.
+     */
+    private suspend fun resumeItems(isForPlayback: Boolean): MediaSession.MediaItemsWithStartPosition {
+        ensureSession()
+        val saved = queueStore.load()
+        if (saved == null || saved.items.isEmpty()) {
+            throw UnsupportedOperationException("No saved queue to resume")
+        }
+        val index = saved.index.coerceIn(0, saved.items.lastIndex)
+        val settings = settingsStore.streamSettings.first()
+        val source = if (isForPlayback) saved.items else listOf(saved.items[index])
+        val items = source.map { mediaItemTree.trackMediaItem(it.toTrack(), settings) }
+        return MediaSession.MediaItemsWithStartPosition(
+            items,
+            if (isForPlayback) index else 0,
+            saved.positionMs.coerceAtLeast(0L),
+        )
     }
 
     override fun onDestroy() {
@@ -711,31 +757,69 @@ class PlaybackService : MediaLibraryService() {
             resolved
         }
 
-        /** Resume from cold (Bluetooth/media button with no active session) using the saved queue. */
-        override fun onPlaybackResumption(
+        /**
+         * Play a browse selection. Delegates to [onAddMediaItems] for the normal case, but
+         * intercepts the "Continue listening" marker item ([MediaItemTree.RESUME_ITEM_ID]), which
+         * stands in for the whole persisted queue and carries no URI of its own: playing it must
+         * restore every track *and* the saved index/position, which only this callback can express.
+         */
+        override fun onSetMediaItems(
             mediaSession: MediaSession,
             controller: MediaSession.ControllerInfo,
+            mediaItems: List<MediaItem>,
+            startIndex: Int,
+            startPositionMs: Long,
         ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> = serviceScope.future {
-            ensureSession()
-            val saved = queueStore.load()
-            if (saved == null || saved.items.isEmpty()) {
-                throw UnsupportedOperationException("No saved queue to resume")
+            if (mediaItems.singleOrNull()?.mediaId == MediaItemTree.RESUME_ITEM_ID) {
+                android.util.Log.d(TAG, "onSetMediaItems: resuming saved queue")
+                return@future resumeItems(isForPlayback = true)
             }
-            val settings = settingsStore.streamSettings.first()
-            val items = saved.items.map { mediaItemTree.trackMediaItem(it.toTrack(), settings) }
+            ensureSession()
             MediaSession.MediaItemsWithStartPosition(
-                items,
-                saved.index.coerceIn(0, items.lastIndex),
-                saved.positionMs.coerceAtLeast(0L),
+                mediaItemTree.resolveForPlayback(mediaItems),
+                startIndex,
+                startPositionMs,
             )
         }
 
+        /**
+         * Resume from cold (Bluetooth/media button, or the system's media resumption UI) using the
+         * saved queue. Only reachable because the app declares a manifest ACTION_MEDIA_BUTTON
+         * receiver — see the comment on it in AndroidManifest.xml.
+         *
+         * [isForPlayback] is false when the caller only wants metadata to render a resumption
+         * affordance (media3 asks this at device boot to populate the notification-tray player), so
+         * skip rebuilding the rest of the queue for it.
+         */
+        override fun onPlaybackResumption(
+            mediaSession: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            isForPlayback: Boolean,
+        ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> = serviceScope.future {
+            resumeItems(isForPlayback)
+        }
+
+        /**
+         * Android Auto asks for the "recent" tree when the car connects, to offer resuming without
+         * touching the phone. Media3 only answers that itself for the system UI controller, so serve
+         * it here: a root whose single child is the "Continue listening" item. With no saved queue
+         * there is nothing to resume — fall back to the normal root so the car still gets a library.
+         */
         override fun onGetLibraryRoot(
             session: MediaLibrarySession,
             browser: MediaSession.ControllerInfo,
             params: LibraryParams?,
-        ): ListenableFuture<LibraryResult<MediaItem>> =
-            Futures.immediateFuture(LibraryResult.ofItem(mediaItemTree.rootItem(), params))
+        ): ListenableFuture<LibraryResult<MediaItem>> {
+            if (params?.isRecent != true) {
+                return Futures.immediateFuture(LibraryResult.ofItem(mediaItemTree.rootItem(), params))
+            }
+            return serviceScope.future {
+                val hasResume = mediaItemTree.resumeItem() != null
+                android.util.Log.d(TAG, "onGetLibraryRoot(isRecent) by ${browser.packageName}, hasResume=$hasResume")
+                val root = if (hasResume) mediaItemTree.recentRootItem() else mediaItemTree.rootItem()
+                LibraryResult.ofItem(root, params)
+            }
+        }
 
         override fun onGetChildren(
             session: MediaLibrarySession,
@@ -749,7 +833,9 @@ class PlaybackService : MediaLibraryService() {
                 // Android Auto can start this service cold (car connected, app never opened), in which
                 // case no Jellyfin session has been restored and every query returns empty. Restore it
                 // before serving any browse request so the tree is populated without opening the app.
-                ensureSession()
+                // The resume node is the exception: it's served straight from the persisted queue, so
+                // don't make the car wait on the network for the one thing it asks for on connect.
+                if (parentId != MediaItemTree.RESUME_ROOT_ID) ensureSession()
                 // Android Auto asks for every child in one call (page=0, pageSize=Int.MAX_VALUE), so the
                 // whole list crosses the Binder in a single transaction. A large node (typically Albums)
                 // exceeds the ~1MB transaction limit and throws TransactionTooLargeException, which surfaces
