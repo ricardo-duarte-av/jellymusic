@@ -18,6 +18,11 @@ val CHANGELOG: List<ChangelogVersion> = listOf(
     ChangelogVersion(
         version = null,
         date = null,
+        changes = emptyList(),
+    ),
+    ChangelogVersion(
+        version = "0.1.79",
+        date = "08/08/2026",
         changes = listOf(
             "Playback can now be resumed after Android has closed the app in the background: the " +
                 "play button on a Bluetooth headset, a car, or the media player in the notification " +
