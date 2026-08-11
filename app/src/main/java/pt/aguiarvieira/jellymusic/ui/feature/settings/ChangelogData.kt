@@ -18,6 +18,11 @@ val CHANGELOG: List<ChangelogVersion> = listOf(
     ChangelogVersion(
         version = null,
         date = null,
+        changes = emptyList(),
+    ),
+    ChangelogVersion(
+        version = "0.1.80",
+        date = "11/08/2026",
         changes = listOf(
             "The mini player at the bottom now floats just above the navigation/gesture bar with " +
                 "rounded corners, so the album cover is no longer cut off by the screen's rounded " +
