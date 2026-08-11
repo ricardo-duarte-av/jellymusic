@@ -1,14 +1,12 @@
 package pt.aguiarvieira.jellymusic.ui.feature.player
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -27,8 +25,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.style.TextOverflow
@@ -104,20 +100,18 @@ fun MiniPlayer(
                     )
                 },
         ) {
-        // Soft top shade (album-tinted) so the bar separates from the list above it.
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .height(6.dp)
-                .background(
-                    Brush.verticalGradient(
-                        listOf(Color.Transparent, MaterialTheme.colorScheme.primary.copy(alpha = 0.20f)),
-                    ),
-                ),
-        )
         Surface(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                // Float the bar clear of the display's rounded corners and of the gesture bar: a
+                // full-bleed bar gets its bottom corners clipped on round-cornered devices, and on
+                // gesture navigation (no button bar) the play/pause sits right on the screen edge.
+                .padding(horizontal = 12.dp)
+                .padding(bottom = 8.dp)
+                .navigationBarsPadding(),
+            shape = MaterialTheme.shapes.large,
             tonalElevation = 3.dp,
+            shadowElevation = 6.dp,
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
         ) {
         Column {
@@ -188,6 +182,10 @@ private fun MiniPlayerProgress(progress: StateFlow<PlaybackProgress>) {
     }
     LinearProgressIndicator(
         progress = { fraction },
-        modifier = Modifier.fillMaxWidth(),
+        // Inset from the card's rounded corners so the track's ends aren't clipped.
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp)
+            .padding(bottom = 6.dp),
     )
 }
