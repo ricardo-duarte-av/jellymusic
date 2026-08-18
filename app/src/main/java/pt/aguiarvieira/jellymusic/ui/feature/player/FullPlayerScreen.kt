@@ -2,7 +2,9 @@ package pt.aguiarvieira.jellymusic.ui.feature.player
 
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -42,6 +44,7 @@ import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -55,12 +58,14 @@ import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -207,13 +212,11 @@ fun FullPlayerScreen(
                             },
                         )
                     }
-                    IconButton(onClick = viewModel::previous, modifier = Modifier.size(56.dp)) {
-                        Icon(
-                            Icons.Filled.SkipPrevious,
-                            contentDescription = "Previous",
-                            modifier = Modifier.size(40.dp),
-                        )
-                    }
+                    SkipButton(
+                        icon = Icons.Filled.SkipPrevious,
+                        contentDescription = "Previous",
+                        onClick = viewModel::previous,
+                    )
                     FilledIconButton(onClick = viewModel::togglePlayPause, modifier = Modifier.size(72.dp)) {
                         PlayPauseButtonContent(
                             isPlaying = state.isPlaying,
@@ -221,13 +224,11 @@ fun FullPlayerScreen(
                             size = 40.dp,
                         )
                     }
-                    IconButton(onClick = viewModel::next, modifier = Modifier.size(56.dp)) {
-                        Icon(
-                            Icons.Filled.SkipNext,
-                            contentDescription = "Next",
-                            modifier = Modifier.size(40.dp),
-                        )
-                    }
+                    SkipButton(
+                        icon = Icons.Filled.SkipNext,
+                        contentDescription = "Next",
+                        onClick = viewModel::next,
+                    )
                     // Repeat toggle — off / all / one, tinted when active.
                     IconButton(onClick = viewModel::cycleRepeat, modifier = Modifier.size(48.dp)) {
                         Icon(
@@ -283,6 +284,49 @@ fun FullPlayerScreen(
  * Measured as one region so the cover can be capped against its height. [headerFraction] runs the
  * morph from "cover above centred metadata" to "corner thumbnail beside it"; see [NowPlayingHeader].
  */
+/**
+ * Previous/next transport button. Tapping has no visible state change of its own, so the icon
+ * snaps to the theme's primary colour (album-derived when dynamic album theming is on) and fades
+ * back to the default content colour as tap feedback.
+ */
+@Composable
+private fun SkipButton(
+    icon: ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+) {
+    var taps by remember { mutableIntStateOf(0) }
+    var lit by remember { mutableStateOf(false) }
+    LaunchedEffect(taps) {
+        if (taps > 0) {
+            lit = true
+            delay(90)
+            lit = false
+        }
+    }
+    IconButton(
+        onClick = {
+            taps++
+            onClick()
+        },
+        modifier = Modifier.size(56.dp),
+    ) {
+        // Read inside the button so the resting colour is the IconButton's own content colour.
+        val tint by animateColorAsState(
+            targetValue = if (lit) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+            // Light up instantly, then ease back out.
+            animationSpec = if (lit) tween(0) else tween(durationMillis = 450),
+            label = "skipTint",
+        )
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = tint,
+            modifier = Modifier.size(40.dp),
+        )
+    }
+}
+
 @Composable
 private fun NowPlayingBody(
     state: PlaybackUiState,
