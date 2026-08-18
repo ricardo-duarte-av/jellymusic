@@ -18,6 +18,11 @@ val CHANGELOG: List<ChangelogVersion> = listOf(
     ChangelogVersion(
         version = null,
         date = null,
+        changes = emptyList(),
+    ),
+    ChangelogVersion(
+        version = "0.1.81",
+        date = "18/08/2026",
         changes = listOf(
             "The previous/next buttons on the full player now briefly light up in the accent " +
                 "colour when tapped, then fade back, so a skip gives visible feedback. The old " +
