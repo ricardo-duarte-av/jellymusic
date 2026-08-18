@@ -315,7 +315,7 @@ private fun SkipButton(
     val tint by animateColorAsState(
         targetValue = if (lit) MaterialTheme.colorScheme.primary else LocalContentColor.current,
         // Light up instantly, then ease back out.
-        animationSpec = if (lit) tween(0) else tween(durationMillis = 450),
+        animationSpec = if (lit) tween(0) else tween(durationMillis = 800),
         label = "skipTint",
     )
     Box(
