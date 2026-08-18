@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -66,6 +68,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -288,6 +291,11 @@ fun FullPlayerScreen(
  * Previous/next transport button. Tapping has no visible state change of its own, so the icon
  * snaps to the theme's primary colour (album-derived when dynamic album theming is on) and fades
  * back to the default content colour as tap feedback.
+ *
+ * Deliberately not an [IconButton]: its ripple ran a second, bounded-circle animation over the same
+ * frames as the tint fade — two overlapping effects that visibly fought each other, and one more
+ * thing animating while the main thread is busy starting the new track. The colour flash is the
+ * only feedback here, so indication is off and the click sits on a plain box.
  */
 @Composable
 private fun SkipButton(
@@ -304,20 +312,27 @@ private fun SkipButton(
             lit = false
         }
     }
-    IconButton(
-        onClick = {
-            taps++
-            onClick()
-        },
-        modifier = Modifier.size(56.dp),
+    val tint by animateColorAsState(
+        targetValue = if (lit) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+        // Light up instantly, then ease back out.
+        animationSpec = if (lit) tween(0) else tween(durationMillis = 450),
+        label = "skipTint",
+    )
+    Box(
+        modifier = Modifier
+            .size(56.dp)
+            .clip(CircleShape)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                role = Role.Button,
+                onClick = {
+                    taps++
+                    onClick()
+                },
+            ),
+        contentAlignment = Alignment.Center,
     ) {
-        // Read inside the button so the resting colour is the IconButton's own content colour.
-        val tint by animateColorAsState(
-            targetValue = if (lit) MaterialTheme.colorScheme.primary else LocalContentColor.current,
-            // Light up instantly, then ease back out.
-            animationSpec = if (lit) tween(0) else tween(durationMillis = 450),
-            label = "skipTint",
-        )
         Icon(
             imageVector = icon,
             contentDescription = contentDescription,
