@@ -21,6 +21,11 @@ val CHANGELOG: List<ChangelogVersion> = listOf(
         changes = listOf(
             "The previous/next buttons on the full player now briefly light up in the accent " +
                 "colour when tapped, then fade back, so a skip gives visible feedback.",
+            "Track lists (playlists and the like) now colour their Play and Shuffle buttons from " +
+                "the cover art when \"Colour from album art\" is on, matching the album viewer.",
+            "Each track in those lists is now a raised card holding its whole content — cover, " +
+                "title, artist, codec/quality line, ReplayGain and length.",
+            "Track cards in the album viewer now sit slightly raised off the background.",
         ),
     ),
     ChangelogVersion(

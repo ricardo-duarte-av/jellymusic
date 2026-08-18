@@ -548,6 +548,7 @@ private fun TrackCard(
                 ),
             shape = RoundedCornerShape(8.dp),
             colors = CardDefaults.cardColors(containerColor = container, contentColor = onContainer),
+            elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
         ) {
             Column {
                 Row(
@@ -729,6 +730,10 @@ private fun TrackListDetail(
     onToggleFavorite: (Boolean) -> Unit = {},
     onToggleTrackFavorite: (Track) -> Unit = {},
 ) {
+    // Same treatment as the album viewer: seed the M3 scheme off the cover shown at the top of this
+    // list, so Play/Shuffle and the track cards match the artwork when album colour is enabled.
+    val heroArt = (tracksState as? ContentState.Data)?.value?.firstOrNull()?.artworkUrl
+    AlbumTheme(artworkUrl = heroArt) {
     Scaffold(
         topBar = {
             DetailTopBar(
@@ -755,7 +760,6 @@ private fun TrackListDetail(
 
                 is ContentState.Data -> {
                     val tracks = tracksState.value
-                    val heroArt = tracks.firstOrNull()?.artworkUrl
                     LazyColumn(Modifier.fillMaxSize()) {
                         item {
                             Column(
@@ -803,6 +807,7 @@ private fun TrackListDetail(
                                 track = track,
                                 onClick = { onPlay(tracks, index) },
                                 showArtwork = showTrackArtwork,
+                                asCard = true,
                                 downloadStatus = trackStatuses[track.id],
                                 onDownload = { onRequestDownload(track) },
                                 onRemoveLocal = { onRemoveTrack(track.id) },
@@ -813,6 +818,7 @@ private fun TrackListDetail(
                 }
             }
         }
+    }
     }
 }
 

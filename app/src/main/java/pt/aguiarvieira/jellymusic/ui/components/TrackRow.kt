@@ -5,6 +5,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -13,10 +14,14 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -26,6 +31,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import pt.aguiarvieira.jellymusic.domain.model.Track
@@ -40,6 +46,8 @@ fun TrackRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     showArtwork: Boolean = false,
+    /** Render the whole row inside a raised M3 card instead of flat on the list background. */
+    asCard: Boolean = false,
     downloadStatus: TrackDownloadStatus? = null,
     onDownload: (() -> Unit)? = null,
     onRemoveLocal: (() -> Unit)? = null,
@@ -50,12 +58,21 @@ fun TrackRow(
     val canRemove = downloadStatus?.isComplete == true || downloadStatus?.isActive == true
 
     Box {
-      Column {
+      // The card wraps the row's *entire* content — artwork, title, artist, the codec/sample-rate/
+      // bitrate/ReplayGain line, duration and the download progress bar — so a track reads as one
+      // raised object. Flat (no card) unless asked, which is what search results still use.
+      CardOrNot(asCard) {
         ListItem(
             modifier = modifier.combinedClickable(
                 onClick = onClick,
                 onLongClick = if (hasMenu) ({ menuOpen = true }) else null,
             ),
+            // Inside a card the ListItem must not paint its own surface over the card container.
+            colors = if (asCard) {
+                ListItemDefaults.colors(containerColor = Color.Transparent)
+            } else {
+                ListItemDefaults.colors()
+            },
             supportingContent = trackSupporting(track, downloadStatus),
             leadingContent = {
                 if (showArtwork) {
@@ -135,6 +152,29 @@ fun TrackRow(
                 }
             }
         }
+    }
+}
+
+/**
+ * Wraps [content] in a raised card when [asCard], otherwise stacks it plainly. Elevation comes from
+ * the M3 scheme in scope, so under [pt.aguiarvieira.jellymusic.ui.theme.AlbumTheme] the card picks
+ * up the cover-derived tones.
+ */
+@Composable
+private fun CardOrNot(asCard: Boolean, content: @Composable () -> Unit) {
+    if (!asCard) {
+        Column { content() }
+        return
+    }
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+    ) {
+        Column { content() }
     }
 }
 
