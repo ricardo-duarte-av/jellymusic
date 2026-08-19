@@ -1,5 +1,6 @@
 package pt.aguiarvieira.jellymusic.ui.components
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
@@ -39,6 +40,9 @@ import pt.aguiarvieira.jellymusic.domain.model.TrackDownloadStatus
 import pt.aguiarvieira.jellymusic.ui.feature.downloads.TrackDownloadBar
 import pt.aguiarvieira.jellymusic.ui.feature.downloads.TrackDownloadIndicator
 
+/** Artist / metadata lines are muted against whichever container the row is wearing. */
+private const val SECONDARY_TEXT_ALPHA = 0.75f
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TrackRow(
@@ -48,6 +52,14 @@ fun TrackRow(
     showArtwork: Boolean = false,
     /** Render the whole row inside a raised M3 card instead of flat on the list background. */
     asCard: Boolean = false,
+    /**
+     * Overrides the card's container (and, with [contentColor], its text/icon colours). Playlists
+     * pass the colour derived from *this track's* own cover, so each card carries its own art's
+     * hue instead of the whole list sharing the playlist cover's one. Null keeps the ambient
+     * scheme's card colours.
+     */
+    containerColor: Color? = null,
+    contentColor: Color? = null,
     downloadStatus: TrackDownloadStatus? = null,
     onDownload: (() -> Unit)? = null,
     onRemoveLocal: (() -> Unit)? = null,
@@ -61,19 +73,27 @@ fun TrackRow(
       // The card wraps the row's *entire* content — artwork, title, artist, the codec/sample-rate/
       // bitrate/ReplayGain line, duration and the download progress bar — so a track reads as one
       // raised object. Flat (no card) unless asked, which is what search results still use.
-      CardOrNot(asCard) {
+      CardOrNot(asCard, containerColor, contentColor) {
         ListItem(
             modifier = modifier.combinedClickable(
                 onClick = onClick,
                 onLongClick = if (hasMenu) ({ menuOpen = true }) else null,
             ),
             // Inside a card the ListItem must not paint its own surface over the card container.
-            colors = if (asCard) {
-                ListItemDefaults.colors(containerColor = Color.Transparent)
-            } else {
-                ListItemDefaults.colors()
+            // ListItem takes its text colours from its own defaults rather than LocalContentColor,
+            // so a tinted card has to hand them over explicitly or the labels stay onSurface.
+            colors = when {
+                contentColor != null -> ListItemDefaults.colors(
+                    containerColor = Color.Transparent,
+                    headlineColor = contentColor,
+                    supportingColor = contentColor.copy(alpha = SECONDARY_TEXT_ALPHA),
+                    trailingIconColor = contentColor,
+                    leadingIconColor = contentColor,
+                )
+                asCard -> ListItemDefaults.colors(containerColor = Color.Transparent)
+                else -> ListItemDefaults.colors()
             },
-            supportingContent = trackSupporting(track, downloadStatus),
+            supportingContent = trackSupporting(track, downloadStatus, contentColor),
             leadingContent = {
                 if (showArtwork) {
                     ArtworkImage(
@@ -86,7 +106,8 @@ fun TrackRow(
                         Text(
                             text = track.trackNumber?.toString() ?: "•",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = contentColor?.copy(alpha = SECONDARY_TEXT_ALPHA)
+                                ?: MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
@@ -161,17 +182,31 @@ fun TrackRow(
  * up the cover-derived tones.
  */
 @Composable
-private fun CardOrNot(asCard: Boolean, content: @Composable () -> Unit) {
+private fun CardOrNot(
+    asCard: Boolean,
+    containerColor: Color?,
+    contentColor: Color?,
+    content: @Composable () -> Unit,
+) {
     if (!asCard) {
         Column { content() }
         return
     }
+    // Animated so a card slides into its tint once the cover has been scored, rather than popping.
+    val container by animateColorAsState(
+        targetValue = containerColor ?: MaterialTheme.colorScheme.surfaceContainer,
+        label = "trackRowContainer",
+    )
+    val onContainer by animateColorAsState(
+        targetValue = contentColor ?: MaterialTheme.colorScheme.onSurface,
+        label = "trackRowContent",
+    )
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 4.dp),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+        colors = CardDefaults.cardColors(containerColor = container, contentColor = onContainer),
         elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
     ) {
         Column { content() }
@@ -186,6 +221,7 @@ private fun CardOrNot(asCard: Boolean, content: @Composable () -> Unit) {
 private fun trackSupporting(
     track: Track,
     downloadStatus: TrackDownloadStatus?,
+    contentColor: Color? = null,
 ): (@Composable () -> Unit)? {
     val meta = trackMetaLine(track, downloadStatus)
     if (track.artist == null && meta == null) return null
@@ -196,7 +232,8 @@ private fun trackSupporting(
                 Text(
                     text = it,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = contentColor?.copy(alpha = SECONDARY_TEXT_ALPHA)
+                        ?: MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )

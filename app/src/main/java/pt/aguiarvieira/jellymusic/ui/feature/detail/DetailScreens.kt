@@ -97,6 +97,8 @@ import pt.aguiarvieira.jellymusic.ui.feature.downloads.TrackDownloadIndicator
 import pt.aguiarvieira.jellymusic.ui.feature.player.MiniPlayer
 import pt.aguiarvieira.jellymusic.ui.feature.player.PlaybackViewModel
 import pt.aguiarvieira.jellymusic.ui.theme.AlbumTheme
+import pt.aguiarvieira.jellymusic.ui.theme.ArtworkTheme
+import pt.aguiarvieira.jellymusic.ui.theme.rememberArtworkColorScheme
 
 private val MAX_ART_HEIGHT = 340.dp
 private const val MIN_ART_FRACTION = 0.25f
@@ -803,16 +805,29 @@ private fun TrackListDetail(
                             }
                         }
                         itemsIndexed(tracks, key = { _, t -> t.id }) { index, track ->
-                            TrackRow(
-                                track = track,
-                                onClick = { onPlay(tracks, index) },
-                                showArtwork = showTrackArtwork,
-                                asCard = true,
-                                downloadStatus = trackStatuses[track.id],
-                                onDownload = { onRequestDownload(track) },
-                                onRemoveLocal = { onRemoveTrack(track.id) },
-                                onToggleFavorite = { onToggleTrackFavorite(track) },
-                            )
+                            // A playlist mixes albums, so each row's own cover — not the playlist's
+                            // hero art — is the honest seed for that card. secondaryContainer
+                            // (rather than surfaceContainer) because TonalSpot's neutrals are too
+                            // low-chroma to tell two covers apart down a scrolling list.
+                            val trackScheme = if (showTrackArtwork) {
+                                rememberArtworkColorScheme(track.artworkUrl)
+                            } else {
+                                null
+                            }
+                            ArtworkTheme(trackScheme) {
+                                TrackRow(
+                                    track = track,
+                                    onClick = { onPlay(tracks, index) },
+                                    showArtwork = showTrackArtwork,
+                                    asCard = true,
+                                    containerColor = trackScheme?.secondaryContainer,
+                                    contentColor = trackScheme?.onSecondaryContainer,
+                                    downloadStatus = trackStatuses[track.id],
+                                    onDownload = { onRequestDownload(track) },
+                                    onRemoveLocal = { onRemoveTrack(track.id) },
+                                    onToggleFavorite = { onToggleTrackFavorite(track) },
+                                )
+                            }
                         }
                     }
                 }

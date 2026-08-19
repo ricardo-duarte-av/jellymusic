@@ -18,7 +18,12 @@ val CHANGELOG: List<ChangelogVersion> = listOf(
     ChangelogVersion(
         version = null,
         date = null,
-        changes = emptyList(),
+        changes = listOf(
+            "In a playlist, each track card is now coloured from that track's own cover art " +
+                "instead of the playlist's, so a mixed playlist reads as a run of different " +
+                "albums. Needs \"Colour from album art\" on; otherwise the cards stay on the " +
+                "device theme.",
+        ),
     ),
     ChangelogVersion(
         version = "0.1.81",

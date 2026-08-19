@@ -1,7 +1,9 @@
 package pt.aguiarvieira.jellymusic.ui.theme
 
 import android.content.Context
+import android.util.LruCache
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.material3.MotionScheme
@@ -31,23 +33,24 @@ val LocalDynamicColorEnabled = staticCompositionLocalOf { true }
  * Wraps [content] in an M3 color scheme derived from [artworkUrl]'s cover, when dynamic album color
  * is enabled and a seed can be extracted. Otherwise renders [content] under the ambient theme.
  */
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun AlbumTheme(artworkUrl: String?, content: @Composable () -> Unit) {
-    val seed = if (LocalDynamicColorEnabled.current) rememberAlbumSeed(artworkUrl) else null
-    if (seed == null) {
+    ArtworkTheme(rememberArtworkColorScheme(artworkUrl), content)
+}
+
+/**
+ * Applies [scheme] to [content], or renders it under the ambient theme when [scheme] is null (no
+ * seed, or the user turned album colour off). Split out of [AlbumTheme] so callers that need the
+ * scheme's individual roles — e.g. a playlist tinting each track card from *that track's* cover —
+ * can resolve it once with [rememberArtworkColorScheme] and then both read it and apply it.
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun ArtworkTheme(scheme: ColorScheme?, content: @Composable () -> Unit) {
+    if (scheme == null) {
         content()
         return
     }
-    // TonalSpot (the stock Android dynamic-color style) keeps the accent hue close to the seed, so
-    // the UI visibly matches the album art. Expressive was livelier but hue-rotated the accents away
-    // from the cover's actual colours.
-    val scheme = rememberDynamicColorScheme(
-        seedColor = seed,
-        isDark = isSystemInDarkTheme(),
-        isAmoled = false,
-        style = PaletteStyle.TonalSpot,
-    )
     MaterialExpressiveTheme(
         colorScheme = scheme,
         motionScheme = MotionScheme.expressive(),
@@ -56,14 +59,44 @@ fun AlbumTheme(artworkUrl: String?, content: @Composable () -> Unit) {
     )
 }
 
+/**
+ * The M3 scheme seeded from [artworkUrl]'s cover, or null while it loads, when no seed qualifies, or
+ * when the user disabled album colour.
+ */
+@Composable
+fun rememberArtworkColorScheme(artworkUrl: String?): ColorScheme? {
+    val seed = if (LocalDynamicColorEnabled.current) rememberAlbumSeed(artworkUrl) else null
+    if (seed == null) return null
+    // TonalSpot (the stock Android dynamic-color style) keeps the accent hue close to the seed, so
+    // the UI visibly matches the album art. Expressive was livelier but hue-rotated the accents away
+    // from the cover's actual colours.
+    return rememberDynamicColorScheme(
+        seedColor = seed,
+        isDark = isSystemInDarkTheme(),
+        isAmoled = false,
+        style = PaletteStyle.TonalSpot,
+    )
+}
+
+/**
+ * Seeds are cached by URL because lists tint *per row*: a playlist scrolling through 200 tracks
+ * would otherwise decode and quantize the same covers over and over as rows leave and re-enter
+ * composition. [Color.Unspecified] is the "this cover has no seed" marker, so unscoreable covers are
+ * not retried forever either.
+ */
+private val seedCache = LruCache<String, Color>(512)
+
 @Composable
 private fun rememberAlbumSeed(artworkUrl: String?): Color? {
     val context = LocalContext.current
-    var seed by remember(artworkUrl) { mutableStateOf<Color?>(null) }
+    // Seed synchronously from the cache when we've already scored this cover, so a recycled row
+    // paints tinted on its first frame instead of flashing neutral.
+    var seed by remember(artworkUrl) { mutableStateOf(artworkUrl?.let(seedCache::get)) }
     LaunchedEffect(artworkUrl) {
-        seed = artworkUrl?.let { extractSeed(context, it) }
+        if (artworkUrl == null || seed != null) return@LaunchedEffect
+        seed = extractSeed(context, artworkUrl)
     }
-    return seed
+    return seed?.takeIf { it != Color.Unspecified }
 }
 
 /** Loads the cover (software bitmap) and picks its seed color via the shared [AlbumSeed] pipeline. */
@@ -73,7 +106,11 @@ private suspend fun extractSeed(context: Context, url: String): Color? =
             .data(url)
             .allowHardware(false) // Seeding needs to read pixels off a software bitmap.
             .build()
+        // A failed *load* (offline, 404) is not "no seed" — leave the cache untouched so the next
+        // composition retries, rather than remembering the cover as colourless forever.
         val bitmap = (context.imageLoader.execute(request) as? SuccessResult)?.image?.toBitmap()
             ?: return@withContext null
-        AlbumSeed.from(bitmap)
+        val seed = AlbumSeed.from(bitmap) ?: Color.Unspecified
+        seedCache.put(url, seed)
+        seed
     }
