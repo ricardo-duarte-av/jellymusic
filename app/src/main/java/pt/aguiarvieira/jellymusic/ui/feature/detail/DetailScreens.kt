@@ -9,6 +9,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -88,7 +89,9 @@ import pt.aguiarvieira.jellymusic.ui.components.FavoriteMarker
 import pt.aguiarvieira.jellymusic.ui.components.FavoriteToggleButton
 import pt.aguiarvieira.jellymusic.ui.components.TrackListDetailSkeleton
 import pt.aguiarvieira.jellymusic.ui.components.TrackRow
+import pt.aguiarvieira.jellymusic.ui.components.bottomInset
 import pt.aguiarvieira.jellymusic.ui.components.trackMetaLine
+import pt.aguiarvieira.jellymusic.ui.components.withoutBottom
 import pt.aguiarvieira.jellymusic.ui.feature.downloads.DownloadDialogs
 import pt.aguiarvieira.jellymusic.ui.feature.downloads.DownloadTarget
 import pt.aguiarvieira.jellymusic.ui.feature.downloads.DownloadsViewModel
@@ -201,7 +204,7 @@ fun AlbumDetailScreen(
                 onRefresh = viewModel::refresh,
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(padding),
+                    .padding(padding.withoutBottom()),
             ) {
                 when (val state = tracksState) {
                     // Hero (lands the shared element) + header/track skeletons where they'll land.
@@ -220,6 +223,7 @@ fun AlbumDetailScreen(
 
                     is ContentState.Data -> AlbumTrackList(
                         title = viewModel.title,
+                        contentPadding = padding.bottomInset(),
                         albumId = viewModel.albumId,
                         tracks = state.value,
                         heroArtworkUrl = heroArt,
@@ -242,6 +246,7 @@ fun AlbumDetailScreen(
 @Composable
 private fun AlbumTrackList(
     title: String,
+    contentPadding: PaddingValues,
     albumId: String,
     tracks: List<Track>,
     heroArtworkUrl: String?,
@@ -295,6 +300,7 @@ private fun AlbumTrackList(
         modifier = Modifier
             .fillMaxSize()
             .nestedScroll(collapseConnection),
+        contentPadding = contentPadding,
     ) {
         item(key = "art") {
             AlbumHeroArt(
@@ -751,7 +757,7 @@ private fun TrackListDetail(
         PullToRefreshBox(
             isRefreshing = isRefreshing,
             onRefresh = onRefresh,
-            modifier = Modifier.fillMaxSize().padding(padding),
+            modifier = Modifier.fillMaxSize().padding(padding.withoutBottom()),
         ) {
             when (tracksState) {
                 ContentState.Loading -> TrackListDetailSkeleton(showTrackArtwork = showTrackArtwork)
@@ -762,7 +768,7 @@ private fun TrackListDetail(
 
                 is ContentState.Data -> {
                     val tracks = tracksState.value
-                    LazyColumn(Modifier.fillMaxSize()) {
+                    LazyColumn(Modifier.fillMaxSize(), contentPadding = padding.bottomInset()) {
                         item {
                             Column(
                                 modifier = Modifier
@@ -891,7 +897,7 @@ private fun ArtistDetailContent(
         PullToRefreshBox(
             isRefreshing = isRefreshing,
             onRefresh = onRefresh,
-            modifier = Modifier.fillMaxSize().padding(padding),
+            modifier = Modifier.fillMaxSize().padding(padding.withoutBottom()),
         ) {
             when (albumsState) {
                 ContentState.Loading -> GridSkeleton(
@@ -910,6 +916,7 @@ private fun ArtistDetailContent(
                     LazyVerticalGrid(
                         columns = GridCells.Adaptive(minSize = 150.dp),
                         modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
+                        contentPadding = padding.bottomInset(),
                     ) {
                         items(albumsState.value, key = { it.id }) { album ->
                             AlbumCard(album, onClick = { onAlbumClick(album.id, album.name, album.artworkUrl) })

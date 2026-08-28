@@ -6,6 +6,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -63,6 +64,8 @@ import pt.aguiarvieira.jellymusic.domain.model.TrackDownloadStatus
 import pt.aguiarvieira.jellymusic.ui.components.ArtworkImage
 import pt.aguiarvieira.jellymusic.ui.components.SearchResultsSkeleton
 import pt.aguiarvieira.jellymusic.ui.components.TrackRow
+import pt.aguiarvieira.jellymusic.ui.components.bottomInset
+import pt.aguiarvieira.jellymusic.ui.components.withoutBottom
 import pt.aguiarvieira.jellymusic.ui.feature.downloads.AlbumArtDownloadBadge
 import pt.aguiarvieira.jellymusic.ui.feature.downloads.AlbumDownloadBar
 import pt.aguiarvieira.jellymusic.ui.feature.downloads.DownloadDialogs
@@ -135,7 +138,7 @@ fun SearchScreen(
         },
         bottomBar = { MiniPlayer(onExpand = onExpandPlayer) },
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
+        Box(Modifier.fillMaxSize().padding(padding.withoutBottom())) {
             when (val s = state) {
                 SearchUiState.Idle -> Centered {
                     Text(
@@ -157,6 +160,7 @@ fun SearchScreen(
                 } else {
                     ResultsContent(
                         results = s.results,
+                        contentPadding = padding.bottomInset(),
                         onPlayTrack = { track ->
                             keyboard?.hide()
                             playbackViewModel.play(listOf(track), 0)
@@ -217,6 +221,7 @@ private enum class SearchKind(val label: String) {
 @Composable
 private fun ResultsContent(
     results: SearchResults,
+    contentPadding: PaddingValues,
     onPlayTrack: (pt.aguiarvieira.jellymusic.domain.model.Track) -> Unit,
     onAlbumClick: (String, String, String?) -> Unit,
     onArtistClick: (String, String) -> Unit,
@@ -255,7 +260,7 @@ private fun ResultsContent(
                 selected = if (kind in selected) selected - kind else selected + kind
             },
         )
-        LazyColumn(Modifier.fillMaxSize()) {
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding) {
             if (visible(SearchKind.Playlists)) {
                 item { SectionHeader("Playlists") }
                 items(results.playlists, key = { "pl-${it.id}" }) { playlist ->

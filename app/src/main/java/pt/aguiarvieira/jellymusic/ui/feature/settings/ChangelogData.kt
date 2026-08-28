@@ -21,6 +21,14 @@ val CHANGELOG: List<ChangelogVersion> = listOf(
         changes = emptyList(),
     ),
     ChangelogVersion(
+        version = "0.1.83",
+        date = "28/08/2026",
+        changes = listOf(
+            "The mini player now floats over the album/artist/playlist grid instead of sitting " +
+                "on a blank strip of background, so the list keeps running underneath it.",
+        ),
+    ),
+    ChangelogVersion(
         version = "0.1.82",
         date = "19/08/2026",
         changes = listOf(

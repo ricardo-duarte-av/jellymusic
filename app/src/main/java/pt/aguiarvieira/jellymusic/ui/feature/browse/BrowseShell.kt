@@ -12,12 +12,14 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -42,6 +44,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -79,6 +82,8 @@ import pt.aguiarvieira.jellymusic.ui.components.ArtistCard
 import pt.aguiarvieira.jellymusic.ui.components.ArtistCardSkeleton
 import pt.aguiarvieira.jellymusic.ui.components.GridSkeleton
 import pt.aguiarvieira.jellymusic.ui.components.PlaylistCard
+import pt.aguiarvieira.jellymusic.ui.components.bottomInset
+import pt.aguiarvieira.jellymusic.ui.components.withoutBottom
 import pt.aguiarvieira.jellymusic.ui.feature.downloads.DownloadDialogs
 import pt.aguiarvieira.jellymusic.ui.feature.downloads.DownloadTarget
 import pt.aguiarvieira.jellymusic.ui.feature.downloads.DownloadsViewModel
@@ -141,69 +146,78 @@ fun BrowseShell(
             }
         },
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            TopAppBar(
-                modifier = Modifier.statusBarsPadding(),
-                // Search/Settings live on the same row as the library/sort controls (not in the
-                // TopAppBar actions slot) so they line up with them instead of centring against the
-                // taller two-line title.
-                title = {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Text(
-                            text = selectedTab.label,
-                            style = MaterialTheme.typography.titleLargeEmphasized,
-                        )
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            LibrarySelector(
-                                selected = state.selectedLibrary,
-                                libraries = state.libraries,
-                                onSelect = viewModel::selectLibrary,
+        Scaffold(
+            // The top bar and the mini player each apply the inset they need; the body sits between
+            // them and must stay flush so the grid can scroll under the floating bar.
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
+            bottomBar = { MiniPlayer(onExpand = onExpandPlayer) },
+            topBar = {
+                TopAppBar(
+                    modifier = Modifier.statusBarsPadding(),
+                    // Search/Settings live on the same row as the library/sort controls (not in the
+                    // TopAppBar actions slot) so they line up with them instead of centring against the
+                    // taller two-line title.
+                    title = {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Text(
+                                text = selectedTab.label,
+                                style = MaterialTheme.typography.titleLargeEmphasized,
                             )
-                            // Sort/order sit right next to the library dropdown (Albums tab only).
-                            if (selectedTab == BrowseTab.ALBUMS) {
-                                AlbumSortControls(
-                                    sort = state.albumSort,
-                                    descending = state.albumSortDescending,
-                                    onSortSelected = viewModel::setAlbumSort,
-                                    onToggleOrder = viewModel::toggleAlbumSortOrder,
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                LibrarySelector(
+                                    selected = state.selectedLibrary,
+                                    libraries = state.libraries,
+                                    onSelect = viewModel::selectLibrary,
+                                )
+                                // Sort/order sit right next to the library dropdown (Albums tab only).
+                                if (selectedTab == BrowseTab.ALBUMS) {
+                                    AlbumSortControls(
+                                        sort = state.albumSort,
+                                        descending = state.albumSortDescending,
+                                        onSortSelected = viewModel::setAlbumSort,
+                                        onToggleOrder = viewModel::toggleAlbumSortOrder,
+                                    )
+                                }
+                                // Favourites filter — narrows the current tab to favourites (all tabs).
+                                FavoritesFilterIcon(
+                                    selected = state.favoritesOnly,
+                                    onClick = viewModel::toggleFavoritesOnly,
+                                )
+                                Spacer(Modifier.weight(1f))
+                                Icon(
+                                    imageVector = Icons.Filled.Search,
+                                    contentDescription = "Search",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier
+                                        .clickable(onClick = onOpenSearch)
+                                        .padding(4.dp)
+                                        .size(24.dp),
+                                )
+                                Icon(
+                                    imageVector = Icons.Filled.Settings,
+                                    contentDescription = "Settings",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier
+                                        .clickable(onClick = onOpenSettings)
+                                        .padding(4.dp)
+                                        .size(24.dp),
                                 )
                             }
-                            // Favourites filter — narrows the current tab to favourites (all tabs).
-                            FavoritesFilterIcon(
-                                selected = state.favoritesOnly,
-                                onClick = viewModel::toggleFavoritesOnly,
-                            )
-                            Spacer(Modifier.weight(1f))
-                            Icon(
-                                imageVector = Icons.Filled.Search,
-                                contentDescription = "Search",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier
-                                    .clickable(onClick = onOpenSearch)
-                                    .padding(4.dp)
-                                    .size(24.dp),
-                            )
-                            Icon(
-                                imageVector = Icons.Filled.Settings,
-                                contentDescription = "Settings",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier
-                                    .clickable(onClick = onOpenSettings)
-                                    .padding(4.dp)
-                                    .size(24.dp),
-                            )
                         }
-                    }
-                },
-            )
-
+                    },
+                )
+            },
+        ) { padding ->
             Box(
                 modifier = Modifier
-                    .weight(1f)
+                    .fillMaxSize()
+                    // Only the top inset: the mini player floats over the grid rather than pushing
+                    // it up, so the content keeps running to the bottom of the window behind it.
+                    .padding(padding.withoutBottom())
                     // Horizontal swipe moves to the adjacent tab. Vertical scroll/pinch stay with the
                     // grid — detectHorizontalDragGestures only claims horizontal-dominant drags.
                     .pointerInput(selectedTab) {
@@ -247,6 +261,7 @@ fun BrowseShell(
                     when (tab) {
                         BrowseTab.ALBUMS -> AlbumsPagingContent(
                             albums = albumItems,
+                            contentPadding = padding.bottomInset(),
                             columns = columns,
                             onZoom = onZoom,
                             onAlbumClick = onAlbumClick,
@@ -267,7 +282,7 @@ fun BrowseShell(
                                 onRefresh = viewModel::refreshArtists,
                                 modifier = Modifier.fillMaxSize(),
                             ) {
-                                Grid(columns = columns, onZoom = onZoom) {
+                                Grid(columns = columns, onZoom = onZoom, contentPadding = padding.bottomInset()) {
                                     items(artists, key = { it.id }) { artist ->
                                         ArtistCard(artist, onClick = { onArtistClick(artist.id, artist.name) })
                                     }
@@ -285,7 +300,7 @@ fun BrowseShell(
                                 onRefresh = viewModel::refreshPlaylists,
                                 modifier = Modifier.fillMaxSize(),
                             ) {
-                                Grid(columns = columns, onZoom = onZoom) {
+                                Grid(columns = columns, onZoom = onZoom, contentPadding = padding.bottomInset()) {
                                     items(playlists, key = { it.id }) { playlist ->
                                         PlaylistCard(
                                             playlist,
@@ -305,8 +320,6 @@ fun BrowseShell(
                     }
                 }
             }
-
-            MiniPlayer(onExpand = onExpandPlayer)
         }
     }
 
@@ -444,6 +457,7 @@ private fun LibrarySelector(
 @Composable
 private fun AlbumsPagingContent(
     albums: LazyPagingItems<Album>,
+    contentPadding: PaddingValues,
     columns: Int,
     onZoom: (Int) -> Unit,
     onAlbumClick: (String, String, String?) -> Unit,
@@ -460,7 +474,7 @@ private fun AlbumsPagingContent(
             onRefresh = { albums.refresh() },
             modifier = Modifier.fillMaxSize(),
         ) {
-            Grid(columns = columns, onZoom = onZoom) {
+            Grid(columns = columns, onZoom = onZoom, contentPadding = contentPadding) {
                 items(
                     count = albums.itemCount,
                     key = albums.itemKey { it.id },
@@ -514,6 +528,7 @@ private fun AlbumsPagingContent(
 private fun Grid(
     columns: Int,
     onZoom: (Int) -> Unit,
+    contentPadding: PaddingValues,
     content: androidx.compose.foundation.lazy.grid.LazyGridScope.() -> Unit,
 ) {
     Box(
@@ -553,6 +568,7 @@ private fun Grid(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 8.dp),
+            contentPadding = contentPadding,
             content = content,
         )
     }

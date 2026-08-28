@@ -42,6 +42,8 @@ import pt.aguiarvieira.jellymusic.domain.model.AlbumDownloadStatus
 import pt.aguiarvieira.jellymusic.domain.model.DownloadState
 import pt.aguiarvieira.jellymusic.domain.model.TrackDownloadStatus
 import pt.aguiarvieira.jellymusic.ui.components.ArtworkImage
+import pt.aguiarvieira.jellymusic.ui.components.bottomInset
+import pt.aguiarvieira.jellymusic.ui.components.withoutBottom
 import pt.aguiarvieira.jellymusic.ui.feature.player.MiniPlayer
 import pt.aguiarvieira.jellymusic.ui.feature.player.PlaybackViewModel
 
@@ -103,13 +105,13 @@ fun DownloadsScreen(
         },
         bottomBar = { MiniPlayer(onExpand = onExpandPlayer) },
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
+        Box(Modifier.fillMaxSize().padding(padding.withoutBottom())) {
             if (albums.isEmpty() && playlists.isEmpty() && individualTracks.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text("No downloads yet", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             } else {
-                LazyColumn(Modifier.fillMaxSize()) {
+                LazyColumn(Modifier.fillMaxSize(), contentPadding = padding.bottomInset()) {
                     item {
                         Text(
                             text = "${formatBytes(totalBytes)} · $completedCount ${if (completedCount == 1) "track" else "tracks"}",
