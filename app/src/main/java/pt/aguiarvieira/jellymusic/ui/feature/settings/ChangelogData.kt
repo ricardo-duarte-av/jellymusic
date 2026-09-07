@@ -18,6 +18,11 @@ val CHANGELOG: List<ChangelogVersion> = listOf(
     ChangelogVersion(
         version = null,
         date = null,
+        changes = emptyList(),
+    ),
+    ChangelogVersion(
+        version = "0.1.84",
+        date = "07/09/2026",
         changes = listOf(
             "Shuffle and repeat are now yours alone: pressing Play on an album or playlist no " +
                 "longer switches shuffle off, and nothing but the shuffle/repeat buttons changes " +
