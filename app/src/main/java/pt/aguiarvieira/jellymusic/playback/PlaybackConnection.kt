@@ -176,11 +176,15 @@ class PlaybackConnection @Inject constructor(
         }
     }
 
+    /**
+     * Plays [tracks] from [startIndex] in their natural order. Deliberately leaves shuffle and repeat
+     * alone: they are user settings, so starting a new album/playlist must not silently turn shuffle
+     * off (with shuffle on, playback still starts on the tapped track and shuffles the rest).
+     */
     fun playTracks(tracks: List<Track>, startIndex: Int) {
         val c = controller ?: return
         val items = tracks.map { mediaItemTree.trackMediaItem(it, streamSettings) }
         if (items.isEmpty()) return
-        c.shuffleModeEnabled = false
         c.setMediaItems(items, startIndex.coerceIn(0, items.lastIndex), 0L)
         c.prepare()
         c.play()
@@ -190,6 +194,9 @@ class PlaybackConnection @Inject constructor(
      * Enqueues [tracks] in their natural order but with Media3 shuffle mode enabled, starting on a
      * random track. Unlike pre-shuffling the list, toggling shuffle off afterwards restores the
      * original order.
+     *
+     * This is the one entry point allowed to turn shuffle on without a tap on the shuffle control:
+     * the user asked for it by pressing Shuffle. Repeat is still left untouched.
      */
     fun playTracksShuffled(tracks: List<Track>) {
         val c = controller ?: return

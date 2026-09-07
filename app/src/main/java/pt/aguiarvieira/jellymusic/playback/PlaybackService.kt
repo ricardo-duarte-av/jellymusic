@@ -539,6 +539,7 @@ class PlaybackService : MediaLibraryService() {
         // the player's defaults. Reads the `player` field lazily so it targets whatever player is
         // current if a rebuild races this.
         serviceScope.launch {
+            settingsStore.applyRepeatDefaultOnce()
             val modes = settingsStore.playbackModes.first()
             player.shuffleModeEnabled = modes.shuffle
             player.repeatMode = modes.repeatMode

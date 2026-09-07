@@ -102,7 +102,7 @@ class SettingsStore @Inject constructor(
     val playbackModes: Flow<PlaybackModes> = context.dataStore.data.map { prefs ->
         PlaybackModes(
             shuffle = prefs[KEY_PLAYBACK_SHUFFLE] ?: false,
-            repeatMode = prefs[KEY_PLAYBACK_REPEAT] ?: 0,
+            repeatMode = prefs[KEY_PLAYBACK_REPEAT] ?: PlaybackModes.DEFAULT_REPEAT_MODE,
         )
     }
 
@@ -176,6 +176,20 @@ class SettingsStore @Inject constructor(
         }
     }
 
+    /**
+     * One-time move to "repeat all" as the default. Older builds wrote repeat-off into this store on
+     * every playback-mode change, so an install that upgrades carries a stored 0 that no user ever
+     * chose and that the new default would never be seen through. Runs once per install; after it,
+     * the stored value is whatever the user last picked.
+     */
+    suspend fun applyRepeatDefaultOnce() {
+        context.dataStore.edit {
+            if (it[KEY_REPEAT_DEFAULT_APPLIED] == true) return@edit
+            it[KEY_REPEAT_DEFAULT_APPLIED] = true
+            it[KEY_PLAYBACK_REPEAT] = PlaybackModes.DEFAULT_REPEAT_MODE
+        }
+    }
+
     private companion object {
         val KEY_LIBRARY_ID = stringPreferencesKey("selected_library_id")
         val KEY_LIBRARY_NAME = stringPreferencesKey("selected_library_name")
@@ -195,5 +209,6 @@ class SettingsStore @Inject constructor(
         val KEY_ALBUM_SORT_DESC = booleanPreferencesKey("album_sort_descending")
         val KEY_PLAYBACK_SHUFFLE = booleanPreferencesKey("playback_shuffle")
         val KEY_PLAYBACK_REPEAT = intPreferencesKey("playback_repeat_mode")
+        val KEY_REPEAT_DEFAULT_APPLIED = booleanPreferencesKey("playback_repeat_default_applied")
     }
 }
