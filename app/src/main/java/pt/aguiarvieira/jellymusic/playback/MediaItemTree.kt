@@ -23,8 +23,8 @@ import javax.inject.Singleton
  * domain models into Media3 [MediaItem]s. The tree mirrors the in-app IA:
  *
  * ```
- * root → { Recently Played, Most Played, Recently Added, Favourites, Albums, Artists, Playlists }
- *   Recently Played / Most Played / Recently Added / Favourites → album/<id> → track/<id>
+ * root → { Recently Played, Most Played, Favourites, Recently Added, Albums, Artists, Playlists }
+ *   Recently Played / Most Played / Favourites / Recently Added → album/<id> → track/<id>
  *   Albums    → A..Z,# → album/<id>    → track/<id> (playable)
  *   Artists   → A..Z,# → artist/<id>   → album/<id> → track/<id>
  *   Playlists → playlist/<id> → track/<id>
@@ -132,8 +132,8 @@ class MediaItemTree @Inject constructor(
     private suspend fun contentNodes(): List<MediaItem> = listOfNotNull(resumeItem()) + listOf(
         browsable(RECENTLY_PLAYED_ID, "Recently Played", MediaMetadata.MEDIA_TYPE_FOLDER_ALBUMS),
         browsable(MOST_PLAYED_ID, "Most Played", MediaMetadata.MEDIA_TYPE_FOLDER_ALBUMS),
-        browsable(RECENTLY_ADDED_ID, "Recently Added", MediaMetadata.MEDIA_TYPE_FOLDER_ALBUMS),
         browsable(FAVORITES_ID, "Favourites", MediaMetadata.MEDIA_TYPE_FOLDER_ALBUMS),
+        browsable(RECENTLY_ADDED_ID, "Recently Added", MediaMetadata.MEDIA_TYPE_FOLDER_ALBUMS),
         browsable(ALBUMS_ID, "Albums", MediaMetadata.MEDIA_TYPE_FOLDER_ALBUMS),
         browsable(ARTISTS_ID, "Artists", MediaMetadata.MEDIA_TYPE_FOLDER_ARTISTS),
         browsable(PLAYLISTS_ID, "Playlists", MediaMetadata.MEDIA_TYPE_FOLDER_PLAYLISTS),

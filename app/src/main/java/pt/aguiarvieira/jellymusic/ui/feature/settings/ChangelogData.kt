@@ -18,7 +18,9 @@ val CHANGELOG: List<ChangelogVersion> = listOf(
     ChangelogVersion(
         version = null,
         date = null,
-        changes = emptyList(),
+        changes = listOf(
+            "Android Auto: Favourites now comes before Recently Added in the browse menu.",
+        ),
     ),
     ChangelogVersion(
         version = "0.1.84",
