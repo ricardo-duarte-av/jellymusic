@@ -263,6 +263,7 @@ class PlaybackService : MediaLibraryService() {
     }
 
     private fun onPlaybackModesChanged() {
+        android.util.Log.d(TAG, "playback modes changed: shuffle=${player.shuffleModeEnabled} repeat=${player.repeatMode}")
         mediaSession.setMediaButtonPreferences(mediaButtonPreferences())
         serviceScope.launch { settingsStore.setPlaybackModes(player.shuffleModeEnabled, player.repeatMode) }
     }
@@ -682,7 +683,14 @@ class PlaybackService : MediaLibraryService() {
 
     private inner class LibraryCallback : MediaLibrarySession.Callback {
 
-        /** Advertise the custom shuffle/repeat commands and publish the initial button layout. */
+        /**
+         * Advertise the custom shuffle/repeat commands and publish the initial button layout.
+         *
+         * The Bluetooth stack is denied shuffle/repeat: over AVRCP, car head units and headsets push
+         * their own "player application settings" on connect (typically repeat off), which the stack
+         * forwards as setRepeatMode/setShuffleMode — and [modeListener] then persists it as if the
+         * user had chosen it. Those modes are user settings, so only a real tap may change them.
+         */
         override fun onConnect(
             session: MediaSession,
             controller: MediaSession.ControllerInfo,
@@ -692,8 +700,18 @@ class PlaybackService : MediaLibraryService() {
                 .add(SessionCommand(CMD_TOGGLE_SHUFFLE, Bundle.EMPTY))
                 .add(SessionCommand(CMD_CYCLE_REPEAT, Bundle.EMPTY))
                 .build()
+            val isBluetooth = controller.packageName.contains("bluetooth", ignoreCase = true)
+            android.util.Log.d(TAG, "onConnect by ${controller.packageName} (legacy=${controller.controllerVersion == MediaSession.ControllerInfo.LEGACY_CONTROLLER_VERSION}, bluetooth=$isBluetooth)")
+            val playerCommands = if (isBluetooth) {
+                MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS.buildUpon()
+                    .removeAll(Player.COMMAND_SET_REPEAT_MODE, Player.COMMAND_SET_SHUFFLE_MODE)
+                    .build()
+            } else {
+                MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS
+            }
             return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
                 .setAvailableSessionCommands(sessionCommands)
+                .setAvailablePlayerCommands(playerCommands)
                 .setMediaButtonPreferences(mediaButtonPreferences())
                 .build()
         }
