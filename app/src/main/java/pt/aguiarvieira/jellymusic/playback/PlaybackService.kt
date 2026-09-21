@@ -130,6 +130,9 @@ class PlaybackService : MediaLibraryService() {
     lateinit var clientProvider: pt.aguiarvieira.jellymusic.data.jellyfin.JellyfinClientProvider
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    /** The most recent Android Auto search, reused when Auto fetches its result pages. */
+    private var lastSearch: Pair<String, List<MediaItem>>? = null
     private lateinit var player: ExoPlayer
     private lateinit var mediaSession: MediaLibrarySession
 
@@ -837,15 +840,59 @@ class PlaybackService : MediaLibraryService() {
                 // The resume node is the exception: it's served straight from the persisted queue, so
                 // don't make the car wait on the network for the one thing it asks for on connect.
                 if (parentId != MediaItemTree.RESUME_ROOT_ID) ensureSession()
-                // Android Auto asks for every child in one call (page=0, pageSize=Int.MAX_VALUE), so the
-                // whole list crosses the Binder in a single transaction. A large node (typically Albums)
-                // exceeds the ~1MB transaction limit and throws TransactionTooLargeException, which surfaces
-                // as an *empty* tab. Cap the payload to keep every node well under that limit.
-                val children = mediaItemTree.getChildren(parentId).let {
-                    if (it.size > MAX_CHILDREN_PER_NODE) it.subList(0, MAX_CHILDREN_PER_NODE) else it
-                }
-                android.util.Log.d(TAG, "onGetChildren($parentId) -> ${children.size} items")
+                // Serve only the requested page (and cap unpaged requests) — see [page].
+                val children = mediaItemTree.getChildren(parentId).page(page, pageSize)
+                android.util.Log.d(TAG, "onGetChildren($parentId, page=$page, pageSize=$pageSize) -> ${children.size} items")
                 LibraryResult.ofItemList(ImmutableList.copyOf(children), params)
             }
+
+        /**
+         * Android Auto's search box. The legacy browser API Auto speaks has a single search call that
+         * only completes once the session announces the result via notifySearchResultChanged — until
+         * then Auto shows a spinner (forever, if we never do). So run the query here, keep the result
+         * for the follow-up [onGetSearchResult], and announce it.
+         */
+        override fun onSearch(
+            session: MediaLibrarySession,
+            browser: MediaSession.ControllerInfo,
+            query: String,
+            params: LibraryParams?,
+        ): ListenableFuture<LibraryResult<Void>> = serviceScope.future {
+            ensureSession()
+            val results = mediaItemTree.search(query)
+            lastSearch = query to results
+            android.util.Log.d(TAG, "onSearch(\"$query\") by ${browser.packageName} -> ${results.size} items")
+            session.notifySearchResultChanged(browser, query, results.size, params)
+            LibraryResult.ofVoid(params)
+        }
+
+        override fun onGetSearchResult(
+            session: MediaLibrarySession,
+            browser: MediaSession.ControllerInfo,
+            query: String,
+            page: Int,
+            pageSize: Int,
+            params: LibraryParams?,
+        ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> = serviceScope.future {
+            val results = lastSearch?.takeIf { it.first == query }?.second
+                ?: run { ensureSession(); mediaItemTree.search(query) }
+            val items = results.page(page, pageSize)
+            android.util.Log.d(TAG, "onGetSearchResult(\"$query\", page=$page, pageSize=$pageSize) -> ${items.size} items")
+            LibraryResult.ofItemList(ImmutableList.copyOf(items), params)
+        }
+    }
+
+    /**
+     * Slices out the requested page. Media3 rejects (as an error, which Auto shows as an empty list)
+     * any result larger than `pageSize`, so a paged request — e.g. from Auto's A–Z jump — must get
+     * exactly its page, not the whole list. An unpaged request (pageSize = Int.MAX_VALUE, how Auto
+     * normally browses) sends everything in one Binder transaction, so cap it at
+     * [MAX_CHILDREN_PER_NODE] to stay under the ~1MB transaction limit.
+     */
+    private fun List<MediaItem>.page(page: Int, pageSize: Int): List<MediaItem> {
+        if (pageSize == Int.MAX_VALUE) return take(MAX_CHILDREN_PER_NODE)
+        val from = page.toLong() * pageSize
+        if (page < 0 || pageSize <= 0 || from >= size) return emptyList()
+        return subList(from.toInt(), minOf(size.toLong(), from + pageSize).toInt())
     }
 }

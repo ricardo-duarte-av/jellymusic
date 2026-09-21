@@ -1,9 +1,11 @@
 package pt.aguiarvieira.jellymusic.playback
 
 import android.net.Uri
+import android.os.Bundle
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.MimeTypes
+import androidx.media3.session.MediaConstants
 import kotlinx.coroutines.flow.first
 import pt.aguiarvieira.jellymusic.data.download.MusicDownloadManager
 import pt.aguiarvieira.jellymusic.data.jellyfin.StreamUrlBuilder
@@ -119,6 +121,30 @@ class MediaItemTree @Inject constructor(
         }
 
         else -> emptyList()
+    }
+
+    /**
+     * Search results for Android Auto's search box, as one flat list grouped (via
+     * [MediaConstants.EXTRAS_KEY_CONTENT_STYLE_GROUP_TITLE]) into Artists, Albums, Songs and
+     * Playlists. Each item is the same node the browse tree serves, so tapping an artist/album opens
+     * it and playing resolves through [resolveForPlayback] as usual.
+     */
+    suspend fun search(query: String): List<MediaItem> {
+        if (query.isBlank()) return emptyList()
+        val results = musicRepository.search(query.trim(), libraryId()).getOrNull() ?: return emptyList()
+        val settings = settingsStore.streamSettings.first()
+        return results.artists.map { it.toMediaItem().inGroup("Artists") } +
+            results.albums.map { it.toMediaItem().inGroup("Albums") } +
+            results.tracks.map { trackMediaItem(it, settings).inGroup("Songs") } +
+            results.playlists.map { it.toMediaItem().inGroup("Playlists") }
+    }
+
+    private fun MediaItem.inGroup(title: String): MediaItem {
+        val extras = Bundle(mediaMetadata.extras ?: Bundle.EMPTY)
+        extras.putString(MediaConstants.EXTRAS_KEY_CONTENT_STYLE_GROUP_TITLE, title)
+        return buildUpon()
+            .setMediaMetadata(mediaMetadata.buildUpon().setExtras(extras).build())
+            .build()
     }
 
     /**
