@@ -18,6 +18,11 @@ val CHANGELOG: List<ChangelogVersion> = listOf(
     ChangelogVersion(
         version = null,
         date = null,
+        changes = emptyList(),
+    ),
+    ChangelogVersion(
+        version = "0.1.86",
+        date = "21/09/2026",
         changes = listOf(
             "Android Auto: search now works, with results grouped into artists, albums, songs " +
                 "and playlists.",
