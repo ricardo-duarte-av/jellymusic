@@ -88,6 +88,10 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        # The action's default also installs the legacy "tools" package, which Google has
+        # dropped from the SDK repository, so sdkmanager fails. Only platform-tools is needed.
+        with:
+          packages: platform-tools
 
       # Pin the AVD location so avdmanager (which creates it) and the emulator (which
       # reads it) agree. Without this they can disagree — avdmanager writing under the
