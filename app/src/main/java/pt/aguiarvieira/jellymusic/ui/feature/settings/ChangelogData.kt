@@ -18,6 +18,11 @@ val CHANGELOG: List<ChangelogVersion> = listOf(
     ChangelogVersion(
         version = null,
         date = null,
+        changes = emptyList(),
+    ),
+    ChangelogVersion(
+        version = "0.1.87",
+        date = "21/09/2026",
         changes = listOf(
             "Connecting a car or Bluetooth headset no longer turns repeat or shuffle off",
         ),
