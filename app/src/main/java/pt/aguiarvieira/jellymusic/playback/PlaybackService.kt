@@ -701,7 +701,8 @@ class PlaybackService : MediaLibraryService() {
                 .add(SessionCommand(CMD_CYCLE_REPEAT, Bundle.EMPTY))
                 .build()
             val isBluetooth = controller.packageName.contains("bluetooth", ignoreCase = true)
-            android.util.Log.d(TAG, "onConnect by ${controller.packageName} (legacy=${controller.controllerVersion == MediaSession.ControllerInfo.LEGACY_CONTROLLER_VERSION}, bluetooth=$isBluetooth)")
+            val isLegacy = controller.controllerVersion == MediaSession.ControllerInfo.LEGACY_CONTROLLER_VERSION
+            android.util.Log.d(TAG, "onConnect by ${controller.packageName} (legacy=$isLegacy, bluetooth=$isBluetooth)")
             val playerCommands = if (isBluetooth) {
                 MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS.buildUpon()
                     .removeAll(Player.COMMAND_SET_REPEAT_MODE, Player.COMMAND_SET_SHUFFLE_MODE)
