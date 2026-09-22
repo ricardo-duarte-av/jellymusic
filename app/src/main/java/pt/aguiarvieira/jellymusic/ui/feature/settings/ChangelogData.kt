@@ -18,6 +18,11 @@ val CHANGELOG: List<ChangelogVersion> = listOf(
     ChangelogVersion(
         version = null,
         date = null,
+        changes = emptyList(),
+    ),
+    ChangelogVersion(
+        version = "0.1.88",
+        date = "22/09/2026",
         changes = listOf(
             "ReplayGain now kicks in from the very first second of a song, instead of the start " +
                 "sometimes playing at the previous song's volume.",
