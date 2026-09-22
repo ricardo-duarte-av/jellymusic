@@ -51,6 +51,7 @@ import pt.aguiarvieira.jellymusic.data.settings.QueueStore
 import pt.aguiarvieira.jellymusic.data.settings.SettingsStore
 import pt.aguiarvieira.jellymusic.domain.model.PersistedQueue
 import pt.aguiarvieira.jellymusic.domain.model.QueueTrack
+import pt.aguiarvieira.jellymusic.domain.model.ReplayGainMode
 import pt.aguiarvieira.jellymusic.domain.model.toTrack
 import androidx.glance.appwidget.updateAll
 import pt.aguiarvieira.jellymusic.widget.NowPlayingWidget
@@ -140,8 +141,39 @@ class PlaybackService : MediaLibraryService() {
     @Inject
     lateinit var albumGainCache: AlbumGainCache
 
+    @Inject
+    lateinit var replayGainStatus: ReplayGainStatus
+
     /** Applies per-track ReplayGain in the audio pipeline; it tracks the playing stream itself. */
-    private val gainProcessor = GainAudioProcessor { albumGainCache.gainDb(it) }
+    private val gainProcessor = GainAudioProcessor(
+        albumGainDb = { albumGainCache.gainDb(it) },
+        onApplied = { mediaId, applied -> serviceScope.launch { onGainApplied(mediaId, applied) } },
+    )
+    private var replayGainMode = ReplayGainMode.TRACK
+
+    // What the processor applied to recently processed tracks, by mediaId. The processor runs ahead of
+    // playout, so the next track's entry lands before it's audible; [publishAppliedGain] picks the
+    // audible one. Main thread only; bounded, since only the current and next few ever matter.
+    private val appliedGains = object : LinkedHashMap<String, AppliedGain>() {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, AppliedGain>) = size > 16
+    }
+
+    private fun onGainApplied(mediaId: String, applied: AppliedGain) {
+        appliedGains[mediaId] = applied
+        publishAppliedGain()
+    }
+
+    /** Publishes the gain of the audible track for the now-playing screen. */
+    private fun publishAppliedGain() {
+        replayGainStatus.publish(
+            // Off bypasses the processor entirely (float output), so it reports no streams — say so here.
+            if (replayGainMode == ReplayGainMode.OFF) {
+                AppliedGain(GainSource.OFF, null, 0f)
+            } else {
+                player.currentMediaItem?.mediaId?.let { appliedGains[it] }
+            },
+        )
+    }
 
     // Whether the current player's audio sink was built with float output. Float output preserves
     // hi-res FLAC fidelity but routes decoded audio down a sink branch that bypasses our custom
@@ -203,7 +235,11 @@ class PlaybackService : MediaLibraryService() {
      * [applyGainForCurrentItem]. Shuffle is mirrored for the Auto mode's album-run detection.
      */
     private val gainListener = object : Player.Listener {
-        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) = applyGainForCurrentItem()
+        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            applyGainForCurrentItem()
+            publishAppliedGain()
+        }
+
         override fun onTimelineChanged(timeline: Timeline, reason: Int) = prefetchAlbumGains()
         override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
             gainProcessor.shuffleEnabled = shuffleModeEnabled
@@ -584,7 +620,9 @@ class PlaybackService : MediaLibraryService() {
         // to match whenever the toggle flips.
         serviceScope.launch {
             settingsStore.replayGainSettings.collect { rg ->
+                replayGainMode = rg.mode
                 gainProcessor.setSettings(rg.mode, rg.preampDb)
+                publishAppliedGain()
                 val wantFloatOutput = !rg.enabled
                 if (wantFloatOutput != usingFloatOutput) rebuildPlayer(floatOutput = wantFloatOutput)
                 applyGainForCurrentItem()
@@ -693,6 +731,7 @@ class PlaybackService : MediaLibraryService() {
     }
 
     override fun onDestroy() {
+        replayGainStatus.publish(null)
         reportedItemId?.let { playbackReporter.reportStop(it, player.currentPosition) }
         // Final snapshot before teardown, so the stored resume point is the position we actually
         // stopped at rather than the last structural change. Bounded and blocking on purpose:

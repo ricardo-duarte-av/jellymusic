@@ -34,6 +34,11 @@ import java.nio.ByteOrder
 class GainAudioProcessor(
     /** Album gain lookup (see [AlbumGainCache.gainDb]); called on the playback thread, must not block. */
     private val albumGainDb: (albumId: String) -> Float?,
+    /**
+     * Told what was applied to a track each time its gain is (re)computed. Called on the playback
+     * thread for stream changes, and on the caller's thread for settings changes / [refresh].
+     */
+    private val onApplied: (mediaId: String, applied: AppliedGain) -> Unit,
 ) : BaseAudioProcessor() {
 
     // Linear multiplier (10^(dB/20)); 1.0 = unity (no change). Read on the audio thread, written from
@@ -100,17 +105,27 @@ class GainAudioProcessor(
 
     private fun updateGain() {
         val s = stream
-        val db = when {
-            mode == ReplayGainMode.OFF -> null
-            s == null -> preampDb
+        val preamp = preampDb
+        val applied = when {
+            mode == ReplayGainMode.OFF -> AppliedGain(GainSource.OFF, null, preamp)
+            s == null -> AppliedGain(GainSource.NONE, null, preamp)
             else -> {
                 val useAlbum = mode == ReplayGainMode.ALBUM || (mode == ReplayGainMode.AUTO && s.inAlbumRun)
                 val albumDb = if (useAlbum) s.albumId?.let(albumGainDb) else null
                 // An album without a gain (or not fetched yet) falls back to the track's own gain.
-                (albumDb ?: s.trackGainDb ?: 0f) + preampDb
+                when {
+                    albumDb != null -> AppliedGain(GainSource.ALBUM, albumDb, preamp)
+                    s.trackGainDb != null -> AppliedGain(GainSource.TRACK, s.trackGainDb, preamp)
+                    else -> AppliedGain(GainSource.NONE, null, preamp)
+                }
             }
         }
-        gain = if (db == null) 1f else Math.pow(10.0, db / 20.0).toFloat()
+        gain = if (applied.source == GainSource.OFF) {
+            1f
+        } else {
+            Math.pow(10.0, ((applied.gainDb ?: 0f) + preamp) / 20.0).toFloat()
+        }
+        if (s != null) onApplied(s.mediaId, applied)
     }
 
     override fun onFlush(streamMetadata: AudioProcessor.StreamMetadata) {

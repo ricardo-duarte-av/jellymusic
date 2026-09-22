@@ -26,6 +26,7 @@ import pt.aguiarvieira.jellymusic.domain.model.StreamSettings
 import pt.aguiarvieira.jellymusic.domain.model.Track
 import pt.aguiarvieira.jellymusic.domain.repository.MusicRepository
 import java.io.File
+import pt.aguiarvieira.jellymusic.playback.AlbumGainCache
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -42,6 +43,7 @@ class MusicDownloadManager @Inject constructor(
     private val musicRepository: MusicRepository,
     private val settingsStore: SettingsStore,
     private val artworkCache: ArtworkCache,
+    private val albumGainCache: AlbumGainCache,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -56,7 +58,16 @@ class MusicDownloadManager @Inject constructor(
         // Keep the completed-download map current for playback resolution. The on-disk check happens
         // here, on IO, and only when the row set changes — see [localFileUri].
         scope.launch {
+            var gainsBackfilled = false
             dao.observeCompletedTracks().collect { rows ->
+                // Downloads made before album gains were cached (or never played online since) would
+                // otherwise fall back to track gain offline in Album/Auto mode. Once per process;
+                // offline it's simply retried next time.
+                if (!gainsBackfilled) {
+                    gainsBackfilled = true
+                    val albumIds = rows.mapNotNullTo(mutableSetOf()) { it.albumId }
+                    if (albumIds.isNotEmpty()) launch { albumGainCache.ensure(albumIds) }
+                }
                 completedRows = rows
                     .filter { row -> row.filePath?.let { File(it).exists() } == true }
                     .associateBy { it.trackId }
@@ -337,6 +348,8 @@ class MusicDownloadManager @Inject constructor(
                 updatedAt = System.currentTimeMillis(),
             ),
         )
+        // Cache the album gain now, while online, so Album/Auto normalization works offline too.
+        if (albumId != null) scope.launch { albumGainCache.ensure(listOf(albumId)) }
     }
 
     /** Enqueue the background download worker; a single unique instance drains the manual queue. */

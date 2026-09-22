@@ -23,6 +23,7 @@ import pt.aguiarvieira.jellymusic.data.download.FavoriteDownloadSyncManager
 import pt.aguiarvieira.jellymusic.data.settings.SettingsStore
 import pt.aguiarvieira.jellymusic.domain.repository.MusicRepository
 import pt.aguiarvieira.jellymusic.playback.PlaybackConnection
+import pt.aguiarvieira.jellymusic.playback.ReplayGainStatus
 import javax.inject.Inject
 
 /** Lyrics availability for the current track: still fetching, none published, or here they are. */
@@ -39,9 +40,13 @@ class PlaybackViewModel @Inject constructor(
     private val musicRepository: MusicRepository,
     private val favoriteSyncManager: FavoriteDownloadSyncManager,
     settingsStore: SettingsStore,
+    replayGainStatus: ReplayGainStatus,
 ) : ViewModel() {
 
     val state = connection.state
+
+    /** The loudness normalization actually applied to the playing track. */
+    val appliedGain = replayGainStatus.current
     val progress = connection.progress
     val queue = connection.queue
 

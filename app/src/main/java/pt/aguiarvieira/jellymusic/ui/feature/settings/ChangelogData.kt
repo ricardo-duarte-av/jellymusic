@@ -18,7 +18,12 @@ val CHANGELOG: List<ChangelogVersion> = listOf(
     ChangelogVersion(
         version = null,
         date = null,
-        changes = emptyList(),
+        changes = listOf(
+            "The now-playing screen shows which loudness levelling is applied to the current song " +
+                "\u2014 track or album gain and its value, or that it's off.",
+            "Album levelling now works offline for downloaded songs: the album's gain is saved " +
+                "when you download it.",
+        ),
     ),
     ChangelogVersion(
         version = "0.1.88",

@@ -81,6 +81,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
 import pt.aguiarvieira.jellymusic.domain.model.Lyrics
+import pt.aguiarvieira.jellymusic.playback.AppliedGain
+import pt.aguiarvieira.jellymusic.playback.GainSource
 import pt.aguiarvieira.jellymusic.playback.PlaybackProgress
 import pt.aguiarvieira.jellymusic.playback.PlaybackUiState
 import pt.aguiarvieira.jellymusic.playback.QueueItem
@@ -104,6 +106,7 @@ fun FullPlayerScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val qualityLabel by viewModel.qualityLabel.collectAsStateWithLifecycle()
+    val appliedGain by viewModel.appliedGain.collectAsStateWithLifecycle()
     val queue by viewModel.queue.collectAsStateWithLifecycle()
     val isFavorite by viewModel.isFavorite.collectAsStateWithLifecycle()
     val lyricsState by viewModel.lyrics.collectAsStateWithLifecycle()
@@ -177,6 +180,7 @@ fun FullPlayerScreen(
                 NowPlayingBody(
                     state = state,
                     qualityLabel = qualityLabel,
+                    appliedGain = appliedGain,
                     lyrics = lyrics,
                     progress = viewModel.progress,
                     headerFraction = headerFraction,
@@ -346,6 +350,7 @@ private fun SkipButton(
 private fun NowPlayingBody(
     state: PlaybackUiState,
     qualityLabel: String?,
+    appliedGain: AppliedGain?,
     lyrics: Lyrics?,
     progress: StateFlow<PlaybackProgress>,
     headerFraction: Float,
@@ -496,11 +501,8 @@ private fun NowPlayingBody(
                                         Text(
                                             text = buildString {
                                                 append(if (state.isLocal) "Downloaded" else "Streaming")
-                                                // Append this track's ReplayGain value when the server
-                                                // has scanned it.
-                                                state.normalizationGainDb?.let {
-                                                    append("  ·  ReplayGain %+.1f dB".format(it))
-                                                }
+                                                // The normalization actually applied to this track.
+                                                appliedGain?.let { append("  ·  ").append(it.label()) }
                                             },
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -707,6 +709,17 @@ private val PLAYER_PADDING = 24.dp
 private val COVER_PADDING_NO_LYRICS = 8.dp
 
 private const val SEEK_SETTLE_GRACE_MS = 1_000L
+
+/** e.g. "Album gain −8.8 dB", with the pre-amp appended when it isn't zero. */
+private fun AppliedGain.label(): String {
+    val base = when (source) {
+        GainSource.OFF -> return "ReplayGain off"
+        GainSource.TRACK -> "Track gain %+.1f dB".format(gainDb ?: 0f)
+        GainSource.ALBUM -> "Album gain %+.1f dB".format(gainDb ?: 0f)
+        GainSource.NONE -> "No ReplayGain data"
+    }
+    return if (preampDb != 0f) "$base, pre-amp %+.1f dB".format(preampDb) else base
+}
 
 private fun formatTime(ms: Long): String {
     if (ms <= 0) return "0:00"
