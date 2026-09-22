@@ -136,10 +136,8 @@ class PlaybackService : MediaLibraryService() {
     private lateinit var player: ExoPlayer
     private lateinit var mediaSession: MediaLibrarySession
 
-    /** Applies per-track ReplayGain in the audio pipeline; gain is (re)set on transitions/settings. */
+    /** Applies per-track ReplayGain in the audio pipeline; it tracks the playing stream itself. */
     private val gainProcessor = GainAudioProcessor()
-    private var replayGainEnabled = true
-    private var replayGainPreampDb = 0f
 
     // Whether the current player's audio sink was built with float output. Float output preserves
     // hi-res FLAC fidelity but routes decoded audio down a sink branch that bypasses our custom
@@ -196,7 +194,7 @@ class PlaybackService : MediaLibraryService() {
         return if (transcode && !isLocal) PlayMethod.TRANSCODE else PlayMethod.DIRECT_PLAY
     }
 
-    /** Re-applies the ReplayGain level each time the playing track changes. */
+    /** Fallback only — see [applyGainForCurrentItem]. */
     private val gainListener = object : Player.Listener {
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) = applyGainForCurrentItem()
     }
@@ -243,14 +241,14 @@ class PlaybackService : MediaLibraryService() {
     }
 
     /**
-     * Computes and pushes the effective gain for the current track into [gainProcessor]: the track's
-     * Jellyfin normalization gain plus the manual preamp when ReplayGain is on, else unity (bypass).
+     * Pushes the current track's Jellyfin normalization gain into [gainProcessor] — but only until the
+     * processor starts resolving tracks from the audio stream itself (see [GainAudioProcessor]). This
+     * transition-time path fires after the new track's audio has already been processed, so once the
+     * processor follows streams, applying it here would only reintroduce that lag.
      */
     private fun applyGainForCurrentItem() {
-        val trackGainDb = StreamSettingsExtras.gainDbFrom(player.currentMediaItem?.mediaMetadata?.extras)
-        gainProcessor.setGainDb(
-            if (replayGainEnabled) (trackGainDb ?: 0f) + replayGainPreampDb else null,
-        )
+        if (gainProcessor.followsStreams) return
+        gainProcessor.setTrackGainDb(StreamSettingsExtras.gainDbFrom(player.currentMediaItem?.mediaMetadata?.extras))
     }
 
     /**
@@ -557,8 +555,7 @@ class PlaybackService : MediaLibraryService() {
         // to match whenever the toggle flips.
         serviceScope.launch {
             settingsStore.replayGainSettings.collect { rg ->
-                replayGainEnabled = rg.enabled
-                replayGainPreampDb = rg.preampDb
+                gainProcessor.setSettings(rg.enabled, rg.preampDb)
                 val wantFloatOutput = !rg.enabled
                 if (wantFloatOutput != usingFloatOutput) rebuildPlayer(floatOutput = wantFloatOutput)
                 applyGainForCurrentItem()
