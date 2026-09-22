@@ -54,6 +54,9 @@ import javax.inject.Singleton
 
 private const val ALBUM_PAGE_SIZE = 100
 private const val SEARCH_LIMIT = 40
+
+/** Ids per normalization-gain lookup request, keeping the query string a sane length. */
+private const val GAIN_LOOKUP_CHUNK = 50
 private const val HTTP_UNAUTHORIZED = 401
 private const val HTTP_NOT_FOUND = 404
 
@@ -236,6 +239,15 @@ class MusicRepositoryImpl @Inject constructor(
             ),
         ).content.items.map { it.toTrack(urlBuilder) }
     }
+
+    override suspend fun getNormalizationGains(itemIds: Collection<String>): Result<Map<String, Float?>> =
+        query { api ->
+            itemIds.chunked(GAIN_LOOKUP_CHUNK).flatMap { chunk ->
+                ItemsApi(api).getItems(
+                    GetItemsRequest(ids = chunk.map(UUID::fromString), enableUserData = false),
+                ).content.items.map { it.id.toString() to it.normalizationGain }
+            }.toMap()
+        }
 
     override suspend fun getTrackAudioInfo(trackId: String): Result<TrackAudioInfo?> = query { api ->
         val item = ItemsApi(api).getItems(

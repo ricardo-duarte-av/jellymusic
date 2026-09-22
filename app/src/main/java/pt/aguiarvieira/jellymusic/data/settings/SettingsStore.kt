@@ -11,6 +11,7 @@ import pt.aguiarvieira.jellymusic.domain.model.AlbumSort
 import pt.aguiarvieira.jellymusic.domain.model.AudioCodec
 import pt.aguiarvieira.jellymusic.domain.model.MusicLibrary
 import pt.aguiarvieira.jellymusic.domain.model.PlaybackModes
+import pt.aguiarvieira.jellymusic.domain.model.ReplayGainMode
 import pt.aguiarvieira.jellymusic.domain.model.ReplayGainSettings
 import pt.aguiarvieira.jellymusic.domain.model.StreamSettings
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -58,10 +59,14 @@ class SettingsStore @Inject constructor(
         )
     }
 
-    /** ReplayGain (loudness-normalization) playback preferences. Defaults to enabled, 0 dB preamp. */
+    /**
+     * ReplayGain (loudness-normalization) playback preferences. Defaults to track gain, 0 dB preamp.
+     * Installs from before the mode setting only have the old on/off switch, which meant track gain.
+     */
     val replayGainSettings: Flow<ReplayGainSettings> = context.dataStore.data.map { prefs ->
         ReplayGainSettings(
-            enabled = prefs[KEY_REPLAYGAIN_ENABLED] ?: true,
+            mode = prefs[KEY_REPLAYGAIN_MODE]?.let { runCatching { ReplayGainMode.valueOf(it) }.getOrNull() }
+                ?: if (prefs[KEY_REPLAYGAIN_ENABLED] == false) ReplayGainMode.OFF else ReplayGainMode.TRACK,
             preampDb = prefs[KEY_REPLAYGAIN_PREAMP_DB] ?: 0f,
         )
     }
@@ -137,8 +142,8 @@ class SettingsStore @Inject constructor(
         context.dataStore.edit { it[KEY_DOWNLOAD_BITRATE] = kbps }
     }
 
-    suspend fun setReplayGainEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[KEY_REPLAYGAIN_ENABLED] = enabled }
+    suspend fun setReplayGainMode(mode: ReplayGainMode) {
+        context.dataStore.edit { it[KEY_REPLAYGAIN_MODE] = mode.name }
     }
 
     suspend fun setReplayGainPreampDb(db: Float) {
@@ -199,7 +204,9 @@ class SettingsStore @Inject constructor(
         val KEY_DOWNLOAD_TRANSCODE = booleanPreferencesKey("download_transcode")
         val KEY_DOWNLOAD_CODEC = stringPreferencesKey("download_codec")
         val KEY_DOWNLOAD_BITRATE = intPreferencesKey("download_bitrate_kbps")
+        // Legacy on/off switch, read only to seed [KEY_REPLAYGAIN_MODE] for existing installs.
         val KEY_REPLAYGAIN_ENABLED = booleanPreferencesKey("replaygain_enabled")
+        val KEY_REPLAYGAIN_MODE = stringPreferencesKey("replaygain_mode")
         val KEY_REPLAYGAIN_PREAMP_DB = floatPreferencesKey("replaygain_preamp_db")
         val KEY_DYNAMIC_ALBUM_THEME = booleanPreferencesKey("dynamic_album_theme")
         val KEY_LYRICS_ENABLED = booleanPreferencesKey("lyrics_enabled")

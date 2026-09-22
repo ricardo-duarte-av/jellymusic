@@ -12,8 +12,9 @@ import androidx.room.TypeConverters
         PlaylistDownloadEntity::class,
         CachedArtistEntity::class,
         CachedPlaylistEntity::class,
+        AlbumGainEntity::class,
     ],
-    version = 11,
+    version = 12,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -21,4 +22,5 @@ abstract class JellyMusicDatabase : RoomDatabase() {
     abstract fun albumDao(): AlbumDao
     abstract fun downloadDao(): DownloadDao
     abstract fun browseCacheDao(): BrowseCacheDao
+    abstract fun albumGainDao(): AlbumGainDao
 }

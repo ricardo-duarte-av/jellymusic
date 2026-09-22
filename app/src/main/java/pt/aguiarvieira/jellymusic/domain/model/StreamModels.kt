@@ -20,15 +20,38 @@ data class StreamSettings(
 val STREAM_BITRATE_OPTIONS = listOf(320, 256, 192, 128, 96)
 
 /**
- * ReplayGain / loudness-normalization playback preferences. When [enabled], the player applies each
- * track's Jellyfin LUFS normalization gain plus the manual [preampDb] offset; when off, audio plays
- * at its original level (bit-perfect). [preampDb] lets the user compensate globally (e.g. quieter or
- * louder target); it only takes effect while [enabled].
+ * Which of Jellyfin's LUFS normalization gains to apply. Jellyfin stores the same `NormalizationGain`
+ * field on each audio item (track gain) and on each album (album gain).
+ */
+enum class ReplayGainMode {
+    /** No normalization: audio plays at its original level (bit-perfect). */
+    OFF,
+
+    /** Every track levelled on its own — even loudness across everything. */
+    TRACK,
+
+    /** Every track takes its album's gain, preserving the loudness differences within an album. */
+    ALBUM,
+
+    /**
+     * Album gain while an album is played in order (shuffle off, and a neighbouring track in the queue
+     * is from the same album); track gain for shuffle and mixed playlists.
+     */
+    AUTO,
+}
+
+/**
+ * ReplayGain / loudness-normalization playback preferences. Unless [mode] is [ReplayGainMode.OFF], the
+ * player applies the chosen Jellyfin normalization gain (falling back to the track's own gain when the
+ * album has none) plus the manual [preampDb] offset. [preampDb] lets the user compensate globally
+ * (e.g. quieter or louder target); it only takes effect while normalization is on.
  */
 data class ReplayGainSettings(
-    val enabled: Boolean = true,
+    val mode: ReplayGainMode = ReplayGainMode.TRACK,
     val preampDb: Float = 0f,
 ) {
+    val enabled: Boolean get() = mode != ReplayGainMode.OFF
+
     companion object {
         const val PREAMP_MIN_DB = -12f
         const val PREAMP_MAX_DB = 12f

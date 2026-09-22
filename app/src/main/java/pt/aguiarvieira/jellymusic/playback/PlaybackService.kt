@@ -8,6 +8,7 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.common.Timeline
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
@@ -136,8 +137,11 @@ class PlaybackService : MediaLibraryService() {
     private lateinit var player: ExoPlayer
     private lateinit var mediaSession: MediaLibrarySession
 
+    @Inject
+    lateinit var albumGainCache: AlbumGainCache
+
     /** Applies per-track ReplayGain in the audio pipeline; it tracks the playing stream itself. */
-    private val gainProcessor = GainAudioProcessor()
+    private val gainProcessor = GainAudioProcessor { albumGainCache.gainDb(it) }
 
     // Whether the current player's audio sink was built with float output. Float output preserves
     // hi-res FLAC fidelity but routes decoded audio down a sink branch that bypasses our custom
@@ -194,9 +198,31 @@ class PlaybackService : MediaLibraryService() {
         return if (transcode && !isLocal) PlayMethod.TRANSCODE else PlayMethod.DIRECT_PLAY
     }
 
-    /** Fallback only — see [applyGainForCurrentItem]. */
+    /**
+     * Keeps album gains cached for everything queued, and is the fallback gain path — see
+     * [applyGainForCurrentItem]. Shuffle is mirrored for the Auto mode's album-run detection.
+     */
     private val gainListener = object : Player.Listener {
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) = applyGainForCurrentItem()
+        override fun onTimelineChanged(timeline: Timeline, reason: Int) = prefetchAlbumGains()
+        override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
+            gainProcessor.shuffleEnabled = shuffleModeEnabled
+        }
+    }
+
+    /**
+     * Fetches the album gains of every queued track. Called as soon as the queue changes, so for a new
+     * album the gain normally lands before its first samples are processed; if the network is slower
+     * than that, the first track starts on its own gain and switches to the album's once it arrives.
+     */
+    private fun prefetchAlbumGains() {
+        val timeline = player.currentTimeline
+        val window = Timeline.Window()
+        val albumIds = (0 until timeline.windowCount).mapNotNullTo(mutableSetOf()) {
+            StreamSettingsExtras.albumIdFrom(timeline.getWindow(it, window).mediaItem.mediaMetadata.extras)
+        }
+        if (albumIds.isEmpty()) return
+        serviceScope.launch { if (albumGainCache.ensure(albumIds)) gainProcessor.refresh() }
     }
 
     /**
@@ -241,14 +267,14 @@ class PlaybackService : MediaLibraryService() {
     }
 
     /**
-     * Pushes the current track's Jellyfin normalization gain into [gainProcessor] — but only until the
+     * Points [gainProcessor] at the current track — but only until the
      * processor starts resolving tracks from the audio stream itself (see [GainAudioProcessor]). This
      * transition-time path fires after the new track's audio has already been processed, so once the
      * processor follows streams, applying it here would only reintroduce that lag.
      */
     private fun applyGainForCurrentItem() {
         if (gainProcessor.followsStreams) return
-        gainProcessor.setTrackGainDb(StreamSettingsExtras.gainDbFrom(player.currentMediaItem?.mediaMetadata?.extras))
+        gainProcessor.setStream(player.currentTimeline, player.currentMediaItemIndex)
     }
 
     /**
@@ -549,13 +575,16 @@ class PlaybackService : MediaLibraryService() {
         }
         pushWidgetUpdate()
 
+        // Load the stored album gains into memory up front, so the first track can use them.
+        serviceScope.launch { if (albumGainCache.ensure(emptyList())) gainProcessor.refresh() }
+
         // Keep ReplayGain settings live: re-apply to the current track whenever the toggle or preamp
         // changes (and once on startup to seed the values). Float output (better hi-res FLAC
         // fidelity) is only possible while ReplayGain is off, so switch the player's audio-sink mode
         // to match whenever the toggle flips.
         serviceScope.launch {
             settingsStore.replayGainSettings.collect { rg ->
-                gainProcessor.setSettings(rg.enabled, rg.preampDb)
+                gainProcessor.setSettings(rg.mode, rg.preampDb)
                 val wantFloatOutput = !rg.enabled
                 if (wantFloatOutput != usingFloatOutput) rebuildPlayer(floatOutput = wantFloatOutput)
                 applyGainForCurrentItem()

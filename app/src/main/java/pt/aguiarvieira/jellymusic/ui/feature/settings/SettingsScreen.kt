@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import pt.aguiarvieira.jellymusic.domain.model.AudioCodec
+import pt.aguiarvieira.jellymusic.domain.model.ReplayGainMode
 import pt.aguiarvieira.jellymusic.domain.model.ReplayGainSettings
 import pt.aguiarvieira.jellymusic.domain.model.STREAM_BITRATE_OPTIONS
 
@@ -154,20 +155,26 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.primary,
             )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Loudness normalization", style = MaterialTheme.typography.bodyLarge)
-                    Text(
-                        text = "Even out volume between tracks using the server's ReplayGain scan.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+            Text("Loudness normalization", style = MaterialTheme.typography.bodyLarge)
+            Text(
+                text = "Even out volume using the server's ReplayGain scan.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ReplayGainMode.entries.forEach { mode ->
+                    FilterChip(
+                        selected = replayGain.mode == mode,
+                        onClick = { viewModel.setReplayGainMode(mode) },
+                        label = { Text(mode.label) },
                     )
                 }
-                Switch(checked = replayGain.enabled, onCheckedChange = viewModel::setReplayGainEnabled)
             }
+            Text(
+                text = replayGain.mode.description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
 
             if (replayGain.enabled) {
                 // Local draft for smooth dragging; persisted only when the gesture finishes.
@@ -414,3 +421,21 @@ private fun SettingsNavRow(
         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
     }
 }
+
+private val ReplayGainMode.label: String
+    get() = when (this) {
+        ReplayGainMode.OFF -> "Off"
+        ReplayGainMode.TRACK -> "Track"
+        ReplayGainMode.ALBUM -> "Album"
+        ReplayGainMode.AUTO -> "Auto"
+    }
+
+private val ReplayGainMode.description: String
+    get() = when (this) {
+        ReplayGainMode.OFF -> "Tracks play at their original level."
+        ReplayGainMode.TRACK -> "Every track is levelled on its own, so everything plays equally loud."
+        ReplayGainMode.ALBUM -> "Each album is levelled as a whole, keeping its quiet and loud tracks " +
+            "as mixed. Tracks without an album gain fall back to their own."
+        ReplayGainMode.AUTO -> "Album levelling while you play an album in order; track levelling " +
+            "for shuffle and mixed playlists."
+    }

@@ -65,6 +65,12 @@ interface MusicRepository {
     suspend fun getLyrics(trackId: String): Result<Lyrics?>
 
     suspend fun getAlbumTracks(albumId: String): Result<List<Track>>
+
+    /**
+     * Jellyfin's LUFS `NormalizationGain` (dB) for each of [itemIds] — for albums, the album gain.
+     * Every requested id the server returns is in the map, with null when it has no gain.
+     */
+    suspend fun getNormalizationGains(itemIds: Collection<String>): Result<Map<String, Float?>>
     suspend fun getArtistAlbums(artistId: String): Result<List<Album>>
     suspend fun getPlaylistTracks(playlistId: String): Result<List<Track>>
 

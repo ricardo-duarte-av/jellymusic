@@ -11,6 +11,7 @@ import pt.aguiarvieira.jellymusic.core.image.ImageCacheManager
 import pt.aguiarvieira.jellymusic.data.download.FavoriteDownloadSyncManager
 import pt.aguiarvieira.jellymusic.data.settings.SettingsStore
 import pt.aguiarvieira.jellymusic.domain.model.AudioCodec
+import pt.aguiarvieira.jellymusic.domain.model.ReplayGainMode
 import pt.aguiarvieira.jellymusic.domain.model.ReplayGainSettings
 import pt.aguiarvieira.jellymusic.domain.model.StreamSettings
 import javax.inject.Inject
@@ -43,8 +44,8 @@ class SettingsViewModel @Inject constructor(
     val downloadFavoritesOnMetered = settingsStore.downloadFavoritesOnMetered
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
-    fun setReplayGainEnabled(enabled: Boolean) {
-        viewModelScope.launch { settingsStore.setReplayGainEnabled(enabled) }
+    fun setReplayGainMode(mode: ReplayGainMode) {
+        viewModelScope.launch { settingsStore.setReplayGainMode(mode) }
     }
 
     fun setReplayGainPreampDb(db: Float) {

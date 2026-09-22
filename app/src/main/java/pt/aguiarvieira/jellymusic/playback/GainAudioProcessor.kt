@@ -6,13 +6,15 @@ import androidx.media3.common.Timeline
 import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.common.audio.BaseAudioProcessor
 import androidx.media3.common.util.UnstableApi
+import pt.aguiarvieira.jellymusic.domain.model.ReplayGainMode
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 /**
  * A Media3 audio processor that applies a linear gain to the PCM stream — the mechanism behind
  * ReplayGain / loudness normalization. The gain is set per track (from Jellyfin's LUFS
- * `NormalizationGain`, plus the user's manual preamp) and can change live mid-stream.
+ * `NormalizationGain` — the track's own, or its album's per [ReplayGainMode] — plus the user's manual
+ * preamp) and can change live mid-stream.
  *
  * The per-track gain is picked up *here*, in [onFlush], rather than on the player's media-item
  * transition. The audio sink decodes and processes well ahead of what is audible (its AudioTrack
@@ -29,44 +31,86 @@ import java.nio.ByteOrder
  * track into clipping since quiet tracks have headroom by definition.
  */
 @UnstableApi
-class GainAudioProcessor : BaseAudioProcessor() {
+class GainAudioProcessor(
+    /** Album gain lookup (see [AlbumGainCache.gainDb]); called on the playback thread, must not block. */
+    private val albumGainDb: (albumId: String) -> Float?,
+) : BaseAudioProcessor() {
 
     // Linear multiplier (10^(dB/20)); 1.0 = unity (no change). Read on the audio thread, written from
     // the playback thread (stream changes) and the main thread (settings changes), hence @Volatile.
     @Volatile
     private var gain: Float = 1f
 
-    @Volatile private var enabled = true
+    @Volatile private var mode = ReplayGainMode.TRACK
     @Volatile private var preampDb = 0f
 
-    // Normalization gain of the track whose samples are currently being processed (not necessarily
-    // the one audible yet), or null when it has none.
-    @Volatile private var trackGainDb: Float? = null
+    /** Mirrors the player's shuffle mode; read when a track starts, for [ReplayGainMode.AUTO]. */
+    @Volatile
+    var shuffleEnabled = false
+
+    /** The track whose samples are currently being processed — not necessarily the audible one yet. */
+    private data class Stream(
+        val mediaId: String,
+        val trackGainDb: Float?,
+        val albumId: String?,
+        // Played as part of its album: shuffle off and a queue neighbour from the same album.
+        val inAlbumRun: Boolean,
+    )
+
+    @Volatile private var stream: Stream? = null
 
     /**
      * True once a stream change has resolved a track from its [AudioProcessor.StreamMetadata]. Until
-     * then the service falls back to [setTrackGainDb] on media-item transitions, so a sink that never
+     * then the service falls back to [setStream] on media-item transitions, so a sink that never
      * delivers stream metadata still gets normalized (with the old, late timing).
      */
     @Volatile
     var followsStreams = false
         private set
 
-    /** ReplayGain on/off and the manual preamp; applies immediately to the audio being processed. */
-    fun setSettings(enabled: Boolean, preampDb: Float) {
-        this.enabled = enabled
+    /** Normalization mode and the manual preamp; applies immediately to the audio being processed. */
+    fun setSettings(mode: ReplayGainMode, preampDb: Float) {
+        this.mode = mode
         this.preampDb = preampDb
         updateGain()
     }
 
-    /** Fallback track-gain source for when [followsStreams] is false. */
-    fun setTrackGainDb(db: Float?) {
-        trackGainDb = db
+    /** Re-evaluates the current track, e.g. once its album gain has been fetched. */
+    fun refresh() = updateGain()
+
+    /** Points the gain at the track at [windowIndex] in [timeline]; also the service's fallback path. */
+    fun setStream(timeline: Timeline, windowIndex: Int) {
+        if (windowIndex !in 0 until timeline.windowCount) return
+        val window = Timeline.Window()
+        fun albumIdAt(index: Int): String? =
+            if (index !in 0 until timeline.windowCount) {
+                null
+            } else {
+                StreamSettingsExtras.albumIdFrom(timeline.getWindow(index, window).mediaItem.mediaMetadata.extras)
+            }
+        val albumId = albumIdAt(windowIndex)
+        // Neighbours in queue order: with shuffle on the order is shuffled, and AUTO uses track gain.
+        val inAlbumRun = !shuffleEnabled && albumId != null &&
+            (albumIdAt(windowIndex - 1) == albumId || albumIdAt(windowIndex + 1) == albumId)
+        val item = timeline.getWindow(windowIndex, window).mediaItem
+        stream = Stream(item.mediaId, StreamSettingsExtras.gainDbFrom(item.mediaMetadata.extras), albumId, inAlbumRun)
         updateGain()
+        Log.d(TAG, "stream -> ${item.mediaId}, mode=$mode, album=$inAlbumRun, gain=$gain")
     }
 
     private fun updateGain() {
-        gain = if (enabled) Math.pow(10.0, ((trackGainDb ?: 0f) + preampDb) / 20.0).toFloat() else 1f
+        val s = stream
+        val db = when {
+            mode == ReplayGainMode.OFF -> null
+            s == null -> preampDb
+            else -> {
+                val useAlbum = mode == ReplayGainMode.ALBUM || (mode == ReplayGainMode.AUTO && s.inAlbumRun)
+                val albumDb = if (useAlbum) s.albumId?.let(albumGainDb) else null
+                // An album without a gain (or not fetched yet) falls back to the track's own gain.
+                (albumDb ?: s.trackGainDb ?: 0f) + preampDb
+            }
+        }
+        gain = if (db == null) 1f else Math.pow(10.0, db / 20.0).toFloat()
     }
 
     override fun onFlush(streamMetadata: AudioProcessor.StreamMetadata) {
@@ -74,12 +118,8 @@ class GainAudioProcessor : BaseAudioProcessor() {
         val periodUid = streamMetadata.periodUid ?: return
         // A plain flush (seek within the same track) carries no stream: keep the current track's gain.
         if (timeline.isEmpty || timeline.getIndexOfPeriod(periodUid) == C.INDEX_UNSET) return
-        val windowIndex = timeline.getPeriodByUid(periodUid, Timeline.Period()).windowIndex
-        val item = timeline.getWindow(windowIndex, Timeline.Window()).mediaItem
         followsStreams = true
-        trackGainDb = StreamSettingsExtras.gainDbFrom(item.mediaMetadata.extras)
-        updateGain()
-        Log.d(TAG, "stream -> ${item.mediaId}, trackGainDb=$trackGainDb, gain=$gain")
+        setStream(timeline, timeline.getPeriodByUid(periodUid, Timeline.Period()).windowIndex)
     }
 
     override fun onConfigure(inputAudioFormat: AudioProcessor.AudioFormat): AudioProcessor.AudioFormat =

@@ -21,6 +21,10 @@ val CHANGELOG: List<ChangelogVersion> = listOf(
         changes = listOf(
             "ReplayGain now kicks in from the very first second of a song, instead of the start " +
                 "sometimes playing at the previous song's volume.",
+            "Loudness normalization now has four modes in Settings: Off, Track (every song equally " +
+                "loud), Album (each album levelled as a whole, keeping its quiet and loud songs as " +
+                "mixed) and Auto (album levelling while you play an album in order, track levelling " +
+                "for shuffle and mixed playlists).",
         ),
     ),
     ChangelogVersion(
