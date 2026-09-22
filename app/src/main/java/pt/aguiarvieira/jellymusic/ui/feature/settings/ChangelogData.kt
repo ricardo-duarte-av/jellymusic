@@ -18,6 +18,11 @@ val CHANGELOG: List<ChangelogVersion> = listOf(
     ChangelogVersion(
         version = null,
         date = null,
+        changes = emptyList(),
+    ),
+    ChangelogVersion(
+        version = "0.1.89",
+        date = "22/09/2026",
         changes = listOf(
             "The now-playing screen shows which loudness levelling is applied to the current song " +
                 "\u2014 track or album gain and its value, or that it's off.",
