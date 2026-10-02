@@ -144,6 +144,10 @@ class PlaybackService : MediaLibraryService() {
     /** The most recent Android Auto search, reused when Auto fetches its result pages. */
     private var lastSearch: Pair<String, List<MediaItem>>? = null
     private lateinit var player: ExoPlayer
+
+    // The session drives `player` through StreamSeekPlayer, so partially-downloaded transcodes can
+    // still be seeked (see StreamSeekHandler). Lazy: it needs the injected streamCache.
+    private val streamSeeks by lazy { StreamSeekHandler({ player }, streamCache, serviceScope) }
     private lateinit var mediaSession: MediaLibrarySession
 
     @Inject
@@ -196,6 +200,12 @@ class PlaybackService : MediaLibraryService() {
     /** Reports playback lifecycle to Jellyfin (play counts, resume points, now-playing). */
     private val reporterListener = object : Player.Listener {
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            // The same track re-prepared in place (StreamSeekHandler's reload) is not a new play.
+            if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED &&
+                mediaItem?.mediaId?.removePrefix("track/") == reportedItemId
+            ) {
+                return
+            }
             reportedItemId?.let { playbackReporter.reportStop(it, lastPositionMs) }
             reportedItemId = mediaItem?.mediaId?.removePrefix("track/")
             lastPositionMs = player.currentPosition
@@ -616,7 +626,7 @@ class PlaybackService : MediaLibraryService() {
         }
         player = fresh
         usingFloatOutput = floatOutput
-        mediaSession.setPlayer(fresh)
+        mediaSession.setPlayer(StreamSeekPlayer(fresh, streamSeeks))
         detachListeners(old)
         old.release()
     }
@@ -629,7 +639,7 @@ class PlaybackService : MediaLibraryService() {
         player = buildPlayer(floatOutput = false)
         usingFloatOutput = false
 
-        mediaSession = MediaLibrarySession.Builder(this, player, LibraryCallback())
+        mediaSession = MediaLibrarySession.Builder(this, StreamSeekPlayer(player, streamSeeks), LibraryCallback())
             .setSessionActivity(openPlayerPendingIntent())
             .build()
 

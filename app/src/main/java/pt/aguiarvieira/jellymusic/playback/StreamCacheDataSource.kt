@@ -23,10 +23,11 @@ private const val POLL_MS = 50L
 private const val STALL_TIMEOUT_MS = 30_000L
 
 /**
- * How long opening a transcode waits for the whole file before playing what has arrived so far.
- * Playing a partial transcode works, but it can't be seeked (its length is unknown).
+ * How long opening a transcode waits for the whole file before playing what has arrived so far. A
+ * transcode opened complete has a known length and seeks normally; one opened partial can't be
+ * seeked by the player itself, so [StreamSeekHandler] reloads it once its download completes.
  */
-private const val TRANSCODE_WAIT_MS = 10_000L
+private const val TRANSCODE_WAIT_MS = 3_000L
 
 /**
  * Plays a [StreamCache] track (a `jellymusic-stream://` URI) from the cache, reading each fragment

@@ -22,8 +22,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
@@ -91,10 +94,11 @@ private const val BYTES_PER_GB = 1L shl 30
  * now-playing quality label can show what is really playing.
  *
  * Transcodes have no length and no byte ranges, and the server's output differs on every run. So a
- * partial transcode is thrown away rather than resumed, and the player waits for the whole file
- * before opening one (a 4-minute track transcodes in a couple of seconds). That way it plays from a
- * file of known length, and seeking works. Originals are range-resumable and start playing once their
- * first fragment lands.
+ * partial transcode is thrown away rather than resumed. The player waits a moment for the whole file
+ * before opening one (a 4-minute track transcodes in a couple of seconds), so it usually plays from a
+ * file of known length and seeks normally; past that wait it starts on what has arrived, and seeking
+ * goes through [StreamSeekHandler]. Originals are range-resumable and start playing once their first
+ * fragment lands.
  */
 @OptIn(UnstableApi::class)
 @Singleton
@@ -151,6 +155,11 @@ class StreamCache @Inject constructor(
 
     /** Quality pinned per track id, for the tracks in the window. */
     val pins: StateFlow<Map<String, StreamSettings>> = _pins.asStateFlow()
+
+    private val _completed = MutableSharedFlow<String>(extraBufferCapacity = 16)
+
+    /** Ids of tracks whose download just completed. */
+    val completed: SharedFlow<String> = _completed.asSharedFlow()
 
     /** Called (on a background thread) whenever a download starts, i.e. the radio is about to be up. */
     @Volatile
@@ -266,6 +275,12 @@ class StreamCache @Inject constructor(
     internal fun readerClosed(trackId: String) = synchronized(lock) {
         val n = (openTracks[trackId] ?: 1) - 1
         if (n <= 0) openTracks.remove(trackId) else openTracks[trackId] = n
+    }
+
+    /** Whether [trackId] is fully downloaded in its pinned quality. Blocks; not on the main thread. */
+    fun isTrackComplete(trackId: String): Boolean {
+        val quality = pinMap[trackId] ?: return false
+        return isComplete(keyFor(trackId, quality))
     }
 
     internal fun isComplete(key: String): Boolean {
@@ -384,6 +399,7 @@ class StreamCache @Inject constructor(
             failures.remove(key)
             completeTracks += trackId
             removeLowerQualities(trackId, quality)
+            _completed.tryEmit(trackId)
         } catch (e: IOException) {
             if (!job.cancelled) {
                 Log.w(TAG, "Download of $key failed", e)
@@ -428,7 +444,12 @@ class StreamCache @Inject constructor(
         /** Direct play. Its codec/bitrate fields mean nothing, so every original compares equal. */
         private val ORIGINAL = StreamSettings(transcode = false)
 
-        fun streamUri(trackId: String): String = "$STREAM_SCHEME://track/$trackId"
+        /**
+         * The URI a streamed track plays from. A [reload] count gives a different URI for the same
+         * track, which makes the player prepare it afresh (see [StreamSeekHandler]).
+         */
+        fun streamUri(trackId: String, reload: Int = 0): String =
+            "$STREAM_SCHEME://track/$trackId" + if (reload > 0) "?reload=$reload" else ""
 
         fun isStreamUri(uri: Uri?): Boolean = uri?.scheme == STREAM_SCHEME
 

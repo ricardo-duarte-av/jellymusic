@@ -21,6 +21,9 @@ val CHANGELOG: List<ChangelogVersion> = listOf(
         changes = listOf(
             "Songs that aren't cached yet start playing almost right away again, instead of only " +
                 "once the whole file has downloaded \u2014 most noticeable with FLAC on a slow connection.",
+            "Transcoded songs that aren't cached start within a few seconds even on a slow connection, " +
+                "and can still be seeked: a seek made while the song is still downloading lands as " +
+                "soon as it finishes.",
         ),
     ),
     ChangelogVersion(
