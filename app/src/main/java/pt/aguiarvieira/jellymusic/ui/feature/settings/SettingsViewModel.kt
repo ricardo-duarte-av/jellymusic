@@ -3,14 +3,19 @@ package pt.aguiarvieira.jellymusic.ui.feature.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import pt.aguiarvieira.jellymusic.core.image.ImageCacheManager
 import pt.aguiarvieira.jellymusic.data.download.FavoriteDownloadSyncManager
 import pt.aguiarvieira.jellymusic.data.settings.SettingsStore
+import pt.aguiarvieira.jellymusic.playback.StreamCache
 import pt.aguiarvieira.jellymusic.domain.model.AudioCodec
+import pt.aguiarvieira.jellymusic.domain.model.DEFAULT_STREAM_CACHE_GB
 import pt.aguiarvieira.jellymusic.domain.model.ReplayGainMode
 import pt.aguiarvieira.jellymusic.domain.model.ReplayGainSettings
 import pt.aguiarvieira.jellymusic.domain.model.StreamSettings
@@ -21,10 +26,26 @@ class SettingsViewModel @Inject constructor(
     private val settingsStore: SettingsStore,
     private val favoriteSyncManager: FavoriteDownloadSyncManager,
     private val imageCache: ImageCacheManager,
+    private val streamCache: StreamCache,
 ) : ViewModel() {
 
     val streamSettings = settingsStore.streamSettings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), StreamSettings())
+
+    val mobileStreamSettings = settingsStore.mobileStreamSettings
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), StreamSettings())
+
+    val streamCacheGb = settingsStore.streamCacheGb
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DEFAULT_STREAM_CACHE_GB)
+
+    private val _streamCacheUsedBytes = MutableStateFlow<Long?>(null)
+
+    /** Disk used by the streaming cache; null until measured. */
+    val streamCacheUsedBytes: StateFlow<Long?> = _streamCacheUsedBytes.asStateFlow()
+
+    init {
+        refreshStreamCacheUsage()
+    }
 
     val downloadSettings = settingsStore.downloadSettings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), StreamSettings())
@@ -85,6 +106,38 @@ class SettingsViewModel @Inject constructor(
 
     fun setBitrate(kbps: Int) {
         viewModelScope.launch { settingsStore.setStreamBitrate(kbps) }
+    }
+
+    fun setMobileTranscode(enabled: Boolean) = updateMobile { it.copy(transcode = enabled) }
+
+    fun setMobileCodec(codec: AudioCodec) = updateMobile { it.copy(codec = codec) }
+
+    fun setMobileBitrate(kbps: Int) = updateMobile { it.copy(maxBitrateKbps = kbps) }
+
+    private fun updateMobile(change: (StreamSettings) -> StreamSettings) {
+        viewModelScope.launch {
+            settingsStore.setMobileStreamSettings(change(settingsStore.mobileStreamSettings.first()))
+        }
+    }
+
+    fun setStreamCacheGb(gb: Int) {
+        viewModelScope.launch {
+            settingsStore.setStreamCacheGb(gb)
+            refreshStreamCacheUsage()
+        }
+    }
+
+    fun refreshStreamCacheUsage() {
+        viewModelScope.launch { _streamCacheUsedBytes.value = streamCache.usedBytes() }
+    }
+
+    /** Empties the streaming cache (except the track playing), then invokes [onCleared]. */
+    fun clearStreamCache(onCleared: () -> Unit) {
+        viewModelScope.launch {
+            streamCache.clear()
+            _streamCacheUsedBytes.value = streamCache.usedBytes()
+            onCleared()
+        }
     }
 
     fun setDownloadTranscode(enabled: Boolean) {

@@ -4,7 +4,6 @@ import android.content.ComponentName
 import android.content.Context
 import android.util.Log
 import androidx.core.content.ContextCompat
-import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaController
@@ -23,10 +22,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import pt.aguiarvieira.jellymusic.data.download.MusicDownloadManager
-import pt.aguiarvieira.jellymusic.data.jellyfin.StreamUrlBuilder
 import pt.aguiarvieira.jellymusic.data.settings.QueueStore
-import pt.aguiarvieira.jellymusic.data.settings.SettingsStore
 import pt.aguiarvieira.jellymusic.domain.model.StreamSettings
 import pt.aguiarvieira.jellymusic.domain.model.Track
 import pt.aguiarvieira.jellymusic.domain.model.toTrack
@@ -93,10 +89,8 @@ data class QueueItem(
 class PlaybackConnection @Inject constructor(
     @ApplicationContext private val context: Context,
     private val mediaItemTree: MediaItemTree,
-    private val urlBuilder: StreamUrlBuilder,
-    private val downloadManager: MusicDownloadManager,
     private val queueStore: QueueStore,
-    settingsStore: SettingsStore,
+    private val streamCache: StreamCache,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val _state = MutableStateFlow(PlaybackUiState())
@@ -114,25 +108,11 @@ class PlaybackConnection @Inject constructor(
     private var lastQueueCount = -1
     private var lastQueueCurrent = -1
 
-    @Volatile
-    private var streamSettings: StreamSettings = StreamSettings()
-
     private val listener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) = updateState()
     }
 
     init {
-        scope.launch {
-            var first = true
-            settingsStore.streamSettings.collect { newSettings ->
-                val changed = !first && newSettings != streamSettings
-                streamSettings = newSettings
-                first = false
-                // A settings change should affect only upcoming tracks, never the current one.
-                if (changed) rebuildUpcomingQueue()
-            }
-        }
-
         val token = SessionToken(context, ComponentName(context, PlaybackService::class.java))
         val future = MediaController.Builder(context, token).buildAsync()
         future.addListener(
@@ -183,7 +163,7 @@ class PlaybackConnection @Inject constructor(
      */
     fun playTracks(tracks: List<Track>, startIndex: Int) {
         val c = controller ?: return
-        val items = tracks.map { mediaItemTree.trackMediaItem(it, streamSettings) }
+        val items = tracks.map { mediaItemTree.trackMediaItem(it, streamCache.currentStreamSettings()) }
         if (items.isEmpty()) return
         c.setMediaItems(items, startIndex.coerceIn(0, items.lastIndex), 0L)
         c.prepare()
@@ -200,48 +180,12 @@ class PlaybackConnection @Inject constructor(
      */
     fun playTracksShuffled(tracks: List<Track>) {
         val c = controller ?: return
-        val items = tracks.map { mediaItemTree.trackMediaItem(it, streamSettings) }
+        val items = tracks.map { mediaItemTree.trackMediaItem(it, streamCache.currentStreamSettings()) }
         if (items.isEmpty()) return
         c.shuffleModeEnabled = true
         c.setMediaItems(items, items.indices.random(), 0L)
         c.prepare()
         c.play()
-    }
-
-    /** Rebuilds the stream URL of every queued track after the current one with the new settings. */
-    private fun rebuildUpcomingQueue() {
-        val c = controller ?: return
-        val count = c.mediaItemCount
-        val current = c.currentMediaItemIndex
-        if (current < 0 || current >= count - 1) return
-        val rebuilt = ((current + 1) until count).map { index ->
-            val item = c.getMediaItemAt(index)
-            val trackId = item.mediaId.removePrefix("track/")
-            val localUri = downloadManager.localFileUri(trackId)
-            val isLocal = localUri != null
-            val playbackSettings = if (isLocal) downloadManager.localFormat(trackId) ?: streamSettings else streamSettings
-            val metadata = item.mediaMetadata.buildUpon()
-                // Preserve the track's normalization gain across a settings-driven queue rebuild.
-                .setExtras(
-                    StreamSettingsExtras.toBundle(
-                        playbackSettings,
-                        isLocal,
-                        StreamSettingsExtras.gainDbFrom(item.mediaMetadata.extras),
-                        StreamSettingsExtras.albumIdFrom(item.mediaMetadata.extras),
-                        StreamSettingsExtras.artistIdFrom(item.mediaMetadata.extras),
-                    ),
-                )
-                .build()
-            // Transcoded streams are HLS (seekable); clear the MIME otherwise so a switch back to
-            // direct play rebuilds as a progressive item.
-            val transcodeStream = streamSettings.transcode && !isLocal
-            item.buildUpon()
-                .setUri(localUri ?: urlBuilder.playbackStreamUrl(trackId, streamSettings))
-                .setMimeType(if (transcodeStream) MimeTypes.APPLICATION_M3U8 else null)
-                .setMediaMetadata(metadata)
-                .build()
-        }
-        c.replaceMediaItems(current + 1, count, rebuilt)
     }
 
     fun togglePlayPause() {
@@ -368,7 +312,7 @@ class PlaybackConnection @Inject constructor(
             val saved = queueStore.load() ?: return@launch
             val c = controller ?: return@launch
             if (c.mediaItemCount > 0 || saved.items.isEmpty()) return@launch
-            val items = saved.items.map { mediaItemTree.trackMediaItem(it.toTrack(), streamSettings) }
+            val items = saved.items.map { mediaItemTree.trackMediaItem(it.toTrack(), streamCache.currentStreamSettings()) }
             c.setMediaItems(items, saved.index.coerceIn(0, items.lastIndex), saved.positionMs.coerceAtLeast(0L))
             c.prepare()
             // Leave paused; the user presses play to resume.

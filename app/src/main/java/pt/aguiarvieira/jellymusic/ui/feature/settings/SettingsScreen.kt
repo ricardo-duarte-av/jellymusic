@@ -14,6 +14,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
@@ -48,6 +49,8 @@ import pt.aguiarvieira.jellymusic.domain.model.AudioCodec
 import pt.aguiarvieira.jellymusic.domain.model.ReplayGainMode
 import pt.aguiarvieira.jellymusic.domain.model.ReplayGainSettings
 import pt.aguiarvieira.jellymusic.domain.model.STREAM_BITRATE_OPTIONS
+import pt.aguiarvieira.jellymusic.domain.model.STREAM_CACHE_SIZE_OPTIONS_GB
+import pt.aguiarvieira.jellymusic.domain.model.StreamSettings
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -61,6 +64,9 @@ fun SettingsScreen(
     val settings by viewModel.streamSettings.collectAsStateWithLifecycle()
     val dynamicTheme by viewModel.dynamicAlbumTheme.collectAsStateWithLifecycle()
     val lyricsEnabled by viewModel.lyricsEnabled.collectAsStateWithLifecycle()
+    val mobileSettings by viewModel.mobileStreamSettings.collectAsStateWithLifecycle()
+    val streamCacheGb by viewModel.streamCacheGb.collectAsStateWithLifecycle()
+    val streamCacheUsed by viewModel.streamCacheUsedBytes.collectAsStateWithLifecycle()
     val downloadSettings by viewModel.downloadSettings.collectAsStateWithLifecycle()
     val replayGain by viewModel.replayGainSettings.collectAsStateWithLifecycle()
     val downloadFavorites by viewModel.downloadFavorites.collectAsStateWithLifecycle()
@@ -213,54 +219,70 @@ fun SettingsScreen(
                 color = MaterialTheme.colorScheme.primary,
             )
 
+            QualityControls(
+                title = "Transcode on Wi-Fi",
+                settings = settings,
+                onDescription = "Server transcodes to a smaller stream.",
+                offDescription = "Play the original file (direct play).",
+                onTranscode = viewModel::setTranscode,
+                onCodec = viewModel::setCodec,
+                onBitrate = viewModel::setBitrate,
+            )
+
+            QualityControls(
+                title = "Transcode on mobile data",
+                settings = mobileSettings,
+                onDescription = "Server transcodes to a smaller stream on mobile data.",
+                offDescription = "Play the original file on mobile data too.",
+                onTranscode = viewModel::setMobileTranscode,
+                onCodec = viewModel::setMobileCodec,
+                onBitrate = viewModel::setMobileBitrate,
+            )
+
+            Text(
+                text = "Changes apply to the next track — the currently playing track keeps its quality. " +
+                    "A better copy already in the cache is always played instead, without using data.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            Text("Streaming cache", style = MaterialTheme.typography.bodyLarge)
+            Text(
+                text = "Songs are downloaded whole, together with the next few, and kept on the device " +
+                    "so replays use no data. The oldest are removed when the cache is full." +
+                    (streamCacheUsed?.let { "\nUsing ${formatBytes(it)} of $streamCacheGb GB." } ?: ""),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                STREAM_CACHE_SIZE_OPTIONS_GB.forEach { gb ->
+                    FilterChip(
+                        selected = streamCacheGb == gb,
+                        onClick = { viewModel.setStreamCacheGb(gb) },
+                        label = { Text("$gb GB") },
+                    )
+                }
+            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Transcode streaming", style = MaterialTheme.typography.bodyLarge)
-                    Text(
-                        text = if (settings.transcode) {
-                            "Server transcodes to a smaller stream."
-                        } else {
-                            "Play the original file (direct play)."
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(checked = settings.transcode, onCheckedChange = viewModel::setTranscode)
-            }
-
-            if (settings.transcode) {
-                Text("Codec", style = MaterialTheme.typography.labelLarge)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    AudioCodec.entries.forEach { codec ->
-                        FilterChip(
-                            selected = settings.codec == codec,
-                            onClick = { viewModel.setCodec(codec) },
-                            label = { Text(codec.label) },
-                        )
-                    }
-                }
-
-                Text("Max bitrate", style = MaterialTheme.typography.labelLarge)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    STREAM_BITRATE_OPTIONS.forEach { kbps ->
-                        FilterChip(
-                            selected = settings.maxBitrateKbps == kbps,
-                            onClick = { viewModel.setBitrate(kbps) },
-                            label = { Text("$kbps kbps") },
-                        )
-                    }
+                Text(
+                    text = "Clear streaming cache",
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(
+                    onClick = {
+                        viewModel.clearStreamCache {
+                            Toast.makeText(context, "Streaming cache cleared", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                ) {
+                    Icon(Icons.Filled.Delete, contentDescription = null)
+                    Text("Clear", modifier = Modifier.padding(start = 8.dp))
                 }
             }
-
-            Text(
-                text = "Changes apply to the next track — the currently playing track keeps its quality.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
 
             HorizontalDivider()
 
@@ -269,49 +291,16 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.primary,
             )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Transcode downloads", style = MaterialTheme.typography.bodyLarge)
-                    Text(
-                        text = if (downloadSettings.transcode) {
-                            "Downloads are converted to save space on the device."
-                        } else {
-                            "Download the original files. Set separately from streaming, so you can " +
-                                "keep good quality offline while streaming smaller."
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(checked = downloadSettings.transcode, onCheckedChange = viewModel::setDownloadTranscode)
-            }
-
-            if (downloadSettings.transcode) {
-                Text("Codec", style = MaterialTheme.typography.labelLarge)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    AudioCodec.entries.forEach { codec ->
-                        FilterChip(
-                            selected = downloadSettings.codec == codec,
-                            onClick = { viewModel.setDownloadCodec(codec) },
-                            label = { Text(codec.label) },
-                        )
-                    }
-                }
-
-                Text("Max bitrate", style = MaterialTheme.typography.labelLarge)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    STREAM_BITRATE_OPTIONS.forEach { kbps ->
-                        FilterChip(
-                            selected = downloadSettings.maxBitrateKbps == kbps,
-                            onClick = { viewModel.setDownloadBitrate(kbps) },
-                            label = { Text("$kbps kbps") },
-                        )
-                    }
-                }
-            }
+            QualityControls(
+                title = "Transcode downloads",
+                settings = downloadSettings,
+                onDescription = "Downloads are converted to save space on the device.",
+                offDescription = "Download the original files. Set separately from streaming, so you can " +
+                    "keep good quality offline while streaming smaller.",
+                onTranscode = viewModel::setDownloadTranscode,
+                onCodec = viewModel::setDownloadCodec,
+                onBitrate = viewModel::setDownloadBitrate,
+            )
 
             Text(
                 text = "Applies to new downloads — files already on the device keep the format they " +
@@ -392,6 +381,69 @@ fun SettingsScreen(
             )
         }
     }
+}
+
+/**
+ * A "transcode" switch with its codec and bitrate pickers, shown while it's on. Used for Wi-Fi
+ * streaming, mobile-data streaming and downloads.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun QualityControls(
+    title: String,
+    settings: StreamSettings,
+    onDescription: String,
+    offDescription: String,
+    onTranscode: (Boolean) -> Unit,
+    onCodec: (AudioCodec) -> Unit,
+    onBitrate: (Int) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    text = if (settings.transcode) onDescription else offDescription,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(checked = settings.transcode, onCheckedChange = onTranscode)
+        }
+
+        if (settings.transcode) {
+            Text("Codec", style = MaterialTheme.typography.labelLarge)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                AudioCodec.entries.forEach { codec ->
+                    FilterChip(
+                        selected = settings.codec == codec,
+                        onClick = { onCodec(codec) },
+                        label = { Text(codec.label) },
+                    )
+                }
+            }
+
+            Text("Max bitrate", style = MaterialTheme.typography.labelLarge)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                STREAM_BITRATE_OPTIONS.forEach { kbps ->
+                    FilterChip(
+                        selected = settings.maxBitrateKbps == kbps,
+                        onClick = { onBitrate(kbps) },
+                        label = { Text("$kbps kbps") },
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun formatBytes(bytes: Long): String = when {
+    bytes >= 1L shl 30 -> "%.1f GB".format(bytes / (1L shl 30).toDouble())
+    bytes >= 1L shl 20 -> "%.0f MB".format(bytes / (1L shl 20).toDouble())
+    else -> "%.0f KB".format(bytes / 1024.0)
 }
 
 /** A tappable settings entry that navigates to a sub-screen (icon · title/subtitle · chevron). */

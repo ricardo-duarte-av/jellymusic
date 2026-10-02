@@ -47,26 +47,14 @@ class StreamUrlBuilder @Inject constructor(
     }
 
     /**
-     * Progressive (HTTP) stream URL over the universal endpoint. Used for **downloads**, which save a
-     * plain file. When [settings].transcode is off the server direct-plays the original; otherwise it
-     * transcodes to the chosen codec/bitrate cap. See [playbackStreamUrl] for in-app playback.
+     * Progressive (HTTP) stream URL over the universal endpoint, for both playback (fetched whole into
+     * the streaming cache, see [pt.aguiarvieira.jellymusic.playback.StreamCache]) and downloads. When
+     * [settings].transcode is off the server direct-plays the original; otherwise it transcodes to the
+     * chosen codec/bitrate cap.
      */
     fun audioStreamUrl(itemId: String, settings: StreamSettings): String? {
         val (bps, codec, container) = transcodeArgs(settings)
         return buildUniversalUrl(itemId, bps, codec, container, MediaStreamProtocol.HTTP)
-    }
-
-    /**
-     * Stream URL for in-app **playback**. Transcoded playback is requested as HLS — a seekable VOD
-     * playlist — because the progressive transcode stream is not byte-range seekable
-     * (`Accept-Ranges: none`), so `Player.seekTo` on it is a no-op. Direct play (transcode off) stays
-     * progressive: the original file *is* byte-range seekable. The caller must tag transcoded items
-     * with the HLS MIME type so ExoPlayer builds an HlsMediaSource.
-     */
-    fun playbackStreamUrl(itemId: String, settings: StreamSettings): String? {
-        val (bps, codec, container) = transcodeArgs(settings)
-        val protocol = if (settings.transcode) MediaStreamProtocol.HLS else MediaStreamProtocol.HTTP
-        return buildUniversalUrl(itemId, bps, codec, container, protocol)
     }
 
     /** Transcode (bitrate, codec, container) args, or all-null for direct play. */

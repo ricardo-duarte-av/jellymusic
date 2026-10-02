@@ -10,6 +10,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.analytics.AnalyticsListener
@@ -52,6 +53,7 @@ import pt.aguiarvieira.jellymusic.data.settings.SettingsStore
 import pt.aguiarvieira.jellymusic.domain.model.PersistedQueue
 import pt.aguiarvieira.jellymusic.domain.model.QueueTrack
 import pt.aguiarvieira.jellymusic.domain.model.ReplayGainMode
+import pt.aguiarvieira.jellymusic.domain.model.StreamSettings
 import pt.aguiarvieira.jellymusic.domain.model.toTrack
 import androidx.glance.appwidget.updateAll
 import pt.aguiarvieira.jellymusic.widget.NowPlayingWidget
@@ -62,7 +64,11 @@ import javax.inject.Inject
 // Slow heartbeat (only while playing) that keeps the server's "Now Playing" position and resume point
 // fresh between events — matters mainly for a long, single, uninterrupted track where no track
 // transition fires. Track-boundary/pause/seek reporting is event-driven; this just fills the gaps.
+// On mobile data PlaybackReporter batches these, so the tick itself doesn't wake the radio.
 private const val PROGRESS_REPORT_INTERVAL_MS = 30_000L
+
+/** How far ahead in the queue to look for the streamed tracks to keep downloaded. */
+private const val STREAM_WINDOW_SCAN = 12
 private const val TAG = "PlaybackService"
 
 // Custom session commands backing the notification / Android Auto shuffle & repeat buttons.
@@ -124,6 +130,9 @@ class PlaybackService : MediaLibraryService() {
 
     @Inject
     lateinit var playbackReporter: PlaybackReporter
+
+    @Inject
+    lateinit var streamCache: StreamCache
 
     @Inject
     lateinit var authRepository: pt.aguiarvieira.jellymusic.domain.repository.AuthRepository
@@ -198,6 +207,8 @@ class PlaybackService : MediaLibraryService() {
             lastPositionMs = player.currentPosition
             reportedItemId?.let { playbackReporter.reportProgress(it, lastPositionMs, !isPlaying, currentPlayMethod()) }
             setProgressReporting(isPlaying)
+            // A pause is when the resume point matters; don't leave it sitting in a mobile-data batch.
+            if (!isPlaying) playbackReporter.flush()
         }
 
         override fun onPlaybackStateChanged(playbackState: Int) {
@@ -311,6 +322,62 @@ class PlaybackService : MediaLibraryService() {
     private fun applyGainForCurrentItem() {
         if (gainProcessor.followsStreams) return
         gainProcessor.setStream(player.currentTimeline, player.currentMediaItemIndex)
+    }
+
+    /**
+     * Tells the [streamCache] which streamed tracks to keep downloaded: the current one and the next
+     * few in play order (following shuffle and repeat).
+     */
+    private val streamWindowListener = object : Player.Listener {
+        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) = updateStreamWindow()
+        override fun onTimelineChanged(timeline: Timeline, reason: Int) = updateStreamWindow()
+        override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) = updateStreamWindow()
+        override fun onRepeatModeChanged(repeatMode: Int) = updateStreamWindow()
+        override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) = updateStreamWindow()
+    }
+
+    private fun updateStreamWindow() {
+        val timeline = player.currentTimeline
+        if (timeline.isEmpty) {
+            streamCache.setWindow(emptyList())
+            return
+        }
+        // Only look ahead once there's intent to play: a queue restored at launch, sitting paused,
+        // shouldn't download anything. A pause mid-queue keeps the window as it was.
+        if (!player.playWhenReady) return
+        // Repeat-one would just name the current track again; look at what follows it instead.
+        val repeat = if (player.repeatMode == Player.REPEAT_MODE_ONE) Player.REPEAT_MODE_ALL else player.repeatMode
+        val ids = mutableListOf<String>()
+        var index = player.currentMediaItemIndex
+        var steps = 0
+        while (index != C.INDEX_UNSET && steps < STREAM_WINDOW_SCAN) {
+            val item = player.getMediaItemAt(index)
+            if (StreamCache.isStreamUri(item.localConfiguration?.uri)) ids += item.mediaId.removePrefix("track/")
+            index = timeline.getNextWindowIndex(index, repeat, player.shuffleModeEnabled)
+            steps++
+        }
+        streamCache.setWindow(ids)
+    }
+
+    /**
+     * Rewrites the quality recorded in each queued streamed item to the one the [streamCache] pinned
+     * for it (e.g. an original already cached, played while on mobile data), so the now-playing
+     * label and the play method reported to Jellyfin say what's really playing. Only metadata
+     * changes, so the player swaps it in without re-preparing the item.
+     */
+    private fun applyPinnedQualities(pins: Map<String, StreamSettings>) {
+        if (pins.isEmpty()) return
+        for (i in 0 until player.mediaItemCount) {
+            val item = player.getMediaItemAt(i)
+            if (!StreamCache.isStreamUri(item.localConfiguration?.uri)) continue
+            val quality = pins[item.mediaId.removePrefix("track/")] ?: continue
+            val extras = item.mediaMetadata.extras
+            if (StreamSettingsExtras.settingsFrom(extras) == quality) continue
+            val metadata = item.mediaMetadata.buildUpon()
+                .setExtras(StreamSettingsExtras.withSettings(extras, quality))
+                .build()
+            player.replaceMediaItem(i, item.buildUpon().setMediaMetadata(metadata).build())
+        }
     }
 
     /**
@@ -508,8 +575,11 @@ class PlaybackService : MediaLibraryService() {
                 )
                 .build()
         }
+        // Streamed tracks are read from the streaming cache, which downloads each one whole (see
+        // StreamCache); downloaded files and anything else go through the default data source.
+        val dataSourceFactory = StreamCacheDataSource.Factory(streamCache, DefaultDataSource.Factory(this))
         return ExoPlayer.Builder(this, renderersFactory)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(this, extractorsFactory))
+            .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory, extractorsFactory))
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(C.USAGE_MEDIA)
@@ -535,6 +605,7 @@ class PlaybackService : MediaLibraryService() {
                 it.addListener(widgetListener)
                 it.addListener(gainListener)
                 it.addListener(queuePersistenceListener)
+                it.addListener(streamWindowListener)
                 // Diagnostic only — see [underrunLogger]. Keep it out of release builds entirely.
                 if (BuildConfig.DEBUG) it.addAnalyticsListener(underrunLogger)
             }
@@ -553,6 +624,7 @@ class PlaybackService : MediaLibraryService() {
         target.removeListener(widgetListener)
         target.removeListener(gainListener)
         target.removeListener(queuePersistenceListener)
+        target.removeListener(streamWindowListener)
         if (BuildConfig.DEBUG) target.removeAnalyticsListener(underrunLogger)
     }
 
@@ -646,6 +718,11 @@ class PlaybackService : MediaLibraryService() {
                 }
         }
 
+        // Keep queued items' recorded quality in line with what the streaming cache picks, and send
+        // any batched Jellyfin reports whenever it powers the radio up for a download anyway.
+        serviceScope.launch { streamCache.pins.collect { applyPinnedQualities(it) } }
+        streamCache.onFetchStarted = { playbackReporter.flush() }
+
         // The progress-report heartbeat is started/stopped by onIsPlayingChanged (see reporterListener)
         // so it only ticks while audio is actually playing — no periodic wakeup sitting paused/stopped.
     }
@@ -720,7 +797,7 @@ class PlaybackService : MediaLibraryService() {
             throw UnsupportedOperationException("No saved queue to resume")
         }
         val index = saved.index.coerceIn(0, saved.items.lastIndex)
-        val settings = settingsStore.streamSettings.first()
+        val settings = streamCache.currentStreamSettings()
         val source = if (isForPlayback) saved.items else listOf(saved.items[index])
         val items = source.map { mediaItemTree.trackMediaItem(it.toTrack(), settings) }
         return MediaSession.MediaItemsWithStartPosition(
@@ -733,6 +810,9 @@ class PlaybackService : MediaLibraryService() {
     override fun onDestroy() {
         replayGainStatus.publish(null)
         reportedItemId?.let { playbackReporter.reportStop(it, player.currentPosition) }
+        playbackReporter.flush()
+        streamCache.onFetchStarted = null
+        streamCache.setWindow(emptyList())
         // Final snapshot before teardown, so the stored resume point is the position we actually
         // stopped at rather than the last structural change. Bounded and blocking on purpose:
         // [serviceScope] is cancelled just below and the process often dies right after, so a

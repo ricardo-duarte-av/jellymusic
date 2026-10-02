@@ -4,11 +4,9 @@ import android.net.Uri
 import android.os.Bundle
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
-import androidx.media3.common.MimeTypes
 import androidx.media3.session.MediaConstants
 import kotlinx.coroutines.flow.first
 import pt.aguiarvieira.jellymusic.data.download.MusicDownloadManager
-import pt.aguiarvieira.jellymusic.data.jellyfin.StreamUrlBuilder
 import pt.aguiarvieira.jellymusic.data.settings.QueueStore
 import pt.aguiarvieira.jellymusic.data.settings.SettingsStore
 import pt.aguiarvieira.jellymusic.domain.model.Album
@@ -53,7 +51,7 @@ import javax.inject.Singleton
 class MediaItemTree @Inject constructor(
     private val musicRepository: pt.aguiarvieira.jellymusic.domain.repository.MusicRepository,
     private val settingsStore: SettingsStore,
-    private val urlBuilder: StreamUrlBuilder,
+    private val streamCache: StreamCache,
     private val downloadManager: MusicDownloadManager,
     private val queueStore: QueueStore,
 ) {
@@ -109,13 +107,13 @@ class MediaItemTree @Inject constructor(
                 .getOrDefault(emptyList()).map { it.toMediaItem() }
 
         parentId.startsWith(ALBUM_PREFIX) -> {
-            val settings = settingsStore.streamSettings.first()
+            val settings = streamCache.currentStreamSettings()
             musicRepository.getAlbumTracks(parentId.removePrefix(ALBUM_PREFIX))
                 .getOrDefault(emptyList()).map { trackMediaItem(it, settings) }
         }
 
         parentId.startsWith(PLAYLIST_PREFIX) -> {
-            val settings = settingsStore.streamSettings.first()
+            val settings = streamCache.currentStreamSettings()
             musicRepository.getPlaylistTracks(parentId.removePrefix(PLAYLIST_PREFIX))
                 .getOrDefault(emptyList()).map { trackMediaItem(it, settings) }
         }
@@ -132,7 +130,7 @@ class MediaItemTree @Inject constructor(
     suspend fun search(query: String): List<MediaItem> {
         if (query.isBlank()) return emptyList()
         val results = musicRepository.search(query.trim(), libraryId()).getOrNull() ?: return emptyList()
-        val settings = settingsStore.streamSettings.first()
+        val settings = streamCache.currentStreamSettings()
         return results.artists.map { it.toMediaItem().inGroup("Artists") } +
             results.albums.map { it.toMediaItem().inGroup("Albums") } +
             results.tracks.map { trackMediaItem(it, settings).inGroup("Songs") } +
@@ -205,7 +203,7 @@ class MediaItemTree @Inject constructor(
      * Called from [PlaybackService]'s `onAddMediaItems`.
      */
     suspend fun resolveForPlayback(items: List<MediaItem>): List<MediaItem> {
-        val settings = settingsStore.streamSettings.first()
+        val settings = streamCache.currentStreamSettings()
         return items.flatMap { item ->
             val id = item.mediaId
             when {
@@ -213,7 +211,7 @@ class MediaItemTree @Inject constructor(
                     queueStore.load()?.items.orEmpty().map { trackMediaItem(it.toTrack(), settings) }
 
                 id.startsWith(TRACK_PREFIX) ->
-                    listOf(resolveTrackUri(item, id.removePrefix(TRACK_PREFIX), settings))
+                    listOf(resolveTrackUri(item, id.removePrefix(TRACK_PREFIX)))
 
                 id.startsWith(ALBUM_PREFIX) ->
                     musicRepository.getAlbumTracks(id.removePrefix(ALBUM_PREFIX))
@@ -230,15 +228,10 @@ class MediaItemTree @Inject constructor(
     }
 
     /** Re-attaches the stream (or local) URI to a track item that lost it crossing the process boundary. */
-    private fun resolveTrackUri(item: MediaItem, trackId: String, settings: StreamSettings): MediaItem {
-        val localUri = downloadManager.localFileUri(trackId)
-        val isLocal = localUri != null
-        val transcodeStream = settings.transcode && !isLocal
-        return item.buildUpon()
-            .setUri(localUri ?: urlBuilder.playbackStreamUrl(trackId, settings))
-            .apply { if (transcodeStream) setMimeType(MimeTypes.APPLICATION_M3U8) }
+    private fun resolveTrackUri(item: MediaItem, trackId: String): MediaItem =
+        item.buildUpon()
+            .setUri(downloadManager.localFileUri(trackId) ?: StreamCache.streamUri(trackId))
             .build()
-    }
 
     /** Public so the in-app player ([PlaybackConnection]) builds identical playable items. */
     fun trackMediaItem(track: Track, settings: StreamSettings): MediaItem {
@@ -260,8 +253,9 @@ class MediaItemTree @Inject constructor(
             // an unknown timeline duration (TIME_UNSET) until ~15s of buffering, which otherwise left
             // the bar and time labels stuck at 0:00 (and made seeks compute a target of 0).
             .setDurationMs(track.durationMs)
-            // Record what's actually playing (format + local/stream) so the UI can report it; this is
-            // fixed for the item's lifetime rather than tracking the live settings.
+            // Record what's actually playing (format + local/stream) so the UI can report it. For a
+            // streamed track this is the quality expected now; PlaybackService swaps in the one the
+            // streaming cache really picks (e.g. an original already cached) once it's decided.
             .setExtras(
                 StreamSettingsExtras.toBundle(
                     playbackSettings,
@@ -272,14 +266,11 @@ class MediaItemTree @Inject constructor(
                 ),
             )
             .build()
-        // Transcoded playback is served as HLS (seekable); direct play and local files are progressive.
-        val transcodeStream = settings.transcode && !isLocal
+        // Streamed tracks play through the streaming cache, which picks their quality when they're
+        // fetched (see StreamCache); the PlaybackService then corrects the extras above to match.
         return MediaItem.Builder()
             .setMediaId(TRACK_PREFIX + track.id)
-            .setUri(localUri ?: urlBuilder.playbackStreamUrl(track.id, settings))
-            // Tag transcoded streams so ExoPlayer builds an HlsMediaSource for the .m3u8 playlist
-            // instead of trying to play it as a progressive file.
-            .apply { if (transcodeStream) setMimeType(MimeTypes.APPLICATION_M3U8) }
+            .setUri(localUri ?: StreamCache.streamUri(track.id))
             .setMediaMetadata(metadata)
             .build()
     }

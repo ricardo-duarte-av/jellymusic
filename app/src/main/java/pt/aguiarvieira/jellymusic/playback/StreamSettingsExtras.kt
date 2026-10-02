@@ -37,6 +37,13 @@ object StreamSettingsExtras {
         if (artistId != null) putString(KEY_ARTIST_ID, artistId)
     }
 
+    /** A copy of [extras] with its quality replaced by [settings]; everything else is kept. */
+    fun withSettings(extras: Bundle?, settings: StreamSettings): Bundle = Bundle(extras ?: Bundle.EMPTY).apply {
+        putBoolean(KEY_TRANSCODE, settings.transcode)
+        putString(KEY_CODEC, settings.codec.name)
+        putInt(KEY_BITRATE, settings.maxBitrateKbps)
+    }
+
     /** The track's normalization gain in dB, or null when the server hasn't scanned it. */
     fun gainDbFrom(extras: Bundle?): Float? =
         if (extras?.containsKey(KEY_GAIN_DB) == true) extras.getFloat(KEY_GAIN_DB) else null

@@ -19,6 +19,10 @@ data class StreamSettings(
 
 val STREAM_BITRATE_OPTIONS = listOf(320, 256, 192, 128, 96)
 
+/** Choices for the size of the streaming cache, in GB. */
+val STREAM_CACHE_SIZE_OPTIONS_GB = listOf(2, 5, 10, 20, 50)
+const val DEFAULT_STREAM_CACHE_GB = 10
+
 /**
  * Which of Jellyfin's LUFS normalization gains to apply. Jellyfin stores the same `NormalizationGain`
  * field on each audio item (track gain) and on each album (album gain).

@@ -18,7 +18,15 @@ val CHANGELOG: List<ChangelogVersion> = listOf(
     ChangelogVersion(
         version = null,
         date = null,
-        changes = emptyList(),
+        changes = listOf(
+            "Much lighter on battery when streaming, especially on mobile data: songs are now " +
+                "downloaded whole, together with the next few, instead of trickling in while they play.",
+            "Streamed songs are kept in a streaming cache (10 GB by default, up to 50 GB in Settings), " +
+                "so playing them again uses no data. A higher-quality copy is never replaced by a " +
+                "lower-quality one.",
+            "Separate streaming quality for Wi-Fi and mobile data in Settings.",
+            "On mobile data, play reports to the server are sent in batches instead of every 30 seconds.",
+        ),
     ),
     ChangelogVersion(
         version = "0.1.89",

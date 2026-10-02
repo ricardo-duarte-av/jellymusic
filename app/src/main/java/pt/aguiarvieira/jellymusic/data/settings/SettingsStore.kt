@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import pt.aguiarvieira.jellymusic.domain.model.AlbumSort
 import pt.aguiarvieira.jellymusic.domain.model.AudioCodec
+import pt.aguiarvieira.jellymusic.domain.model.DEFAULT_STREAM_CACHE_GB
 import pt.aguiarvieira.jellymusic.domain.model.MusicLibrary
 import pt.aguiarvieira.jellymusic.domain.model.PlaybackModes
 import pt.aguiarvieira.jellymusic.domain.model.ReplayGainMode
@@ -42,6 +43,26 @@ class SettingsStore @Inject constructor(
                 ?: AudioCodec.OPUS,
             maxBitrateKbps = prefs[KEY_STREAM_BITRATE] ?: 320,
         )
+    }
+
+    /**
+     * Streaming preferences on a **metered** network (mobile data); [streamSettings] applies on
+     * Wi-Fi. Until the user sets them, they mirror the Wi-Fi settings, so nothing changes for anyone
+     * who never opens them.
+     */
+    val mobileStreamSettings: Flow<StreamSettings> = context.dataStore.data.map { prefs ->
+        StreamSettings(
+            transcode = prefs[KEY_MOBILE_TRANSCODE] ?: prefs[KEY_STREAM_TRANSCODE] ?: false,
+            codec = (prefs[KEY_MOBILE_CODEC] ?: prefs[KEY_STREAM_CODEC])
+                ?.let { runCatching { AudioCodec.valueOf(it) }.getOrNull() }
+                ?: AudioCodec.OPUS,
+            maxBitrateKbps = prefs[KEY_MOBILE_BITRATE] ?: prefs[KEY_STREAM_BITRATE] ?: 320,
+        )
+    }
+
+    /** Size limit of the streaming cache, in GB. */
+    val streamCacheGb: Flow<Int> = context.dataStore.data.map { prefs ->
+        prefs[KEY_STREAM_CACHE_GB] ?: DEFAULT_STREAM_CACHE_GB
     }
 
     /**
@@ -130,6 +151,19 @@ class SettingsStore @Inject constructor(
         context.dataStore.edit { it[KEY_STREAM_BITRATE] = kbps }
     }
 
+    /** Writes all three mobile values at once, so they stop mirroring the Wi-Fi ones as a set. */
+    suspend fun setMobileStreamSettings(settings: StreamSettings) {
+        context.dataStore.edit {
+            it[KEY_MOBILE_TRANSCODE] = settings.transcode
+            it[KEY_MOBILE_CODEC] = settings.codec.name
+            it[KEY_MOBILE_BITRATE] = settings.maxBitrateKbps
+        }
+    }
+
+    suspend fun setStreamCacheGb(gb: Int) {
+        context.dataStore.edit { it[KEY_STREAM_CACHE_GB] = gb }
+    }
+
     suspend fun setDownloadTranscode(enabled: Boolean) {
         context.dataStore.edit { it[KEY_DOWNLOAD_TRANSCODE] = enabled }
     }
@@ -201,6 +235,10 @@ class SettingsStore @Inject constructor(
         val KEY_STREAM_TRANSCODE = booleanPreferencesKey("stream_transcode")
         val KEY_STREAM_CODEC = stringPreferencesKey("stream_codec")
         val KEY_STREAM_BITRATE = intPreferencesKey("stream_bitrate_kbps")
+        val KEY_MOBILE_TRANSCODE = booleanPreferencesKey("mobile_stream_transcode")
+        val KEY_MOBILE_CODEC = stringPreferencesKey("mobile_stream_codec")
+        val KEY_MOBILE_BITRATE = intPreferencesKey("mobile_stream_bitrate_kbps")
+        val KEY_STREAM_CACHE_GB = intPreferencesKey("stream_cache_gb")
         val KEY_DOWNLOAD_TRANSCODE = booleanPreferencesKey("download_transcode")
         val KEY_DOWNLOAD_CODEC = stringPreferencesKey("download_codec")
         val KEY_DOWNLOAD_BITRATE = intPreferencesKey("download_bitrate_kbps")
