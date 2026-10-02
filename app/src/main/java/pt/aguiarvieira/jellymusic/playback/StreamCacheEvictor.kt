@@ -70,11 +70,13 @@ internal class StreamCacheEvictor(
             var size = currentSize
             if (size + required <= limit) return
             val keep = protectedKeys()
-            for (span in spans) {
-                if (size + required <= limit) break
-                if (span.key in keep) continue
-                victims += span
-                size -= span.length
+            val candidates = spans.iterator()
+            while (size + required > limit && candidates.hasNext()) {
+                val span = candidates.next()
+                if (span.key !in keep) {
+                    victims += span
+                    size -= span.length
+                }
             }
         }
         // removeSpan calls back into onSpanRemoved, so do it outside our lock.

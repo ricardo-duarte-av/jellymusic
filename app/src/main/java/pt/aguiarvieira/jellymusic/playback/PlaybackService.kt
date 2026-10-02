@@ -53,7 +53,6 @@ import pt.aguiarvieira.jellymusic.data.settings.SettingsStore
 import pt.aguiarvieira.jellymusic.domain.model.PersistedQueue
 import pt.aguiarvieira.jellymusic.domain.model.QueueTrack
 import pt.aguiarvieira.jellymusic.domain.model.ReplayGainMode
-import pt.aguiarvieira.jellymusic.domain.model.StreamSettings
 import pt.aguiarvieira.jellymusic.domain.model.toTrack
 import androidx.glance.appwidget.updateAll
 import pt.aguiarvieira.jellymusic.widget.NowPlayingWidget
@@ -337,46 +336,10 @@ class PlaybackService : MediaLibraryService() {
     }
 
     private fun updateStreamWindow() {
-        val timeline = player.currentTimeline
-        if (timeline.isEmpty) {
-            streamCache.setWindow(emptyList())
-            return
-        }
         // Only look ahead once there's intent to play: a queue restored at launch, sitting paused,
         // shouldn't download anything. A pause mid-queue keeps the window as it was.
-        if (!player.playWhenReady) return
-        // Repeat-one would just name the current track again; look at what follows it instead.
-        val repeat = if (player.repeatMode == Player.REPEAT_MODE_ONE) Player.REPEAT_MODE_ALL else player.repeatMode
-        val ids = mutableListOf<String>()
-        var index = player.currentMediaItemIndex
-        var steps = 0
-        while (index != C.INDEX_UNSET && steps < STREAM_WINDOW_SCAN) {
-            val item = player.getMediaItemAt(index)
-            if (StreamCache.isStreamUri(item.localConfiguration?.uri)) ids += item.mediaId.removePrefix("track/")
-            index = timeline.getNextWindowIndex(index, repeat, player.shuffleModeEnabled)
-            steps++
-        }
-        streamCache.setWindow(ids)
-    }
-
-    /**
-     * Rewrites the quality recorded in each queued streamed item to the one the [streamCache] pinned
-     * for it (e.g. an original already cached, played while on mobile data), so the now-playing
-     * label and the play method reported to Jellyfin say what's really playing. Only metadata
-     * changes, so the player swaps it in without re-preparing the item.
-     */
-    private fun applyPinnedQualities(pins: Map<String, StreamSettings>) {
-        if (pins.isEmpty()) return
-        for (i in 0 until player.mediaItemCount) {
-            val item = player.getMediaItemAt(i)
-            if (!StreamCache.isStreamUri(item.localConfiguration?.uri)) continue
-            val quality = pins[item.mediaId.removePrefix("track/")] ?: continue
-            val extras = item.mediaMetadata.extras
-            if (StreamSettingsExtras.settingsFrom(extras) == quality) continue
-            val metadata = item.mediaMetadata.buildUpon()
-                .setExtras(StreamSettingsExtras.withSettings(extras, quality))
-                .build()
-            player.replaceMediaItem(i, item.buildUpon().setMediaMetadata(metadata).build())
+        if (player.currentTimeline.isEmpty || player.playWhenReady) {
+            streamCache.setWindow(player.upcomingStreamTrackIds(STREAM_WINDOW_SCAN))
         }
     }
 
@@ -720,7 +683,7 @@ class PlaybackService : MediaLibraryService() {
 
         // Keep queued items' recorded quality in line with what the streaming cache picks, and send
         // any batched Jellyfin reports whenever it powers the radio up for a download anyway.
-        serviceScope.launch { streamCache.pins.collect { applyPinnedQualities(it) } }
+        serviceScope.launch { streamCache.pins.collect { player.applyPinnedQualities(it) } }
         streamCache.onFetchStarted = { playbackReporter.flush() }
 
         // The progress-report heartbeat is started/stopped by onIsPlayingChanged (see reporterListener)
