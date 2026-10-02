@@ -20,6 +20,7 @@ import pt.aguiarvieira.jellymusic.playback.PlaybackProgress
 import pt.aguiarvieira.jellymusic.playback.PlaybackUiState
 import pt.aguiarvieira.jellymusic.playback.QueueItem
 import pt.aguiarvieira.jellymusic.playback.ReplayGainStatus
+import pt.aguiarvieira.jellymusic.playback.StreamDownloadStatus
 import pt.aguiarvieira.jellymusic.util.MainDispatcherRule
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -45,7 +46,7 @@ class PlaybackViewModelTest {
         coEvery { repository.getFavorite(any()) } returns Result.success(false)
         // Lyrics default to off, so the VM never reaches the repository for them.
         every { settingsStore.lyricsEnabled } returns MutableStateFlow(false)
-        return PlaybackViewModel(connection, repository, favoriteSyncManager, settingsStore, ReplayGainStatus())
+        return PlaybackViewModel(connection, repository, favoriteSyncManager, settingsStore, ReplayGainStatus(), StreamDownloadStatus())
     }
 
     private val flac = TrackAudioInfo(

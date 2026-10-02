@@ -24,6 +24,7 @@ import pt.aguiarvieira.jellymusic.data.settings.SettingsStore
 import pt.aguiarvieira.jellymusic.domain.repository.MusicRepository
 import pt.aguiarvieira.jellymusic.playback.PlaybackConnection
 import pt.aguiarvieira.jellymusic.playback.ReplayGainStatus
+import pt.aguiarvieira.jellymusic.playback.StreamDownloadStatus
 import javax.inject.Inject
 
 /** Lyrics availability for the current track: still fetching, none published, or here they are. */
@@ -41,6 +42,7 @@ class PlaybackViewModel @Inject constructor(
     private val favoriteSyncManager: FavoriteDownloadSyncManager,
     settingsStore: SettingsStore,
     replayGainStatus: ReplayGainStatus,
+    streamDownloadStatus: StreamDownloadStatus,
 ) : ViewModel() {
 
     val state = connection.state
@@ -49,6 +51,21 @@ class PlaybackViewModel @Inject constructor(
     val appliedGain = replayGainStatus.current
     val progress = connection.progress
     val queue = connection.queue
+
+    /**
+     * Downloaded share of the current track, for the seek bars' middle segment; null when there's
+     * nothing to show (fully downloaded, cached, or a local file).
+     */
+    val downloadFraction: StateFlow<Float?> =
+        combine(
+            connection.state,
+            streamDownloadStatus.downloads,
+            connection.progress.map { it.durationMs }.distinctUntilChanged(),
+        ) { state, downloads, durationMs ->
+            if (state.isLocal) null else state.trackId?.let { downloads[it] }?.fraction(durationMs, state.appliedStreamSettings)
+        }
+            .distinctUntilChanged()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     // Favourite state of the currently-playing track. Re-fetched whenever the track changes and
     // flipped optimistically on toggle.

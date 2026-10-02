@@ -68,6 +68,9 @@ private const val PREFETCH_LOW_WATER = 1
  */
 private const val FRAGMENT_BYTES = 1L shl 20 // 1 MiB
 
+/** Download progress is published to the seek bar at most once per this many bytes. */
+private const val PROGRESS_STEP_BYTES = 256L * 1024
+
 /** A failed download isn't retried for this long, unless the player asks for that track. */
 private const val RETRY_BACKOFF_MS = 15_000L
 
@@ -107,6 +110,7 @@ class StreamCache @Inject constructor(
     private val settingsStore: SettingsStore,
     private val urlBuilder: StreamUrlBuilder,
     private val clientProvider: JellyfinClientProvider,
+    private val downloadStatus: StreamDownloadStatus,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val dir = File(context.noBackupFilesDir, "stream_cache")
@@ -217,6 +221,7 @@ class StreamCache @Inject constructor(
             }
             dropUnstartedPinsLocked()
         }
+        downloadStatus.retain(ids)
         wake.trySend(Unit)
     }
 
@@ -343,6 +348,7 @@ class StreamCache @Inject constructor(
         fun pending(id: String): Pair<String, StreamSettings>? {
             val quality = pinForLocked(id)
             val key = keyFor(id, quality)
+            publishProgress(id, key)
             if (isComplete(key)) {
                 completeTracks += id
                 if (urgent == id) urgent = null
@@ -377,6 +383,7 @@ class StreamCache @Inject constructor(
         // A partial transcode can't be resumed: the next run's bytes wouldn't line up with these.
         if (quality.transcode && cache.getCachedSpans(key).isNotEmpty()) cache.removeResource(key)
 
+        var published = 0L
         val writer = CacheWriter(
             writerFactory.createDataSource(),
             // Without FLAG_ALLOW_CACHE_FRAGMENTATION the sink ignores FRAGMENT_BYTES and commits the
@@ -387,8 +394,13 @@ class StreamCache @Inject constructor(
                 .setFlags(DataSpec.FLAG_ALLOW_CACHE_FRAGMENTATION)
                 .build(),
             null,
-            null,
-        )
+        ) { requestLength, bytesCached, _ ->
+            if (bytesCached - published >= PROGRESS_STEP_BYTES) {
+                published = bytesCached
+                val total = requestLength.takeIf { it != C.LENGTH_UNSET.toLong() }
+                downloadStatus.publish(trackId, StreamDownload(bytesCached, total, complete = false))
+            }
+        }
         val job = Running(trackId, key, writer)
         synchronized(lock) { running = job }
         onFetchStarted?.invoke()
@@ -397,6 +409,7 @@ class StreamCache @Inject constructor(
             writer.cache()
             Log.d(TAG, "Cached $key in ${System.currentTimeMillis() - started} ms")
             failures.remove(key)
+            publishProgress(trackId, key)
             completeTracks += trackId
             removeLowerQualities(trackId, quality)
             _completed.tryEmit(trackId)
@@ -406,6 +419,7 @@ class StreamCache @Inject constructor(
                 failures[key] = System.currentTimeMillis()
             }
             if (quality.transcode) runCatching { cache.removeResource(key) }
+            publishProgress(trackId, key)
         } finally {
             synchronized(lock) {
                 running = null
@@ -413,6 +427,17 @@ class StreamCache @Inject constructor(
                 publishPinsLocked()
             }
         }
+    }
+
+    /** Publishes how much of [key] is cached, for the seek bar. */
+    private fun publishProgress(trackId: String, key: String) {
+        val cache = cache()
+        val length = ContentMetadata.getContentLength(cache.getContentMetadata(key)).takeIf { it != C.LENGTH_UNSET.toLong() }
+        val bytes = cache.getCachedBytes(key, 0, C.LENGTH_UNSET.toLong())
+        downloadStatus.publish(
+            trackId,
+            StreamDownload(bytes, length, complete = length != null && cache.isCached(key, 0, length)),
+        )
     }
 
     private fun removeLowerQualities(trackId: String, kept: StreamSettings) {

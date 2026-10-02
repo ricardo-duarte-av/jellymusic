@@ -10,9 +10,11 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ProgressIndicatorDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,6 +27,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.style.TextOverflow
@@ -165,27 +169,62 @@ fun MiniPlayer(
                 }
             }
             // Collects the position flow internally so only this bar recomposes as playback advances.
-            MiniPlayerProgress(progress = viewModel.progress)
+            MiniPlayerProgress(progress = viewModel.progress, downloadFraction = viewModel.downloadFraction)
         }
         }
         }
     }
 }
 
+/**
+ * The mini-player's thin position bar. While the track is still downloading it shows the same three
+ * segments as the full player's seek bar (see DownloadAwareSliderTrack): played · downloaded · not
+ * downloaded yet.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun MiniPlayerProgress(progress: StateFlow<PlaybackProgress>) {
+private fun MiniPlayerProgress(progress: StateFlow<PlaybackProgress>, downloadFraction: StateFlow<Float?>) {
     val p by progress.collectAsStateWithLifecycle()
+    val downloaded by downloadFraction.collectAsStateWithLifecycle()
     val fraction = if (p.durationMs > 0) {
         (p.positionMs.toFloat() / p.durationMs).coerceIn(0f, 1f)
     } else {
         0f
     }
+    val color = ProgressIndicatorDefaults.linearColor
+    val trackColor = ProgressIndicatorDefaults.linearTrackColor
+    val strokeCap = ProgressIndicatorDefaults.LinearStrokeCap
+    val gapSize = ProgressIndicatorDefaults.LinearIndicatorTrackGapSize
+    val gap = with(LocalDensity.current) { gapSize.toPx() }
     LinearProgressIndicator(
         progress = { fraction },
         // Inset from the card's rounded corners so the track's ends aren't clipped.
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp)
-            .padding(bottom = 6.dp),
+            .padding(bottom = 6.dp)
+            .drawWithContent {
+                drawContent()
+                downloaded?.let {
+                    drawNotDownloaded(
+                        downloaded = it,
+                        inactiveStartPx = if (fraction > 0f) fraction * size.width + gap else 0f,
+                        inactiveTrack = trackColor,
+                        insideCornerPx = size.height / 2,
+                    )
+                }
+                // Drawn here rather than by the indicator, so it sits on top of the segment above.
+                ProgressIndicatorDefaults.drawStopIndicator(
+                    this,
+                    ProgressIndicatorDefaults.LinearTrackStopIndicatorSize,
+                    color,
+                    strokeCap,
+                )
+            },
+        color = color,
+        trackColor = if (downloaded == null) trackColor else downloadedTrackColor(color, trackColor),
+        strokeCap = strokeCap,
+        gapSize = gapSize,
+        drawStopIndicator = {},
     )
 }
