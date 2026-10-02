@@ -18,6 +18,11 @@ val CHANGELOG: List<ChangelogVersion> = listOf(
     ChangelogVersion(
         version = null,
         date = null,
+        changes = emptyList(),
+    ),
+    ChangelogVersion(
+        version = "0.1.92",
+        date = "02/10/2026",
         changes = listOf(
             "The seek bar (and the mini-player's bar) shows how much of a streaming song has " +
                 "downloaded, as a darker band ahead of the playback position.",
