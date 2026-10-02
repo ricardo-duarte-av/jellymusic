@@ -18,7 +18,11 @@ val CHANGELOG: List<ChangelogVersion> = listOf(
     ChangelogVersion(
         version = null,
         date = null,
-        changes = emptyList(),
+        changes = listOf(
+            "Fixed the now-playing screen and mini-player showing no title or artwork, music stopping " +
+                "when the app went to the background, and the media controls missing from the " +
+                "notification shade (all broken since 0.1.91).",
+        ),
     ),
     ChangelogVersion(
         version = "0.1.92",

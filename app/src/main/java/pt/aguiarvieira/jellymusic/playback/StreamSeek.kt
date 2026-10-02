@@ -6,6 +6,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.lang.reflect.InvocationTargetException
+import java.lang.reflect.Proxy
 
 /**
  * Seeking in a transcode that started playing before it had fully downloaded.
@@ -94,12 +96,36 @@ class StreamSeekPlayer(
     }
 
     // The session takes the available commands from this callback's argument, so it needs the same
-    // adjustment as getAvailableCommands().
+    // adjustment as getAvailableCommands(). Every other callback must reach the listener untouched.
+    //
+    // This is a dynamic proxy, not `object : Player.Listener by listener`: every Player.Listener
+    // method is a Java default method, and Kotlin's `by` delegation doesn't forward those. A `by`
+    // wrapper silently swallowed all other callbacks, so the session never heard of metadata, track or
+    // play/pause changes, and the app and notification showed no title or artwork. A proxy forwards
+    // every method, including any a later media3 adds.
+    @Suppress("SpreadOperator") // Forwarding a reflective call needs its arguments spread back out.
     override fun addListener(listener: Player.Listener) {
-        val wrapped = object : Player.Listener by listener {
-            override fun onAvailableCommandsChanged(availableCommands: Player.Commands) =
-                listener.onAvailableCommandsChanged(withStreamSeek(availableCommands))
-        }
+        val wrapped = Proxy.newProxyInstance(
+            Player.Listener::class.java.classLoader,
+            arrayOf(Player.Listener::class.java),
+        ) { proxy, method, args ->
+            when {
+                method.declaringClass == Any::class.java -> when (method.name) {
+                    "equals" -> proxy === args?.firstOrNull()
+                    "hashCode" -> System.identityHashCode(proxy)
+                    else -> "StreamSeekPlayer.Listener($listener)"
+                }
+                // Matched by signature, not name: R8 may rename listener methods in release builds.
+                // onAvailableCommandsChanged is the only callback taking a single Player.Commands.
+                method.parameterTypes.singleOrNull() == Player.Commands::class.java ->
+                    listener.onAvailableCommandsChanged(withStreamSeek(args!![0] as Player.Commands))
+                else -> try {
+                    method.invoke(listener, *(args ?: emptyArray()))
+                } catch (e: InvocationTargetException) {
+                    throw e.targetException
+                }
+            }
+        } as Player.Listener
         wrappedListeners[listener] = wrapped
         super.addListener(wrapped)
     }
