@@ -18,7 +18,10 @@ val CHANGELOG: List<ChangelogVersion> = listOf(
     ChangelogVersion(
         version = null,
         date = null,
-        changes = emptyList(),
+        changes = listOf(
+            "Songs that aren't cached yet start playing almost right away again, instead of only " +
+                "once the whole file has downloaded \u2014 most noticeable with FLAC on a slow connection.",
+        ),
     ),
     ChangelogVersion(
         version = "0.1.90",

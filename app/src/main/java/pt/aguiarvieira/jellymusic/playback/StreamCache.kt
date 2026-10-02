@@ -61,6 +61,7 @@ private const val PREFETCH_LOW_WATER = 1
 /**
  * Size of the files a download is committed to the cache in. A track becomes readable one fragment
  * at a time, so this is also how much of an original file has to arrive before it starts playing.
+ * Only applies to downloads flagged [DataSpec.FLAG_ALLOW_CACHE_FRAGMENTATION].
  */
 private const val FRAGMENT_BYTES = 1L shl 20 // 1 MiB
 
@@ -363,7 +364,13 @@ class StreamCache @Inject constructor(
 
         val writer = CacheWriter(
             writerFactory.createDataSource(),
-            DataSpec.Builder().setUri(url).setKey(key).build(),
+            // Without FLAG_ALLOW_CACHE_FRAGMENTATION the sink ignores FRAGMENT_BYTES and commits the
+            // whole file as one span at the very end, so nothing could play until it had all arrived.
+            DataSpec.Builder()
+                .setUri(url)
+                .setKey(key)
+                .setFlags(DataSpec.FLAG_ALLOW_CACHE_FRAGMENTATION)
+                .build(),
             null,
             null,
         )
