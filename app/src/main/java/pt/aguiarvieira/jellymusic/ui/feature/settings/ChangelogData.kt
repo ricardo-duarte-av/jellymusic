@@ -18,6 +18,11 @@ val CHANGELOG: List<ChangelogVersion> = listOf(
     ChangelogVersion(
         version = null,
         date = null,
+        changes = emptyList(),
+    ),
+    ChangelogVersion(
+        version = "0.1.94",
+        date = "06/10/2026",
         changes = listOf(
             "Playlists now highlight the song that's playing, like albums do.",
         ),
