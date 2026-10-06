@@ -685,6 +685,10 @@ fun PlaylistDetailScreen(
     val trackStatuses by downloadsViewModel.trackStatuses.collectAsStateWithLifecycle()
     val downloadSettings by downloadsViewModel.downloadSettings.collectAsStateWithLifecycle()
     var pendingDownload by remember { mutableStateOf<DownloadTarget?>(null) }
+    // Same as the album screen: only the playing track's identity matters here (it tints that row).
+    val playingTrackId by remember(playbackViewModel) {
+        playbackViewModel.state.map { it.trackId }.distinctUntilChanged()
+    }.collectAsStateWithLifecycle(initialValue = null)
 
     DownloadDialogs(
         target = pendingDownload,
@@ -709,6 +713,7 @@ fun PlaylistDetailScreen(
         onPlay = playbackViewModel::play,
         onShufflePlay = playbackViewModel::playShuffled,
         showTrackArtwork = true,
+        playingTrackId = playingTrackId,
         trackStatuses = trackStatuses,
         onRequestDownload = { pendingDownload = DownloadTarget.TrackItem(it) },
         onRemoveTrack = downloadsViewModel::removeTrack,
@@ -731,6 +736,8 @@ private fun TrackListDetail(
     onPlay: (List<Track>, Int) -> Unit,
     onShufflePlay: (List<Track>) -> Unit,
     showTrackArtwork: Boolean = false,
+    /** Id of the track playing right now; its row wears the tertiary accent, as on the album screen. */
+    playingTrackId: String? = null,
     trackStatuses: Map<String, TrackDownloadStatus> = emptyMap(),
     onRequestDownload: (Track) -> Unit = {},
     onRemoveTrack: (String) -> Unit = {},
@@ -821,13 +828,24 @@ private fun TrackListDetail(
                                 null
                             }
                             ArtworkTheme(trackScheme) {
+                                // The playing row takes the tertiary accent of its own cover's
+                                // scheme (or the ambient one), like the album screen's playing card.
+                                val playing = track.id == playingTrackId
                                 TrackRow(
                                     track = track,
                                     onClick = { onPlay(tracks, index) },
                                     showArtwork = showTrackArtwork,
                                     asCard = true,
-                                    containerColor = trackScheme?.secondaryContainer,
-                                    contentColor = trackScheme?.onSecondaryContainer,
+                                    containerColor = if (playing) {
+                                        MaterialTheme.colorScheme.tertiaryContainer
+                                    } else {
+                                        trackScheme?.secondaryContainer
+                                    },
+                                    contentColor = if (playing) {
+                                        MaterialTheme.colorScheme.onTertiaryContainer
+                                    } else {
+                                        trackScheme?.onSecondaryContainer
+                                    },
                                     downloadStatus = trackStatuses[track.id],
                                     onDownload = { onRequestDownload(track) },
                                     onRemoveLocal = { onRemoveTrack(track.id) },
