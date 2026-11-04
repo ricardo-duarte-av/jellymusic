@@ -100,8 +100,8 @@ private const val BYTES_PER_GB = 1L shl 30
  * partial transcode is thrown away rather than resumed. The player waits up to a second for the whole
  * file before opening one (a 4-minute track transcodes in a couple of seconds, so short tracks often
  * make it), in which case it plays from a file of known length and seeks normally; past that wait it
- * starts on what has arrived, and seeking goes through [StreamSeekHandler]. Originals are range-resumable and start playing once their first
- * fragment lands.
+ * starts on what has arrived, and seeking goes through [StreamSeekHandler]. Originals are
+ * range-resumable and start playing once their first fragment lands.
  */
 @OptIn(UnstableApi::class)
 @Singleton
