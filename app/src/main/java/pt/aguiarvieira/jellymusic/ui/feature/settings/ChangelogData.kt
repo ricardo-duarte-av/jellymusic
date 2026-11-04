@@ -18,7 +18,10 @@ val CHANGELOG: List<ChangelogVersion> = listOf(
     ChangelogVersion(
         version = null,
         date = null,
-        changes = emptyList(),
+        changes = listOf(
+            "The now-playing seek bar is now a wave while music plays, matching the notification " +
+                "controls. It flattens when paused or while you drag it.",
+        ),
     ),
     ChangelogVersion(
         version = "0.1.94",

@@ -53,8 +53,6 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.SliderState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -69,9 +67,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
@@ -203,6 +198,7 @@ fun FullPlayerScreen(
                     PlayerSeekBar(
                         progress = viewModel.progress,
                         downloadFraction = viewModel.downloadFraction,
+                        isPlaying = state.isPlaying,
                         onSeek = viewModel::seekTo,
                     )
                 }
@@ -602,6 +598,7 @@ private fun QueueSheet(
 private fun PlayerSeekBar(
     progress: StateFlow<PlaybackProgress>,
     downloadFraction: StateFlow<Float?>,
+    isPlaying: Boolean,
     onSeek: (Long) -> Unit,
 ) {
     val p by progress.collectAsStateWithLifecycle()
@@ -674,7 +671,9 @@ private fun PlayerSeekBar(
                 .fillMaxWidth()
                 .align(Alignment.BottomStart)
                 .padding(top = 28.dp),
-            track = { sliderState -> DownloadAwareSliderTrack(sliderState, downloaded) },
+            track = { sliderState ->
+                WavySliderTrack(sliderState, downloaded, isPlaying, isScrubbing)
+            },
         )
     }
     Row(modifier = Modifier.fillMaxWidth()) {
@@ -688,46 +687,6 @@ private fun PlayerSeekBar(
             style = MaterialTheme.typography.labelMedium,
         )
     }
-}
-
-/**
- * The stock M3 slider track, plus a third segment while the track is still downloading: played
- * (primary) · downloaded (a stronger inactive tone) · not downloaded yet (the plain inactive track).
- * With [downloaded] null — fully downloaded, cached or local — it's the plain track.
- */
-@Composable
-private fun DownloadAwareSliderTrack(sliderState: SliderState, downloaded: Float?) {
-    val colors = SliderDefaults.colors()
-    if (downloaded == null) {
-        SliderDefaults.Track(sliderState = sliderState, colors = colors)
-        return
-    }
-    val clearance = with(LocalDensity.current) { SLIDER_THUMB_CLEARANCE.toPx() }
-    val insideCorner = with(LocalDensity.current) { SLIDER_INSIDE_CORNER.toPx() }
-    SliderDefaults.Track(
-        sliderState = sliderState,
-        colors = colors.copy(
-            inactiveTrackColor = downloadedTrackColor(colors.activeTrackColor, colors.inactiveTrackColor),
-        ),
-        // Drawn below instead, on top of the not-downloaded segment.
-        drawStopIndicator = null,
-        modifier = Modifier.drawWithContent {
-            drawContent()
-            drawNotDownloaded(
-                downloaded = downloaded,
-                inactiveStartPx = sliderState.value * size.width + clearance,
-                inactiveTrack = colors.inactiveTrackColor,
-                insideCornerPx = insideCorner,
-            )
-            with(SliderDefaults) {
-                drawStopIndicator(
-                    Offset(size.width - size.height / 2, center.y),
-                    SliderDefaults.TrackStopIndicatorSize,
-                    colors.activeTrackColor,
-                )
-            }
-        },
-    )
 }
 
 /**
@@ -761,12 +720,6 @@ private val PLAYER_PADDING = 24.dp
 private val COVER_PADDING_NO_LYRICS = 8.dp
 
 private const val SEEK_SETTLE_GRACE_MS = 1_000L
-
-/** Space from the slider value to where the inactive track starts: half the 4dp thumb + its 6dp gap. */
-private val SLIDER_THUMB_CLEARANCE = 8.dp
-
-/** The M3 slider track's inside corner radius (the ends facing the thumb). */
-private val SLIDER_INSIDE_CORNER = 2.dp
 
 /** e.g. "Album gain −8.8 dB", with the pre-amp appended when it isn't zero. */
 private fun AppliedGain.label(): String {
