@@ -203,6 +203,7 @@ class MediaItemTree @Inject constructor(
      * Called from [PlaybackService]'s `onAddMediaItems`.
      */
     suspend fun resolveForPlayback(items: List<MediaItem>): List<MediaItem> {
+        awaitDownloadsLoaded()
         val settings = streamCache.currentStreamSettings()
         return items.flatMap { item ->
             val id = item.mediaId
@@ -232,6 +233,13 @@ class MediaItemTree @Inject constructor(
         item.buildUpon()
             .setUri(downloadManager.localFileUri(trackId) ?: StreamCache.streamUri(trackId))
             .build()
+
+    /**
+     * Waits for the download list to load, so [trackMediaItem] picks local copies. Call before
+     * building items right after a cold start (restoring a saved queue); otherwise downloaded tracks
+     * come out as streams.
+     */
+    suspend fun awaitDownloadsLoaded() = downloadManager.awaitLoaded()
 
     /** Public so the in-app player ([PlaybackConnection]) builds identical playable items. */
     fun trackMediaItem(track: Track, settings: StreamSettings): MediaItem {

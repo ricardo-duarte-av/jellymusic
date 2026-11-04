@@ -8,11 +8,13 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import pt.aguiarvieira.jellymusic.data.db.AlbumDownloadEntity
 import pt.aguiarvieira.jellymusic.data.db.DownloadDao
 import pt.aguiarvieira.jellymusic.data.db.PlaylistDownloadEntity
@@ -51,6 +53,9 @@ class MusicDownloadManager @Inject constructor(
     @Volatile
     private var completedRows: Map<String, TrackDownloadEntity> = emptyMap()
 
+    /** Completes once [completedRows] holds the first load from the database. */
+    private val completedRowsLoaded = CompletableDeferred<Unit>()
+
     private val downloadsDir: File
         get() = File(context.filesDir, "downloads").apply { mkdirs() }
 
@@ -71,6 +76,7 @@ class MusicDownloadManager @Inject constructor(
                 completedRows = rows
                     .filter { row -> row.filePath?.let { File(it).exists() } == true }
                     .associateBy { it.trackId }
+                completedRowsLoaded.complete(Unit)
             }
         }
         // Pick up anything left pending by a previous session.
@@ -87,6 +93,15 @@ class MusicDownloadManager @Inject constructor(
      * with it is only reachable by something outside the app deleting it, and the cost of being
      * wrong is a failed load that falls back to streaming.
      */
+    /**
+     * Waits until [localFileUri] reflects the downloads on disk. Until the first database load lands,
+     * every track looks not downloaded — which, right after a cold start, is exactly when a saved
+     * queue gets rebuilt. Bounded, so a stuck database falls back to streaming rather than hanging.
+     */
+    suspend fun awaitLoaded() {
+        withTimeoutOrNull(LOAD_TIMEOUT_MS) { completedRowsLoaded.await() }
+    }
+
     fun localFileUri(trackId: String): String? =
         completedRows[trackId]?.filePath?.let { "file://$it" }
 
@@ -397,3 +412,6 @@ class MusicDownloadManager @Inject constructor(
         }
     }
 }
+
+/** Longest a queue restore waits for the download list before treating everything as streamed. */
+private const val LOAD_TIMEOUT_MS = 2_000L

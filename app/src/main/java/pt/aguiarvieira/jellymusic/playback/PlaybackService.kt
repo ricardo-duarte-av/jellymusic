@@ -770,6 +770,7 @@ class PlaybackService : MediaLibraryService() {
             throw UnsupportedOperationException("No saved queue to resume")
         }
         val index = saved.index.coerceIn(0, saved.items.lastIndex)
+        mediaItemTree.awaitDownloadsLoaded()
         val settings = streamCache.currentStreamSettings()
         val source = if (isForPlayback) saved.items else listOf(saved.items[index])
         val items = source.map { mediaItemTree.trackMediaItem(it.toTrack(), settings) }

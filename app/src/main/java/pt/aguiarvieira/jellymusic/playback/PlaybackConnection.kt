@@ -312,6 +312,10 @@ class PlaybackConnection @Inject constructor(
             val saved = queueStore.load() ?: return@launch
             val c = controller ?: return@launch
             if (c.mediaItemCount > 0 || saved.items.isEmpty()) return@launch
+            // After a cold start the download list may not be loaded yet; without this wait every
+            // downloaded track would be rebuilt as a stream.
+            mediaItemTree.awaitDownloadsLoaded()
+            if (c.mediaItemCount > 0) return@launch
             val items = saved.items.map { mediaItemTree.trackMediaItem(it.toTrack(), streamCache.currentStreamSettings()) }
             c.setMediaItems(items, saved.index.coerceIn(0, items.lastIndex), saved.positionMs.coerceAtLeast(0L))
             c.prepare()

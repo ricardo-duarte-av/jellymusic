@@ -22,6 +22,8 @@ val CHANGELOG: List<ChangelogVersion> = listOf(
             "The now-playing seek bar is now a wave while music plays, matching the notification " +
                 "controls. It flattens when paused or while you drag it.",
             "Transcoded streams start playing about two seconds sooner.",
+            "Fixed downloaded songs streaming instead of playing from the device when resuming after the " +
+                "app had been in the background for a while.",
         ),
     ),
     ChangelogVersion(
