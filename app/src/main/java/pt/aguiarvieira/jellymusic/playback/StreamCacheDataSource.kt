@@ -27,7 +27,7 @@ private const val STALL_TIMEOUT_MS = 30_000L
  * transcode opened complete has a known length and seeks normally; one opened partial can't be
  * seeked by the player itself, so [StreamSeekHandler] reloads it once its download completes.
  */
-private const val TRANSCODE_WAIT_MS = 3_000L
+private const val TRANSCODE_WAIT_MS = 1_000L
 
 /**
  * Plays a [StreamCache] track (a `jellymusic-stream://` URI) from the cache, reading each fragment

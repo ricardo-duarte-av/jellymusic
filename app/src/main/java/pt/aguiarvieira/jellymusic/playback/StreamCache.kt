@@ -97,10 +97,10 @@ private const val BYTES_PER_GB = 1L shl 30
  * now-playing quality label can show what is really playing.
  *
  * Transcodes have no length and no byte ranges, and the server's output differs on every run. So a
- * partial transcode is thrown away rather than resumed. The player waits a moment for the whole file
- * before opening one (a 4-minute track transcodes in a couple of seconds), so it usually plays from a
- * file of known length and seeks normally; past that wait it starts on what has arrived, and seeking
- * goes through [StreamSeekHandler]. Originals are range-resumable and start playing once their first
+ * partial transcode is thrown away rather than resumed. The player waits up to a second for the whole
+ * file before opening one (a 4-minute track transcodes in a couple of seconds, so short tracks often
+ * make it), in which case it plays from a file of known length and seeks normally; past that wait it
+ * starts on what has arrived, and seeking goes through [StreamSeekHandler]. Originals are range-resumable and start playing once their first
  * fragment lands.
  */
 @OptIn(UnstableApi::class)
