@@ -5,6 +5,7 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.Uri
+import android.os.PowerManager
 import android.util.Log
 import androidx.annotation.OptIn
 import androidx.media3.common.C
@@ -73,6 +74,12 @@ private const val PROGRESS_STEP_BYTES = 256L * 1024
 
 /** A failed download isn't retried for this long, unless the player asks for that track. */
 private const val RETRY_BACKOFF_MS = 15_000L
+
+/**
+ * Safety cap on the download wake lock. A whole track arrives in seconds; this only matters if a
+ * download hangs, so the lock can never pin the CPU awake indefinitely.
+ */
+private const val DOWNLOAD_WAKE_LOCK_TIMEOUT_MS = 10 * 60_000L
 
 private const val BYTES_PER_GB = 1L shl 30
 
@@ -168,6 +175,16 @@ class StreamCache @Inject constructor(
     /** Called (on a background thread) whenever a download starts, i.e. the radio is about to be up. */
     @Volatile
     var onFetchStarted: (() -> Unit)? = null
+
+    /**
+     * Keeps the CPU up while a download runs. The player's own wake lock isn't enough: with audio
+     * offload the DSP plays on its own and media3 drops that lock so the CPU can sleep, which would
+     * freeze a download (current track or look-ahead) half-way. Held only for the burst itself.
+     */
+    private val downloadWakeLock: PowerManager.WakeLock? =
+        context.getSystemService(PowerManager::class.java)
+            ?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "JellyMusic:StreamDownload")
+            ?.apply { setReferenceCounted(false) }
 
     private class Running(val trackId: String, val key: String, val writer: CacheWriter) {
         @Volatile var cancelled = false
@@ -405,6 +422,7 @@ class StreamCache @Inject constructor(
         synchronized(lock) { running = job }
         onFetchStarted?.invoke()
         val started = System.currentTimeMillis()
+        downloadWakeLock?.acquire(DOWNLOAD_WAKE_LOCK_TIMEOUT_MS)
         try {
             writer.cache()
             Log.d(TAG, "Cached $key in ${System.currentTimeMillis() - started} ms")
@@ -421,6 +439,7 @@ class StreamCache @Inject constructor(
             if (quality.transcode) runCatching { cache.removeResource(key) }
             publishProgress(trackId, key)
         } finally {
+            downloadWakeLock?.release()
             synchronized(lock) {
                 running = null
                 if (urgent == trackId && trackId in completeTracks) urgent = null

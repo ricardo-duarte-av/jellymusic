@@ -9,6 +9,7 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
+import androidx.media3.common.TrackSelectionParameters.AudioOffloadPreferences
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.exoplayer.DefaultRenderersFactory
@@ -56,6 +57,7 @@ import pt.aguiarvieira.jellymusic.domain.model.ReplayGainMode
 import pt.aguiarvieira.jellymusic.domain.model.toTrack
 import androidx.glance.appwidget.updateAll
 import pt.aguiarvieira.jellymusic.widget.NowPlayingWidget
+import pt.aguiarvieira.jellymusic.widget.NowPlayingWidgetData
 import pt.aguiarvieira.jellymusic.widget.nowPlayingWidgetData
 import pt.aguiarvieira.jellymusic.widget.writeNowPlayingWidgetData
 import javax.inject.Inject
@@ -301,6 +303,13 @@ class PlaybackService : MediaLibraryService() {
         }
     }
 
+    /** Logs offload transitions, so `adb logcat -s PlaybackService` shows whether offload engaged. */
+    private val offloadLogger = object : ExoPlayer.AudioOffloadListener {
+        override fun onOffloadedPlayback(isOffloadedPlayback: Boolean) {
+            android.util.Log.d(TAG, "offloaded playback: $isOffloadedPlayback")
+        }
+    }
+
     /**
      * DIAGNOSTIC (debug builds only): appends a timestamped line to <externalFilesDir>/underruns.log
      * so underruns can be captured with the device **fully disconnected** — no live adb session, which
@@ -382,8 +391,16 @@ class PlaybackService : MediaLibraryService() {
         override fun onRepeatModeChanged(repeatMode: Int) = pushWidgetUpdate()
     }
 
+    /** Last snapshot pushed to the widget; main thread only. */
+    private var lastWidgetData: NowPlayingWidgetData? = null
+
     private fun pushWidgetUpdate() {
         val data = player.nowPlayingWidgetData()
+        // Most of the events above (timeline/metadata updates especially) fire several times per
+        // track without changing anything the widget shows. Each push is a DataStore write plus a
+        // Glance recomposition and RemoteViews round-trip to the launcher, so skip the no-ops.
+        if (data == lastWidgetData) return
+        lastWidgetData = data
         serviceScope.launch {
             // The write is what actually refreshes the widget: its composition collects this store as
             // state (see NowPlayingWidget), so a write recomposes the live session. updateAll() stays
@@ -565,14 +582,32 @@ class PlaybackService : MediaLibraryService() {
             // it restarts the current one. Every previous button in the app goes through
             // seekToPrevious(), so setting it here is what makes them all behave the same.
             .setMaxSeekToPreviousPositionMs(MAX_SEEK_TO_PREVIOUS_MS)
-            // Hold a partial wake lock (+ Wi-Fi lock) *while playing* so the CPU/radio can't doze mid-
-            // track with the screen off and starve the audio pipeline — the classic screen-off stutter.
-            // media3 acquires these only during active playback and releases them on pause/stop, so idle
-            // battery cost is nil. NETWORK (not LOCAL) because the app streams by default; the added
-            // Wi-Fi lock is what keeps streamed playback smooth, and it's harmless for offline downloads.
-            .setWakeMode(C.WAKE_MODE_NETWORK)
+            // Hold a partial wake lock *while playing* so the CPU can't doze mid-track with the screen
+            // off and starve the audio pipeline — the classic screen-off stutter. media3 acquires it
+            // only during active playback and releases it on pause/stop.
+            // LOCAL, not NETWORK: NETWORK adds a Wi-Fi lock that disables Wi-Fi power saving for the
+            // whole time music plays. The player never reads the network — StreamCache downloads each
+            // track whole in a burst and the radio then sits idle — so that lock bought nothing and was
+            // a large, constant battery drain. The CPU wake lock alone keeps those bursts running.
+            .setWakeMode(C.WAKE_MODE_LOCAL)
             .build()
             .also {
+                // Audio offload: the DSP decodes and plays while the CPU sleeps, the single largest
+                // battery saving for long screen-off listening (media3 also drops its wake lock while
+                // "sleeping for offload"). Only possible in float mode, i.e. ReplayGain off: offload
+                // sends the encoded stream straight to the hardware, so no PCM processor can run.
+                // Formats/routes the device can't offload silently fall back to normal decoding.
+                if (floatOutput) {
+                    it.trackSelectionParameters = it.trackSelectionParameters.buildUpon()
+                        .setAudioOffloadPreferences(
+                            AudioOffloadPreferences.Builder()
+                                .setAudioOffloadMode(AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_ENABLED)
+                                .setIsGaplessSupportRequired(true)
+                                .build(),
+                        )
+                        .build()
+                }
+                it.addAudioOffloadListener(offloadLogger)
                 it.addListener(reporterListener)
                 it.addListener(modeListener)
                 it.addListener(widgetListener)
@@ -592,6 +627,7 @@ class PlaybackService : MediaLibraryService() {
      * exactly what media3 dispatches during `release()`.
      */
     private fun detachListeners(target: ExoPlayer) {
+        target.removeAudioOffloadListener(offloadLogger)
         target.removeListener(reporterListener)
         target.removeListener(modeListener)
         target.removeListener(widgetListener)

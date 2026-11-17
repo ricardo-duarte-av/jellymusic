@@ -18,7 +18,13 @@ val CHANGELOG: List<ChangelogVersion> = listOf(
     ChangelogVersion(
         version = null,
         date = null,
-        changes = emptyList(),
+        changes = listOf(
+            "Uses noticeably less battery while playing: Wi-Fi is no longer kept at full power for the " +
+                "whole time music plays.",
+            "With ReplayGain off, playback is handed to the phone's low-power audio hardware where " +
+                "supported, so long screen-off listening uses much less battery.",
+            "The home-screen widget refreshes only when what it shows actually changes.",
+        ),
     ),
     ChangelogVersion(
         version = "0.1.95",
