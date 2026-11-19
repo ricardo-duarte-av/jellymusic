@@ -21,6 +21,14 @@ val CHANGELOG: List<ChangelogVersion> = listOf(
         changes = emptyList(),
     ),
     ChangelogVersion(
+        version = "0.1.99",
+        date = "19/11/2026",
+        changes = listOf(
+            "Transcoded AAC streams can now play through the phone's low-power audio processor, " +
+                "using much less battery with the screen off.",
+        ),
+    ),
+    ChangelogVersion(
         version = "0.1.98",
         date = "19/11/2026",
         changes = listOf(

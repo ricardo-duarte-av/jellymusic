@@ -591,6 +591,14 @@ class PlaybackService : MediaLibraryService() {
             .setWakeMode(C.WAKE_MODE_LOCAL)
             .build()
             .also {
+                // Never select metadata or text tracks: the app reads neither, and DefaultTrackSelector
+                // refuses offload whenever any non-audio track is selected. The ADTS extractor always
+                // declares an ID3 metadata track (even when the stream has no tag), so transcoded AAC
+                // streams were silently kept off offload by it.
+                it.trackSelectionParameters = it.trackSelectionParameters.buildUpon()
+                    .setTrackTypeDisabled(C.TRACK_TYPE_METADATA, true)
+                    .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+                    .build()
                 // Audio offload: the DSP decodes and plays while the CPU sleeps, the single largest
                 // battery saving for long screen-off listening (media3 also drops its wake lock while
                 // "sleeping for offload"). Only possible in float mode, i.e. ReplayGain off: offload
