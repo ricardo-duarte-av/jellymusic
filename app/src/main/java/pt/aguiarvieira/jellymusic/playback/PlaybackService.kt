@@ -86,6 +86,9 @@ private const val MAX_CHILDREN_PER_NODE = 500
 /** Upper bound on the blocking final queue write in [PlaybackService.onDestroy]. */
 private const val QUEUE_SAVE_TIMEOUT_MS = 1_000L
 
+/** How long a paused session stays a foreground service (media3's default is 10 minutes). */
+private const val FOREGROUND_SERVICE_TIMEOUT_MS = 2 * 60_000L
+
 /**
  * How deep into a track "previous" still means *previous track*. Past this point every previous
  * button — widget, player screen, notification, Android Auto, headset — restarts the current track
@@ -303,12 +306,8 @@ class PlaybackService : MediaLibraryService() {
         }
     }
 
-    /** Logs offload transitions, so `adb logcat -s PlaybackService` shows whether offload engaged. */
-    private val offloadLogger = object : ExoPlayer.AudioOffloadListener {
-        override fun onOffloadedPlayback(isOffloadedPlayback: Boolean) {
-            android.util.Log.d(TAG, "offloaded playback: $isOffloadedPlayback")
-        }
-    }
+    /** Per-track offload diagnostics, visible in release builds too: `adb logcat -s AudioPath`. */
+    private val audioPathLogger by lazy { AudioPathLogger(this) }
 
     /**
      * DIAGNOSTIC (debug builds only): appends a timestamped line to <externalFilesDir>/underruns.log
@@ -607,7 +606,8 @@ class PlaybackService : MediaLibraryService() {
                         )
                         .build()
                 }
-                it.addAudioOffloadListener(offloadLogger)
+                it.addAudioOffloadListener(audioPathLogger)
+                it.addAnalyticsListener(audioPathLogger)
                 it.addListener(reporterListener)
                 it.addListener(modeListener)
                 it.addListener(widgetListener)
@@ -627,7 +627,8 @@ class PlaybackService : MediaLibraryService() {
      * exactly what media3 dispatches during `release()`.
      */
     private fun detachListeners(target: ExoPlayer) {
-        target.removeAudioOffloadListener(offloadLogger)
+        target.removeAudioOffloadListener(audioPathLogger)
+        target.removeAnalyticsListener(audioPathLogger)
         target.removeListener(reporterListener)
         target.removeListener(modeListener)
         target.removeListener(widgetListener)
@@ -669,6 +670,10 @@ class PlaybackService : MediaLibraryService() {
 
     override fun onCreate() {
         super.onCreate()
+        // Once paused, drop out of the foreground after a couple of minutes instead of media3's default
+        // 10 (observed lingering 15–28 min). The notification stays and still resumes playback; the
+        // system can then stop the idle service and freeze the process sooner.
+        setForegroundServiceTimeoutMs(FOREGROUND_SERVICE_TIMEOUT_MS)
         // Start in int (ReplayGain-capable) mode; the replayGainSettings collector below rebuilds
         // into float mode if ReplayGain is off (see buildPlayer / rebuildPlayer). At startup nothing
         // is playing yet, so that initial rebuild is seamless.
