@@ -18,6 +18,11 @@ val CHANGELOG: List<ChangelogVersion> = listOf(
     ChangelogVersion(
         version = null,
         date = null,
+        changes = emptyList(),
+    ),
+    ChangelogVersion(
+        version = "0.1.97",
+        date = "19/11/2026",
         changes = listOf(
             "After you pause, playback now leaves the foreground after 2 minutes instead of 10, so " +
                 "an idle player uses less battery in the background.",
