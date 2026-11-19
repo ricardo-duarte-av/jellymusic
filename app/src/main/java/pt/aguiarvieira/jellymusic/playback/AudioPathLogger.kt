@@ -9,10 +9,14 @@ import android.util.Log
 import androidx.media3.common.C
 import androidx.media3.common.Format
 import androidx.media3.common.MimeTypes
+import androidx.media3.common.Player
+import androidx.media3.common.TrackSelectionParameters.AudioOffloadPreferences
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.common.util.Util
 import androidx.media3.exoplayer.DecoderReuseEvaluation
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.RendererCapabilities
+import androidx.media3.exoplayer.trackselection.MappingTrackSelector
 import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.audio.AudioSink
 
@@ -53,6 +57,65 @@ internal class AudioPathLogger(context: Context) : AnalyticsListener, ExoPlayer.
                 " | offload=${config.offload} sinkEncoding=${encodingName(config.encoding)} " +
                 "rate=${config.sampleRate} | route=${route()} | platformOffload=${format?.let(::platformSupport)}",
         )
+    }
+
+    /**
+     * After each track selection, logs the inputs DefaultTrackSelector used to decide on offload: the
+     * offload preferences the player actually holds, each audio renderer's offload capability for its
+     * tracks, and any non-audio track that is selected (which on its own vetoes offload).
+     */
+    override fun onEvents(player: Player, events: AnalyticsListener.Events) {
+        if (!events.contains(AnalyticsListener.EVENT_TRACKS_CHANGED)) return
+        val exo = player as? ExoPlayer ?: return
+        val prefs = exo.trackSelectionParameters.audioOffloadPreferences
+        val pref = "mode=${offloadModeName(prefs.audioOffloadMode)} gaplessRequired=${prefs.isGaplessSupportRequired}"
+        val mapped = (exo.trackSelector as? MappingTrackSelector)?.currentMappedTrackInfo
+        if (mapped == null) {
+            Log.i(TAG, "selection: offloadPrefs[$pref] | no mapped track info")
+            return
+        }
+        val audioCaps = mutableListOf<String>()
+        for (r in 0 until mapped.rendererCount) {
+            if (mapped.getRendererType(r) != C.TRACK_TYPE_AUDIO) continue
+            val groups = mapped.getTrackGroups(r)
+            for (g in 0 until groups.length) {
+                val group = groups[g]
+                for (t in 0 until group.length) {
+                    val caps = mapped.getCapabilities(r, g, t)
+                    val f = group.getFormat(t)
+                    audioCaps += "r$r(${mapped.getRendererName(r)}) ${f.sampleMimeType}/${f.codecs} " +
+                        "delay=${f.encoderDelay} pad=${f.encoderPadding} " +
+                        "support=${RendererCapabilities.getFormatSupport(caps)} " +
+                        "offloadCaps=${offloadCapsName(RendererCapabilities.getAudioOffloadSupport(caps))}"
+                }
+            }
+        }
+        val selectedNonAudio = exo.currentTracks.groups
+            .filter { it.isSelected && it.type != C.TRACK_TYPE_AUDIO }
+            .joinToString { "type${it.type}:${it.getTrackFormat(0).sampleMimeType}" }
+            .ifEmpty { "none" }
+        val selectedAudio = exo.currentTracks.groups.count { it.isSelected && it.type == C.TRACK_TYPE_AUDIO }
+        Log.i(
+            TAG,
+            "selection: offloadPrefs[$pref] | audio=${audioCaps.joinToString(" ; ").ifEmpty { "none" }}" +
+                " | selectedAudioGroups=$selectedAudio selectedNonAudio=$selectedNonAudio",
+        )
+    }
+
+    private fun offloadModeName(mode: Int): String = when (mode) {
+        AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_DISABLED -> "disabled"
+        AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_ENABLED -> "enabled"
+        AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_REQUIRED -> "required"
+        else -> "mode$mode"
+    }
+
+    private fun offloadCapsName(caps: Int): String {
+        if (caps == RendererCapabilities.AUDIO_OFFLOAD_NOT_SUPPORTED) return "none"
+        return buildList {
+            if (caps and RendererCapabilities.AUDIO_OFFLOAD_SUPPORTED != 0) add("supported")
+            if (caps and RendererCapabilities.AUDIO_OFFLOAD_GAPLESS_SUPPORTED != 0) add("gapless")
+            if (caps and RendererCapabilities.AUDIO_OFFLOAD_SPEED_CHANGE_SUPPORTED != 0) add("speed")
+        }.joinToString("+")
     }
 
     override fun onOffloadedPlayback(isOffloadedPlayback: Boolean) {

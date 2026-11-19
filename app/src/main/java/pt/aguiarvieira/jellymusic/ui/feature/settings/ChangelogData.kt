@@ -18,7 +18,9 @@ val CHANGELOG: List<ChangelogVersion> = listOf(
     ChangelogVersion(
         version = null,
         date = null,
-        changes = emptyList(),
+        changes = listOf(
+            "More detailed diagnostics on why low-power audio playback is or isn't used",
+        ),
     ),
     ChangelogVersion(
         version = "0.1.97",
