@@ -1,0 +1,5 @@
+11-19 18:47:34.162  1980  3618 I AudioSvc.FocusCtrl: abandonAudioFocus() from uid/pid 10705/24377 clientId=android.media.AudioManager@768e301vn@9925a6 callingPack=pt.aguiarvieira.jellymusic
+11-19 18:51:57.264  1980  2064 W ActivityManager: Stopping service due to app idle: u0a705 -44m20s366ms pt.aguiarvieira.jellymusic/.playback.PlaybackService
+11-19 18:51:57.358  1980  3619 W MR2ServiceImpl: Router record not found for the target package: pt.aguiarvieira.jellymusic
+11-19 18:51:57.398  1980  3619 I MediaSessionStack: removeSession | record: pt.aguiarvieira.jellymusic/androidx.media3.session.id./862 (userId=0)
+11-19 18:52:07.484  1980  2394 D ActivityManager: freezing 24377 pt.aguiarvieira.jellymusic
