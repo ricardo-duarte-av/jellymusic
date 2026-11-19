@@ -19,9 +19,18 @@ BASELINE="${ROOT}/config/detekt/baseline.xml"
 mkdir -p "${CACHE_DIR}"
 if [ ! -f "${JAR}" ]; then
   echo "Downloading detekt-cli ${DETEKT_VERSION}…"
-  curl -fsSL \
+  # Maven Central occasionally 404s a file it normally serves; retry, then fall back
+  # to the same jar on detekt's GitHub release.
+  for url in \
     "https://repo1.maven.org/maven2/io/gitlab/arturbosch/detekt/detekt-cli/${DETEKT_VERSION}/detekt-cli-${DETEKT_VERSION}-all.jar" \
-    -o "${JAR}"
+    "https://github.com/detekt/detekt/releases/download/v${DETEKT_VERSION}/detekt-cli-${DETEKT_VERSION}-all.jar"; do
+    if curl -fsSL --retry 3 --retry-all-errors --retry-delay 5 "${url}" -o "${JAR}.part"; then
+      mv "${JAR}.part" "${JAR}"
+      break
+    fi
+    echo "Download failed: ${url}" >&2
+  done
+  [ -f "${JAR}" ] || { echo "Could not download detekt-cli ${DETEKT_VERSION}" >&2; exit 1; }
 fi
 
 ARGS=(
